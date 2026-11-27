@@ -13,6 +13,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import ".."
+import "../../FileIcons.js" as FileIcons
 
 Item {
     id: overlay
@@ -22,12 +23,15 @@ Item {
     property bool held
 
     property alias toolbar: toolbar
+    readonly property real toolbarSpace: enabled ? bottomFade.height : 0
     property alias detailsButton: detailsButton
     property alias topFade: topFade
     property alias fadeOpacity: topFade.fadeOpacity
 
     property url source
     property bool error
+    // Delete offered: false where netvfs grants less than full access.
+    property bool changeable: true
 
     signal details
     signal remove
@@ -100,6 +104,7 @@ Item {
 
                 objectName: "deleteButton"
                 icon.source: "image://theme/icon-m-delete"
+                visible: overlay.changeable
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: overlay.remove()
             }
@@ -130,7 +135,7 @@ Item {
                 objectName: "moreButton"
                 // The app's own icon, drawn like the theme's (the theme has no
                 // circle with dots); the button's Icon tints it as a theme glyph.
-                icon.source: Qt.resolvedUrl("../../../icons/more.svg")
+                icon.source: FileIcons.source("more", Theme.pixelRatio)
                 icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: overlay.more()

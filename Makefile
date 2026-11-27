@@ -1,33 +1,25 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-#
-#   make check      format, lint (every crate, Qt glue included) and host tests
-#   make test       host tests only
-#   make coverage   host tests with coverage -> coverage/lcov.info (needs cargo-llvm-cov)
-#   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
-#   make mutants-diff  the same, only for the lines a diff changes (MUTANTS_DIFF=file)
-#   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
-#   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids),
-#                   English plural forms of the `%n` strings included
-#   make rpm        aarch64 RPM: cross-built binary, packaged in the Sailfish SDK
-#                   container (tools/ci/build-rpm.sh; needs docker and libc6-i386)
-#
-# The Qt crates need Qt 5 development files on the host (qmake in PATH).
 
 CARGO ?= cargo
 HOST_FEATURES = --features lautta-bridge-proto/fake
-# The "sailfish" feature needs libsailfishapp and is only built in the SDK.
 SDK_IMAGE ?= mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha256:e5f7596d14502746b308c3dde36f65fc25d7f76c45a01acaed56a1f55b76f592
 TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
-# Engineering English with its plural forms (UI-7): `language="en"` makes lrelease
-# write English plural rules; tools/english-plurals.py fills the forms.
 LUPDATE_ARGS = -silent -locations none -no-obsolete -target-language en
 
-.PHONY: translations translations-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
+.PHONY: translations translations-check comments-check cover-lanes-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
 
-check: fmt-check translations-check clippy test
+check: fmt-check comments-check cover-lanes-check translations-check clippy test
+
+comments-check:
+	python3 tools/no_comments_test.py
+	python3 tools/no_comments.py
+
+cover-lanes-check:
+	python3 tools/cover_lanes_test.py
+	python3 tools/cover_lanes.py --check
 
 fmt-check:
 	$(CARGO) fmt --all -- --check
@@ -36,20 +28,25 @@ clippy:
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) -- -D warnings
 
 test:
-	QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace $(HOST_FEATURES)
+	@if command -v cargo-nextest >/dev/null 2>&1; then \
+		QT_QPA_PLATFORM=offscreen $(CARGO) nextest run --workspace $(HOST_FEATURES); \
+	else \
+		echo "test: cargo-nextest not installed, running cargo test (install-host-deps.sh nextest)"; \
+		QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace $(HOST_FEATURES); \
+	fi
+	$(CARGO) test --workspace --doc $(HOST_FEATURES)
 
 coverage:
 	mkdir -p coverage
 	QT_QPA_PLATFORM=offscreen $(CARGO) llvm-cov --workspace $(HOST_FEATURES) --lcov --output-path coverage/lcov.info
+	python3 -m coverage run --data-file=coverage/python.data --include='tools/*' tools/no_comments_test.py
+	python3 -m coverage run --append --data-file=coverage/python.data --include='tools/*' tools/cover_lanes_test.py
+	python3 -m coverage xml --data-file=coverage/python.data -o coverage/python.xml
 
 clippy-report:
 	mkdir -p coverage
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
-# SPEC TST-5: planner, queue, conflict and activity-bar modules, and the PDF
-# viewer's document handling and text search (PRV-12). MUTANTS_SHARD=k/n splits
-# the run; CI runs all shards weekly (.github/workflows/mutation.yml) and
-# mutants-diff on the lines each pull request changes.
 MUTANTS_SHARD ?= 0/1
 MUTANTS_DIFF ?= mutants.diff
 MUTANTS_PATHS = crates/lautta-core/src/ops/plan.rs crates/lautta-core/src/ops/conflict.rs \
@@ -65,7 +62,6 @@ mutants:
 mutants-diff:
 	$(CARGO) mutants $(MUTANTS_ARGS) --in-diff $(MUTANTS_DIFF)
 
-# The mutated files, for CI to tell whether a pull request touches them.
 mutants-paths:
 	@echo $(MUTANTS_PATHS)
 
@@ -80,8 +76,6 @@ translations:
 	python3 tools/english-plurals.py fill < translations/harbour-lautta.ts > $${TMPDIR:-/tmp}/lautta-ts-filled.ts
 	mv $${TMPDIR:-/tmp}/lautta-ts-filled.ts translations/harbour-lautta.ts
 
-# The engineering English catalogue must match the QML, plural forms included (UI-7):
-# regenerating it changes nothing.
 translations-check:
 	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 	$(LUPDATE) $(LUPDATE_ARGS) qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts

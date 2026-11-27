@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Target test: Settings (SPEC §18) with real Silica and the real Lautta
-// types, laid out as Salama's: the page is a list of entries, each opening a
-// page of settings, with pages of their own for Deleting, Transfers, Search,
-// Recents and Storage. Every control writes the key it wrote before; the
-// thumbnails are in View options; no setting is left without a control.
-// There is no date format (dates follow the system) nor grid size, and no
-// view option is repeated (BRW-4): the View options entry opens that page. Fails when an
-// entry is missing or opens another page, a page lacks one of its settings
-// or a control writes nothing, or a setting can no longer be reached.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -15,25 +6,22 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
-    // Each entry of Settings, the page it opens and the keys set there.
     readonly property var subPages: [
         { "entry": "deletingEntry", "page": "deletingSettingsPage",
           "keys": ["recently_deleted", "recently_deleted_retention_days", "remorse_seconds"] },
         { "entry": "transfersEntry", "page": "transfersSettingsPage",
           "keys": ["local_concurrency", "remote_lanes", "preserve_mtimes", "preserve_permissions",
                    "verify_checksums", "auto_resume", "history_retention_days"] },
-        { "entry": "searchEntry", "page": "searchSettingsPage", "keys": ["search_remote_depth"] },
+        { "entry": "searchEntry", "page": "searchSettingsPage", "keys": ["index_on_charger", "index_on_mobile"] },
         { "entry": "recentsEntry", "page": "recentsSettingsPage", "keys": ["recents_enabled"] },
         { "entry": "storageEntry", "page": "storageSettingsPage", "keys": ["listing_cache_days"] }
     ]
     readonly property var thumbnailKeys: ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
-    // Set on View options by its own controls, and by "Ask before large
-    // operations" two at once.
     readonly property var viewKeys: ["sort_key", "sort_descending", "folders_first", "show_hidden", "view_mode",
                                      "thumbnails_local"]
     readonly property var largeOpKeys: ["large_op_items", "large_op_bytes"]
-    // Every key a page of Settings sets (nothing lost).
     property var reached: []
 
     ViewerTools { id: tools }
@@ -44,7 +32,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Items are reached both as children and as a content item: each once.
     function findAll(item, pred, out) {
         if (!item || out.indexOf(item) >= 0)
             return out
@@ -71,7 +58,6 @@ ApplicationWindow {
         return controls(page).map(function (x) { return x.settingKey })
     }
 
-    // The rows of a combo box's menu, in order.
     function menuItems(box) {
         var kids = box.menu._contentColumn.children
         var out = []
@@ -82,9 +68,6 @@ ApplicationWindow {
         return out
     }
 
-    // Changes a setting through its control as a finger would: a switch is
-    // pressed, a combo box gets another entry, a slider goes to another end.
-    // Gives back the value the setting should have now.
     function change(control, before) {
         if (control.values !== undefined) {
             var other = control.values.filter(function (v) { return v !== before })[0]
@@ -92,8 +75,6 @@ ApplicationWindow {
             return other
         }
         if (control.maximumValue !== undefined) {
-            // On release Silica takes the value from where the handle is:
-            // the finger left it at one end.
             var drag = control.drag
             var toMin = before === control.maximumValue
             drag.target.x = toMin ? drag.minimumX : drag.maximumX
@@ -104,7 +85,6 @@ ApplicationWindow {
         return !before
     }
 
-    // Each control writes its own key, and only that one.
     function exercise(control) {
         var key = control.settingKey
         var before = App.setting(key)
@@ -118,13 +98,18 @@ ApplicationWindow {
         App.setSetting(key, JSON.stringify(before))
     }
 
-    // Opens the page of one entry of Settings.
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function open(settings, entry) {
         var row = find(settings, entry)
         if (!expect(row !== null, "Settings has the entry " + entry))
             return null
         row.clicked(null)
-        tools.pump(1000)
+        waitFor(function () { return !pageStack.busy && pageStack.currentPage !== settings }, entry + "'s page")
         return pageStack.currentPage
     }
 
@@ -138,10 +123,8 @@ ApplicationWindow {
         controls(page).forEach(exercise)
         reached = reached.concat(keys)
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
-    // "Ask before large operations" sets two keys from one menu.
     function checkLargeOps(settings) {
         var page = open(settings, "transfersEntry")
         var box = find(page, "largeOpsBox")
@@ -154,11 +137,8 @@ ApplicationWindow {
             reached = reached.concat(largeOpKeys)
         }
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
-    // Opened from Settings, View options has no folder; it has the
-    // thumbnails, those from servers among them.
     function checkViewOptions(settings) {
         var options = open(settings, "viewOptionsRow")
         if (!expect(options.objectName === "viewOptionsPage" && !options.model,
@@ -170,40 +150,50 @@ ApplicationWindow {
         controls(options).forEach(exercise)
         reached = reached.concat(keys).concat(viewKeys)
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
-    // The entries tell what is chosen on their pages, and follow changes.
-    function checkValues(settings) {
-        var names = ["viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry", "transfersEntry", "storageEntry"]
+    function texts(item, out) {
+        if (item.visible && typeof item.text === "string" && item.text.length > 0 && item.truncationMode !== undefined)
+            out.push(item.text)
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i)
+            texts(kids[i], out)
+        return out
+    }
+
+    function checkNamesOnly(settings) {
+        var names = ["homePageEntry", "viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry",
+                     "transfersEntry", "storageEntry", "aboutEntry"]
         names.forEach(function (name) {
             var row = find(settings, name)
-            expect(row && row.value.length > 0, name + " tells what is chosen: " + (row ? row.value : ""))
+            var shown = row ? texts(row, []) : []
+            expect(shown.length === 1, name + " shows its name only: " + JSON.stringify(shown))
         })
-        var deleting = find(settings, "deletingEntry")
-        var before = deleting.value
-        App.setSetting("recently_deleted", JSON.stringify(false))
-        expect(deleting.value !== before, "Deleting tells that Trash is off: " + deleting.value)
-        App.setSetting("recently_deleted", JSON.stringify(true))
     }
 
     Component.onCompleted: {
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(300)
         var settings = pageStack.currentPage
         var keys = keysOf(settings)
         expect(keys.length === 0, "Settings is a list of entries, with no setting of its own: " + keys)
-        expect(find(settings, "browsePageEntry") !== null && find(settings, "aboutEntry") !== null,
-               "Browse page and About stay on Settings")
-        checkValues(settings)
+        expect(find(settings, "homePageEntry") !== null && find(settings, "aboutEntry") !== null,
+               "Home page and About stay on Settings")
+        var homeIcon = String(find(settings, "homePageEntry").iconSource)
+        expect(homeIcon.indexOf("image://lautta-icon/") === 0 && homeIcon.indexOf("/lautta.svg?") > 0,
+               "its row shows Lautta's glyph, as the folder header does: " + homeIcon)
+        checkNamesOnly(settings)
         subPages.forEach(function (spec) { checkSubPage(settings, spec) })
         checkLargeOps(settings)
         checkViewOptions(settings)
         var all = Object.keys(JSON.parse(App.settingsJson))
-        var lost = all.filter(function (k) { return reached.indexOf(k) < 0 })
+        var remembered = ["share_folders"]
+        var lost = all.filter(function (k) { return reached.indexOf(k) < 0 && remembered.indexOf(k) < 0 })
         expect(lost.length === 0, "every setting has its control: none for " + lost)
+        expect(remembered.every(function (k) { return all.indexOf(k) >= 0 && reached.indexOf(k) < 0 }),
+               "what Lautta remembers by itself is kept, without a control: " + remembered)
         expect(all.indexOf("date_format") < 0 && reached.indexOf("date_format") < 0, "there is no date format")
         expect(all.indexOf("grid_columns") < 0, "there is no grid size")
+        reachedEnd = true
     }
 
     Component {

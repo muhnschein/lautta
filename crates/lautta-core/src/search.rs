@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recursive name search (SRC-2..4): substring or glob, type, size and date
-//! filters, results streamed per folder, cancelable. The tree is walked by
-//! the generic [`ListWalker`] (BFS over `Provider::list`) or by a
-//! provider-specific [`TreeWalker`] such as the bridge's `Walk`.
 
 use crate::db::Db;
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::filter::fold_text;
 use crate::provider::{list_all, Lane, Provider, ProviderResolver};
 use crate::uri::Uri;
 use crate::vpath::VPath;
@@ -18,12 +15,9 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Listings in flight at once; remote locations cap their own lanes too.
 const WALK_CONCURRENCY: usize = 2;
-/// SRC-4.
 pub const RECENT_SEARCHES_PER_LOCATION: usize = 10;
-/// SRC-3 defaults; the caller decides which applies to a location.
-pub const REMOTE_DEPTH_DEFAULT: u32 = 8;
+pub const SERVER_SEARCH_DEPTH: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MatchMode {
@@ -32,11 +26,20 @@ pub enum MatchMode {
     Glob,
 }
 
+impl MatchMode {
+    pub fn for_text(text: &str) -> MatchMode {
+        if text.contains(['*', '?', '[']) {
+            MatchMode::Glob
+        } else {
+            MatchMode::Substring
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SearchQuery {
     pub text: String,
     pub mode: MatchMode,
-    /// Categories as returned by the `classify` closure; empty means any.
     pub types: BTreeSet<String>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
@@ -52,7 +55,6 @@ pub struct SearchHit {
     pub folder_uri: Uri,
 }
 
-/// One folder's listing as produced by a walker.
 #[derive(Debug, Clone)]
 pub struct FolderListing {
     pub folder: Uri,
@@ -61,7 +63,6 @@ pub struct FolderListing {
 
 #[derive(Debug, Clone)]
 pub struct WalkOptions {
-    /// Deepest folder level listed, root = 0; `None` is unlimited (SRC-3).
     pub depth_limit: Option<u32>,
     pub include_hidden: bool,
     pub cancel: Arc<AtomicBool>,
@@ -70,12 +71,9 @@ pub struct WalkOptions {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WalkStats {
     pub folders: u64,
-    /// Sub-folders that could not be listed; the search goes on without them.
     pub errors: u64,
 }
 
-/// Produces folder listings below `root`. A failure to list `root` itself is
-/// an error; unreadable sub-folders are counted in the stats.
 #[async_trait]
 pub trait TreeWalker: Send + Sync {
     async fn walk(
@@ -86,9 +84,6 @@ pub trait TreeWalker: Send + Sync {
     ) -> Result<WalkStats>;
 }
 
-/// Generic walker: breadth first over `Provider::list` with two listings in
-/// flight. Symlinked folders are never followed (loop safety) and a folder is
-/// listed at most once.
 pub struct ListWalker<'a> {
     resolver: &'a dyn ProviderResolver,
 }
@@ -174,31 +169,30 @@ fn enqueue_children(
     }
 }
 
-/// A query ready to match entries.
-struct Matcher<'q> {
+pub struct Matcher<'q> {
     query: &'q SearchQuery,
     needle: String,
     glob: Option<glob::Pattern>,
 }
 
 impl<'q> Matcher<'q> {
-    fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
+    pub fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
         let glob = match query.mode {
             MatchMode::Glob if !query.text.is_empty() => Some(
-                glob::Pattern::new(&query.text.to_lowercase())
+                glob::Pattern::new(&fold_text(&query.text))
                     .map_err(|_| Error::new(ErrorKind::InvalidArgument, "invalid search pattern"))?,
             ),
             _ => None,
         };
         Ok(Matcher {
             query,
-            needle: query.text.to_lowercase(),
+            needle: fold_text(&query.text),
             glob,
         })
     }
 
     fn name_matches(&self, entry: &Entry) -> bool {
-        let name = entry.display_name().to_lowercase();
+        let name = fold_text(&entry.display_name());
         match &self.glob {
             Some(pat) => pat.matches(&name),
             None => name.contains(&self.needle),
@@ -226,7 +220,7 @@ impl<'q> Matcher<'q> {
         q.modified_after.is_none_or(|a| t >= a) && q.modified_before.is_none_or(|b| t <= b)
     }
 
-    fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
+    pub fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
         (self.query.include_hidden || !entry.is_hidden())
             && self.name_matches(entry)
             && self.attributes_match(entry)
@@ -234,25 +228,22 @@ impl<'q> Matcher<'q> {
     }
 }
 
-/// What a finished search reports.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SearchSummary {
     pub folders: u64,
     pub hits: u64,
-    /// Sub-folders that could not be read.
     pub errors: u64,
     pub canceled: bool,
 }
 
-/// How a search runs: depth (SRC-3), cancellation and an optional
-/// provider-specific walker (bridge `Walk`) replacing the generic listing.
+pub type FolderProgress = Arc<dyn Fn(u64) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct SearchOptions {
-    /// `None` is unlimited (local); remote locations use
-    /// [`REMOTE_DEPTH_DEFAULT`] unless the setting says otherwise.
     pub depth_limit: Option<u32>,
     pub cancel: Arc<AtomicBool>,
     pub walker: Option<Arc<dyn TreeWalker>>,
+    pub progress: Option<FolderProgress>,
 }
 
 impl SearchOptions {
@@ -261,7 +252,13 @@ impl SearchOptions {
             depth_limit,
             cancel,
             walker: None,
+            progress: None,
         }
+    }
+
+    pub fn with_progress(mut self, progress: FolderProgress) -> SearchOptions {
+        self.progress = Some(progress);
+        self
     }
 
     pub fn with_walker(mut self, walker: Arc<dyn TreeWalker>) -> SearchOptions {
@@ -270,9 +267,6 @@ impl SearchOptions {
     }
 }
 
-/// Searches below `root`, sending one batch of hits per folder that has any
-/// (SRC-2). Cancelling (the flag, or dropping the receiver) ends the search
-/// early with `canceled` set; it is not an error.
 pub async fn search(
     resolver: &dyn ProviderResolver,
     root: Uri,
@@ -294,11 +288,15 @@ pub async fn search(
         None => &list_walker,
     };
     let (matcher_ref, out_ref, cancel_ref) = (&matcher, &out, &options.cancel);
-    // `rx` moves in so it is dropped when the consumer stops; otherwise a
-    // walker blocked on a full channel would never finish.
+    let progress = options.progress.clone();
     let consume = async move {
         let mut hits = 0u64;
+        let mut folders = 0u64;
         while let Some(listing) = rx.recv().await {
+            folders += 1;
+            if let Some(report) = &progress {
+                report(folders);
+            }
             let batch = hits_in(matcher_ref, classify, &listing);
             if batch.is_empty() {
                 continue;
@@ -340,8 +338,19 @@ fn hits_in(
         .collect()
 }
 
-/// A local, extension-based classification for the type filter: `folder`,
-/// `image`, `video`, `audio`, `document`, `archive`, `text` or `other`.
+pub fn filter_hits<T>(
+    items: Vec<T>,
+    hit: impl Fn(&T) -> &SearchHit,
+    query: &SearchQuery,
+    classify: &(dyn Fn(&Entry) -> String + Send + Sync),
+) -> Result<Vec<T>> {
+    let matcher = Matcher::new(query)?;
+    Ok(items
+        .into_iter()
+        .filter(|item| matcher.matches(&hit(item).entry, classify))
+        .collect())
+}
+
 pub fn classify_by_extension(entry: &Entry) -> String {
     if entry.is_dir() {
         return "folder".to_owned();
@@ -360,7 +369,6 @@ pub fn classify_by_extension(entry: &Entry) -> String {
     category.to_owned()
 }
 
-/// Recent search strings per location (SRC-4).
 #[derive(Clone)]
 pub struct RecentSearches {
     db: Db,
@@ -371,8 +379,6 @@ impl RecentSearches {
         RecentSearches { db }
     }
 
-    /// Adds `query` (trimmed; blank is ignored) as the newest entry of
-    /// `location`, keeping the newest ten.
     pub fn add(&self, location: &str, query: &str) -> Result<()> {
         self.add_at(location, query, crate::org::now_ms())
     }
@@ -397,7 +403,27 @@ impl RecentSearches {
         Ok(())
     }
 
-    /// Newest first.
+    pub fn remember(&self, location: &str, query: &str) -> Result<()> {
+        self.remember_at(location, query, crate::org::now_ms())
+    }
+
+    pub fn remember_at(&self, location: &str, query: &str, at_ms: i64) -> Result<()> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(());
+        }
+        if let Some(latest) = self.list(location)?.into_iter().next() {
+            let grew = latest.len() < query.len() && query.to_lowercase().starts_with(&latest.to_lowercase());
+            if grew {
+                self.db.lock().execute(
+                    "DELETE FROM recent_searches WHERE location_id = ?1 AND query = ?2",
+                    (location, &latest),
+                )?;
+            }
+        }
+        self.add_at(location, query, at_ms)
+    }
+
     pub fn list(&self, location: &str) -> Result<Vec<String>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(
@@ -421,6 +447,46 @@ impl RecentSearches {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn progress_counts_every_folder_walked() {
+        let (m, res) = fixture();
+        m.add_file("a/x.txt", b"", 0);
+        m.add_file("a/b/y.txt", b"", 0);
+        m.add_file("c/z.txt", b"", 0);
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let record = seen.clone();
+        let options = SearchOptions::new(None, Arc::new(AtomicBool::new(false)))
+            .with_progress(Arc::new(move |n| record.lock().unwrap().push(n)));
+        let (tx, mut rx) = mpsc::channel(64);
+        let query = SearchQuery {
+            text: "x".into(),
+            ..Default::default()
+        };
+        let summary = search(
+            &res,
+            Uri::parse("lautta://l/").unwrap(),
+            &query,
+            options,
+            &classify_by_extension,
+            tx,
+        )
+        .await
+        .unwrap();
+        while rx.recv().await.is_some() {}
+        assert_eq!(summary.folders, 4);
+        assert_eq!(*seen.lock().unwrap(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn wildcards_make_a_pattern_and_plain_text_a_substring() {
+        for text in ["*.pdf", "IMG_20??", "[ab]c", "a*"] {
+            assert_eq!(MatchMode::for_text(text), MatchMode::Glob, "{text}");
+        }
+        for text in ["thesis", "", "budget 2026", "a.b-c_(1)"] {
+            assert_eq!(MatchMode::for_text(text), MatchMode::Substring, "{text}");
+        }
+    }
     use crate::provider::memory::MemoryProvider;
     use crate::provider::StaticResolver;
     use std::time::Duration;
@@ -552,7 +618,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn date_filters_are_inclusive_and_exclude_unknown_dates() {
+    async fn date_filters_are_inclusive() {
         let (m, res) = fixture();
         m.add_file("old", b"x", 1_000_000);
         m.add_file("mid", b"x", 2_000_000);
@@ -564,14 +630,26 @@ mod tests {
         };
         let (batches, _) = run(&res, "", &query, None).await;
         assert_eq!(names(&batches), ["mid", "new"]);
-        // Folders carry no mtime in the memory provider's fixture (epoch).
-        let dated = SearchQuery {
+    }
+
+    #[tokio::test]
+    async fn date_filters_exclude_entries_without_a_date() {
+        let (_m, res) = fixture();
+        let walker: Arc<dyn TreeWalker> = Arc::new(FixedWalker);
+        let query = SearchQuery {
             modified_after: Some(at(1)),
             ..SearchQuery::default()
         };
-        m.add_dir("folder");
-        let (batches, _) = run(&res, "", &dated, None).await;
-        assert!(!names(&batches).contains(&"folder".to_owned()));
+        let (batches, _) = run_with(
+            &res,
+            "",
+            &query,
+            Some(8),
+            Arc::new(AtomicBool::new(false)),
+            Some(walker),
+        )
+        .await;
+        assert_eq!(names(&batches), ["dated"]);
     }
 
     #[tokio::test]
@@ -736,9 +814,12 @@ mod tests {
             out: mpsc::Sender<FolderListing>,
         ) -> Result<WalkStats> {
             assert_eq!(opts.depth_limit, Some(8));
+            let mut dated = Entry::new(b"dated", Kind::File);
+            dated.modified = Some(at(5_000));
             let entries = vec![
                 Entry::new(b"server-hit", Kind::File),
                 Entry::new(b"miss", Kind::File),
+                dated,
             ];
             let _ = out
                 .send(FolderListing {
@@ -789,5 +870,41 @@ mod tests {
         assert_eq!(rs.clear("nas").unwrap(), 10);
         assert!(rs.list("nas").unwrap().is_empty());
         assert_eq!(rs.list("sd").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_remembered_search_replaces_the_latest_one_it_grew_from() {
+        let rs = RecentSearches::new(Db::open_in_memory().unwrap());
+        rs.remember_at("nas", "tes", 1).unwrap();
+        rs.remember_at("nas", "test", 2).unwrap();
+        assert_eq!(rs.list("nas").unwrap(), ["test"]);
+        rs.remember_at("nas", "Report", 3).unwrap();
+        rs.remember_at("nas", "report 2026", 4).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["report 2026", "test"],
+            "case does not matter"
+        );
+        rs.remember_at("nas", "test again", 5).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test again", "report 2026", "test"],
+            "only the latest search is replaced"
+        );
+        rs.remember_at("nas", "test", 6).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test", "test again", "report 2026"],
+            "a shorter search replaces nothing"
+        );
+        rs.remember_at("nas", " test ", 7).unwrap();
+        rs.remember_at("nas", "  ", 8).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap().len(),
+            3,
+            "the same search again moves up, blanks are skipped"
+        );
+        rs.remember_at("sd", "testing", 9).unwrap();
+        assert_eq!(rs.list("nas").unwrap()[0], "test", "other places keep theirs");
     }
 }

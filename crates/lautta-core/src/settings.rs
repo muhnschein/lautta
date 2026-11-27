@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Settings (SPEC §18): the global preferences with their defaults and
-//! limits, and the per-location preferences kept in the app database.
-//!
-//! The Qt layer keeps the simple global values in dconf
-//! (`Nemo.Configuration`); [`Settings::to_map`] and [`Settings::from_map`]
-//! are the generic bridge: flat string keys, JSON values, bad or unknown
-//! entries ignored.
 
 use crate::db::Db;
 use crate::error::Result;
@@ -23,34 +16,28 @@ const GB: u64 = 1_000_000_000;
 
 pub const SORT_KEYS: [&str; 4] = ["name", "size", "modified", "type"];
 pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
+pub const SHARE_FOLDERS_MAX: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    // View options (BRW-4): one set for every folder.
     pub sort_key: String,
     pub sort_descending: bool,
     pub folders_first: bool,
     pub show_hidden: bool,
     pub view_mode: String,
 
-    // Thumbnails (PRV).
     pub thumbnails_local: bool,
     pub thumbnails_remote: bool,
-    /// Largest remote file read whole for a thumbnail (PRV-2). There is no
-    /// lower limit for metered connections: the app cannot tell one.
     pub thumbnail_max_remote_mb: u64,
 
-    // Caches.
     pub thumbnail_cache_mb: u64,
     pub listing_cache_days: u32,
 
-    // The Trash (OPS-8; stored as `recently_deleted`) and remorse timer.
     pub recently_deleted: bool,
     pub recently_deleted_retention_days: u32,
     pub remorse_seconds: u32,
 
-    // Transfers (§15).
     pub local_concurrency: u32,
     pub remote_lanes: u32,
     pub preserve_mtimes: bool,
@@ -62,8 +49,10 @@ pub struct Settings {
     pub large_op_bytes: u64,
 
     pub recents_enabled: bool,
-    /// SRC-3: depth limit of remote searches.
-    pub search_remote_depth: u32,
+    pub index_on_charger: bool,
+    pub index_on_mobile: bool,
+
+    pub share_folders: Vec<String>,
 }
 
 impl Default for Settings {
@@ -92,7 +81,9 @@ impl Default for Settings {
             large_op_items: 1_000,
             large_op_bytes: GB,
             recents_enabled: true,
-            search_remote_depth: 8,
+            index_on_charger: false,
+            index_on_mobile: false,
+            share_folders: Vec::new(),
         }
     }
 }
@@ -102,7 +93,6 @@ fn clamp<T: Ord>(v: T, range: (T, T)) -> T {
 }
 
 impl Settings {
-    /// Forces every value into its allowed range (§18 limits).
     pub fn sanitise(&mut self) {
         let defaults = Settings::default();
         if !SORT_KEYS.contains(&self.sort_key.as_str()) {
@@ -122,15 +112,19 @@ impl Settings {
         self.remote_lanes = clamp(self.remote_lanes, REMOTE_LANES_RANGE);
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
-        self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
+        let mut kept: Vec<String> = Vec::new();
+        for folder in self.share_folders.drain(..) {
+            if kept.len() < SHARE_FOLDERS_MAX && !kept.contains(&folder) {
+                kept.push(folder);
+            }
+        }
+        self.share_folders = kept;
     }
 
-    /// `thumbnail_max_remote_mb` in bytes (PRV-2).
     pub fn thumbnail_max_remote_bytes(&self) -> u64 {
         self.thumbnail_max_remote_mb.saturating_mul(MB)
     }
 
-    /// `thumbnail_cache_mb` in bytes (PRV-2).
     pub fn thumbnail_cache_bytes(&self) -> u64 {
         self.thumbnail_cache_mb.saturating_mul(MB)
     }
@@ -141,12 +135,9 @@ impl Settings {
     }
 
     pub fn to_json(&self) -> String {
-        // Plain data with string keys: serialisation cannot fail.
         serde_json::to_string(self).unwrap_or_else(|_| "{}".to_owned())
     }
 
-    /// Parses JSON; a document that is not an object yields defaults, bad
-    /// keys are ignored one by one.
     pub fn from_json(json: &str) -> Settings {
         match serde_json::from_str::<Value>(json) {
             Ok(Value::Object(obj)) => Settings::from_map(&obj.into_iter().collect::<BTreeMap<_, _>>()),
@@ -154,7 +145,6 @@ impl Settings {
         }
     }
 
-    /// Flat key to value map for the dconf bridge.
     pub fn to_map(&self) -> BTreeMap<String, Value> {
         match serde_json::to_value(self) {
             Ok(Value::Object(obj)) => obj.into_iter().collect(),
@@ -162,9 +152,6 @@ impl Settings {
         }
     }
 
-    /// Starts from the defaults and applies every entry that has a known key
-    /// and the right type; then sanitises. Unknown keys and mistyped values
-    /// are ignored so a stale or hand-edited store never breaks the app.
     pub fn from_map(map: &BTreeMap<String, Value>) -> Settings {
         let mut current = Settings::default();
         for (key, value) in map {
@@ -181,8 +168,6 @@ impl Settings {
         current.sanitised()
     }
 
-    /// Sets one key from the UI; `false` when the key is unknown or the
-    /// value has the wrong type (settings unchanged).
     pub fn set(&mut self, key: &str, value: Value) -> bool {
         let mut map = self.to_map();
         if !map.contains_key(key) {
@@ -200,7 +185,6 @@ impl Settings {
     }
 }
 
-/// Per-location preferences (§18, `location_prefs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocationPrefs {
     pub location_id: String,
@@ -208,8 +192,8 @@ pub struct LocationPrefs {
     pub start_folder: Option<Uri>,
     pub no_listing_cache: bool,
     pub no_thumb_cache: bool,
-    /// Bulk lanes for this remote location (1..=6); `None` uses the global.
     pub bulk_lanes: Option<u32>,
+    pub index_names: bool,
 }
 
 impl LocationPrefs {
@@ -221,10 +205,10 @@ impl LocationPrefs {
             no_listing_cache: false,
             no_thumb_cache: false,
             bulk_lanes: None,
+            index_names: false,
         }
     }
 
-    /// Blank names count as no override; lane sizes are clamped.
     fn normalised(&self) -> LocationPrefs {
         let mut p = self.clone();
         p.display_name = p
@@ -245,33 +229,40 @@ pub struct LocationPrefsStore {
     db: Db,
 }
 
-type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>);
+type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>, i64);
 
 fn build(raw: RawPrefs) -> LocationPrefs {
     LocationPrefs {
         location_id: raw.0,
         display_name: raw.1,
-        // A malformed stored URI is dropped rather than failing the page.
         start_folder: raw.2.and_then(|s| Uri::parse(&s).ok()),
         no_listing_cache: raw.3 != 0,
         no_thumb_cache: raw.4 != 0,
         bulk_lanes: raw.5.and_then(|n| u32::try_from(n).ok()),
+        index_names: raw.6 != 0,
     }
 }
 
 fn raw_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawPrefs> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+    ))
 }
 
 const PREF_COLUMNS: &str =
-    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes";
+    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes, index_names";
 
 impl LocationPrefsStore {
     pub fn new(db: Db) -> LocationPrefsStore {
         LocationPrefsStore { db }
     }
 
-    /// The stored preferences, or the defaults when none are stored.
     pub fn get(&self, location_id: &str) -> Result<LocationPrefs> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(&format!(
@@ -284,7 +275,6 @@ impl LocationPrefsStore {
         }
     }
 
-    /// Stores `prefs`; all-default preferences remove the row.
     pub fn set(&self, prefs: &LocationPrefs) -> Result<()> {
         let p = prefs.normalised();
         let conn = self.db.lock();
@@ -297,13 +287,14 @@ impl LocationPrefsStore {
         }
         conn.execute(
             "INSERT INTO location_prefs(location_id, display_name, start_folder,
-                                        no_listing_cache, no_thumb_cache, bulk_lanes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                                        no_listing_cache, no_thumb_cache, bulk_lanes, index_names)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(location_id) DO UPDATE SET display_name = excluded.display_name,
                  start_folder = excluded.start_folder,
                  no_listing_cache = excluded.no_listing_cache,
                  no_thumb_cache = excluded.no_thumb_cache,
-                 bulk_lanes = excluded.bulk_lanes",
+                 bulk_lanes = excluded.bulk_lanes,
+                 index_names = excluded.index_names",
             rusqlite::params![
                 p.location_id,
                 p.display_name,
@@ -311,6 +302,7 @@ impl LocationPrefsStore {
                 i64::from(p.no_listing_cache),
                 i64::from(p.no_thumb_cache),
                 p.bulk_lanes.map(i64::from),
+                i64::from(p.index_names),
             ],
         )?;
         Ok(())
@@ -324,7 +316,6 @@ impl LocationPrefsStore {
         Ok(n > 0)
     }
 
-    /// Every location with non-default preferences.
     pub fn list(&self) -> Result<Vec<LocationPrefs>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(&format!(
@@ -363,7 +354,6 @@ mod tests {
         assert_eq!(s.history_retention_days, 30);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
         assert!(s.recents_enabled);
-        assert_eq!(s.search_remote_depth, 8);
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -379,7 +369,6 @@ mod tests {
             history_retention_days: 100_000,
             large_op_items: 0,
             large_op_bytes: 0,
-            search_remote_depth: 0,
             sort_key: "bogus".into(),
             view_mode: "".into(),
             ..Settings::default()
@@ -393,7 +382,6 @@ mod tests {
         assert_eq!(s.thumbnail_max_remote_mb, 1);
         assert_eq!(s.history_retention_days, 365);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1, MB));
-        assert_eq!(s.search_remote_depth, 1);
         assert_eq!((s.sort_key.as_str(), s.view_mode.as_str()), ("name", "list"));
         s.remorse_seconds = 99;
         s.remote_lanes = 99;
@@ -439,9 +427,6 @@ mod tests {
 
     #[test]
     fn a_stored_date_format_is_ignored() {
-        // Dates follow the system format (§18): there is no date format
-        // setting, and the value an earlier version left in dconf neither
-        // breaks the other keys nor survives the next save.
         let stored = r#"{"date_format":"iso","remorse_seconds":7}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(
@@ -457,9 +442,15 @@ mod tests {
     }
 
     #[test]
+    fn a_stored_search_depth_is_ignored() {
+        let mut s = Settings::from_json(r#"{"search_remote_depth":3,"remorse_seconds":7}"#);
+        assert_eq!(s.remorse_seconds, 7);
+        assert!(!s.to_json().contains("search_remote_depth"));
+        assert!(!s.set("search_remote_depth", json!(4)));
+    }
+
+    #[test]
     fn a_stored_grid_size_is_ignored() {
-        // The grid has one size (BRW-4): the number of tiles per row an
-        // earlier version stored is dropped like any unknown key.
         let stored = r#"{"grid_columns":3,"view_mode":"grid"}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(s.view_mode, "grid");
@@ -473,8 +464,6 @@ mod tests {
 
     #[test]
     fn a_stored_metered_limit_is_ignored() {
-        // The app cannot tell a metered connection (PRV-2): the limit an
-        // earlier version stored for one is dropped like any unknown key.
         let stored = r#"{"thumbnail_max_metered_mb":1,"thumbnail_max_remote_mb":50}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(s.thumbnail_max_remote_mb, 50);
@@ -492,6 +481,17 @@ mod tests {
         assert!(!s.set("remorse_seconds", json!("x")));
         assert_eq!(s.remorse_seconds, 10);
         assert!(!s.set("nope", json!(1)));
+    }
+
+    #[test]
+    fn share_folders_keep_the_latest_three_once_each() {
+        let mut s = Settings::default();
+        assert!(s.share_folders.is_empty());
+        assert!(s.set("share_folders", json!(["a", "b", "a", "c", "d"])));
+        assert_eq!(s.share_folders, ["a", "b", "c"]);
+        assert!(!s.set("share_folders", json!("a")));
+        assert_eq!(s.share_folders, ["a", "b", "c"]);
+        assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 
     fn store() -> LocationPrefsStore {

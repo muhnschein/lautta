@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The details panel of the image viewer (PRV-4, board ImageExif): the image
-// dimmed at the top (tap to go back), EXIF fields below.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +8,6 @@ Page {
     id: page
 
     property string uri
-    // The source the viewer shows for this image.
     property url imageSource
 
     readonly property var info: exif.infoJson.length > 0 ? JSON.parse(exif.infoJson) : ({})
@@ -25,14 +22,15 @@ Page {
 
     Image {
         id: preview
+        objectName: "detailsPreview"
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: Math.min(parent.height * 0.35, Theme.itemSizeHuge * 2)
         source: page.imageSource
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         autoTransform: true
-        sourceSize.width: page.width
-        sourceSize.height: page.width
+        sourceSize.width: Screen.width
+        sourceSize.height: Screen.height
 
         Rectangle {
             anchors.fill: parent

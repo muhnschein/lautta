@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The error type of the fake's methods: D-Bus errors as the real bridge
-//! sends them (`org.netvfs.Error.<Name>` with message and optional details,
-//! or the standard `InvalidArgs`).
 
 use super::tree::TreeError;
 use std::collections::HashMap;
@@ -12,7 +9,6 @@ use zbus::DBusError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fail {
-    /// Full D-Bus error name.
     full: String,
     message: String,
     detail: Option<String>,
@@ -29,18 +25,14 @@ impl Fail {
         }
     }
 
-    /// `org.netvfs.Error.<bare>`.
     pub fn net(bare: &str, message: &str) -> Fail {
         Fail::named(format!("org.netvfs.Error.{bare}"), message)
     }
 
-    /// `org.freedesktop.DBus.Error.InvalidArgs`.
     pub fn args(message: &str) -> Fail {
         Fail::named("org.freedesktop.DBus.Error.InvalidArgs".to_owned(), message)
     }
 
-    /// `org.freedesktop.DBus.Error.UnknownMethod`: what a bridge older than
-    /// `method` answers.
     pub fn unknown_method(method: &str) -> Fail {
         Fail::named(
             "org.freedesktop.DBus.Error.UnknownMethod".to_owned(),
@@ -54,7 +46,6 @@ impl Fail {
         self
     }
 
-    /// The bare XC-21 name, for `ListDone` and `JobFinished`.
     pub fn bare(&self) -> &str {
         self.full.strip_prefix("org.netvfs.Error.").unwrap_or(&self.full)
     }
@@ -63,7 +54,6 @@ impl Fail {
         &self.message
     }
 
-    /// `JobFinished.extra` entries describing this error.
     pub fn extra(&self) -> HashMap<String, Value<'static>> {
         let mut extra = HashMap::new();
         if let Some(d) = &self.detail {
@@ -87,7 +77,7 @@ impl From<TreeError> for Fail {
 
 impl DBusError for Fail {
     fn create_reply(&self, msg: &Header<'_>) -> zbus::Result<Message> {
-        #[allow(deprecated)] // the only builder that replies from a header, which DBusError hands over
+        #[allow(deprecated)]
         let builder = zbus::message::Builder::error(msg, self.name())?;
         let extra = self.extra();
         if extra.is_empty() {

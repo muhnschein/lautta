@@ -1,0 +1,4 @@
+query: AccessInvalidPointer.ql
+# Model ids (`MaD:N`) as rank of model text: stock row numbers shift between bundles.
+postprocess:
+  - utils/test/PrettyPrintModels.ql

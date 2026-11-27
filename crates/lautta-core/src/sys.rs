@@ -1,33 +1,25 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #![allow(unsafe_code)]
-//! The only module with unsafe code (SPEC RS-5): renameat2, statx, FICLONE, fd helpers.
-//!
-//! rustix 0.38 wraps every syscall Lautta needs behind a safe API, so this
-//! module currently contains no `unsafe` block at all; it stays the single
-//! place where one may be added. Everything returns `std::io::Result` so the
-//! callers map errors with `Error::from` and keep the errno.
 
 use rustix::fs::{
-    copy_file_range, fadvise, ioctl_ficlone, renameat_with, statvfs as rx_statvfs, utimensat, Access, Advice,
-    AtFlags, RenameFlags, StatxFlags, Timespec, Timestamps, CWD, UTIME_OMIT,
+    copy_file_range, fadvise, fstatvfs as rx_fstatvfs, ioctl_ficlone, renameat_with, statvfs as rx_statvfs,
+    utimensat, Access, Advice, AtFlags, RenameFlags, StatxFlags, Timespec, Timestamps, CWD, UTIME_OMIT,
 };
 use rustix::io::Errno;
 use std::fs::File;
 use std::io;
+use std::os::fd::BorrowedFd;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// Largest single `copy_file_range` request. The kernel may copy less.
 const COPY_CHUNK: usize = 8 << 20;
 
-/// `S_IFMT` and the file type values (not exported by `std`).
 const S_IFMT: u32 = 0o170_000;
 const S_IFDIR: u32 = 0o040_000;
 const S_IFREG: u32 = 0o100_000;
 const S_IFLNK: u32 = 0o120_000;
 
-/// What `stat` returns, whichever syscall produced it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStat {
     pub mode: u32,
@@ -35,7 +27,6 @@ pub struct FileStat {
     pub uid: u32,
     pub gid: u32,
     pub mtime: SystemTime,
-    /// Birth time; `None` when the filesystem or kernel does not record it.
     pub btime: Option<SystemTime>,
     pub dev: u64,
     pub ino: u64,
@@ -55,12 +46,10 @@ impl FileStat {
         self.mode & S_IFMT == S_IFLNK
     }
 
-    /// Permission bits including setuid/setgid/sticky.
     pub fn permissions(&self) -> u32 {
         self.mode & 0o7777
     }
 
-    /// Fallback for kernels without `statx`: no birth time.
     pub fn from_metadata(m: &std::fs::Metadata) -> FileStat {
         FileStat {
             mode: m.mode(),
@@ -76,18 +65,17 @@ impl FileStat {
     }
 }
 
-/// Seconds (possibly negative) plus nanoseconds to a `SystemTime`.
 pub fn timestamp(sec: i64, nsec: u32) -> SystemTime {
-    let nanos = Duration::from_nanos(u64::from(nsec));
-    if sec >= 0 {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(sec.unsigned_abs()) + nanos
+    let whole = if sec >= 0 {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(sec.unsigned_abs())
     } else {
-        SystemTime::UNIX_EPOCH - Duration::from_secs(sec.unsigned_abs()) + nanos
-    }
+        SystemTime::UNIX_EPOCH - Duration::from_secs(sec.unsigned_abs())
+    };
+    whole
+        .checked_add(Duration::from_nanos(u64::from(nsec)))
+        .unwrap_or(whole)
 }
 
-/// `statx` in one syscall: type, size, owner, times and the birth time
-/// (SPEC BRW-1 "created"). `follow` selects stat vs lstat.
 pub fn stat(path: &Path, follow: bool) -> io::Result<FileStat> {
     let flags = if follow {
         AtFlags::empty()
@@ -110,8 +98,6 @@ pub fn stat(path: &Path, follow: bool) -> io::Result<FileStat> {
                 nlink: u64::from(sx.stx_nlink),
             })
         }
-        // Old kernels and some seccomp profiles refuse statx; the plain
-        // stat answers the same question minus the birth time.
         Err(e) if statx_unavailable(e) => {
             let meta = if follow {
                 std::fs::metadata(path)?
@@ -128,54 +114,43 @@ fn statx_unavailable(e: Errno) -> bool {
     e == Errno::NOSYS || e == Errno::PERM || e == Errno::INVAL
 }
 
-/// True when `a` and `b` are on the same device.
 pub fn same_device(a: &Path, b: &Path) -> io::Result<bool> {
     Ok(stat(a, true)?.dev == stat(b, true)?.dev)
 }
 
-/// True when this process may add and remove entries in the folder `dir`
-/// (`access(W_OK | X_OK)`). The trash copies an item across mounts only
-/// when it can remove the original afterwards (OPS-8).
 pub fn can_change(dir: &Path) -> bool {
     rustix::fs::access(dir, Access::WRITE_OK | Access::EXEC_OK).is_ok()
 }
 
-/// `renameat2(RENAME_NOREPLACE)`: atomic "fail if the destination exists".
-/// `EEXIST` comes back as `AlreadyExists`; `EINVAL`/`ENOSYS`/`EOPNOTSUPP`
-/// mean the filesystem cannot do it (see [`is_flag_unsupported`]).
 pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
     renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE).map_err(Into::into)
 }
 
-/// `renameat2(RENAME_EXCHANGE)`: atomically swaps two existing paths.
 pub fn rename_exchange(a: &Path, b: &Path) -> io::Result<()> {
     renameat_with(CWD, a, CWD, b, RenameFlags::EXCHANGE).map_err(Into::into)
 }
 
-/// The errors a filesystem or kernel returns for renameat2 flags it lacks.
 pub fn is_flag_unsupported(e: &io::Error) -> bool {
     matches!(e.raw_os_error(), Some(code)
         if [Errno::INVAL, Errno::NOSYS, Errno::OPNOTSUPP].iter().any(|k| k.raw_os_error() == code))
 }
 
-/// `FICLONE`: makes `dst` share `src`'s extents (reflink). Fails with
-/// `EOPNOTSUPP`/`EXDEV`/`EINVAL`/`ENOTTY` when the filesystem cannot.
 pub fn clone_file(dst: &File, src: &File) -> io::Result<()> {
     ioctl_ficlone(dst, src).map_err(Into::into)
 }
 
-/// Copies from the current position of `src` to the current position of
-/// `dst` until end of file with `copy_file_range`, calling `progress` with
-/// the running total of bytes. On error the positions stay consistent, so the
-/// caller can continue with a buffered copy.
-pub fn copy_range_all(src: &File, dst: &File, progress: &mut dyn FnMut(u64)) -> io::Result<u64> {
+pub fn copy_range_all(
+    src: &File,
+    dst: &File,
+    progress: &mut dyn FnMut(u64) -> io::Result<()>,
+) -> io::Result<u64> {
     let mut total = 0u64;
     loop {
         match copy_file_range(src, None, dst, None, COPY_CHUNK) {
             Ok(0) => return Ok(total),
             Ok(n) => {
                 total += n as u64;
-                progress(total);
+                progress(total)?;
             }
             Err(Errno::INTR) => {}
             Err(e) => return Err(e.into()),
@@ -183,14 +158,11 @@ pub fn copy_range_all(src: &File, dst: &File, progress: &mut dyn FnMut(u64)) -> 
     }
 }
 
-/// The `statfs` `f_type` magic of the filesystem holding `path`.
 pub fn fs_magic(path: &Path) -> io::Result<u64> {
     let st = rustix::fs::statfs(path)?;
-    // f_type is signed on some targets; the magic is a 32-bit value.
     Ok(st.f_type as u64 & 0xFFFF_FFFF)
 }
 
-/// Space and mount flags from `statvfs`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VfsInfo {
     pub free: u64,
@@ -201,19 +173,25 @@ pub struct VfsInfo {
 }
 
 pub fn statvfs(path: &Path) -> io::Result<VfsInfo> {
-    let v = rx_statvfs(path)?;
+    Ok(vfs_info(&rx_statvfs(path)?))
+}
+
+pub fn fstatvfs(fd: BorrowedFd<'_>) -> io::Result<VfsInfo> {
+    Ok(vfs_info(&rx_fstatvfs(fd)?))
+}
+
+fn vfs_info(v: &rustix::fs::StatVfs) -> VfsInfo {
     let total = v.f_blocks.saturating_mul(v.f_frsize);
     let free_all = v.f_bfree.saturating_mul(v.f_frsize);
-    Ok(VfsInfo {
+    VfsInfo {
         free: v.f_bavail.saturating_mul(v.f_frsize),
         total,
         used: total.saturating_sub(free_all),
         read_only: v.f_flag.contains(rustix::fs::StatVfsMountFlags::RDONLY),
         name_max: v.f_namemax,
-    })
+    }
 }
 
-/// Sets the modification time (`utimensat`), leaving the access time alone.
 pub fn set_mtime(path: &Path, mtime: SystemTime) -> io::Result<()> {
     let (sec, nsec) = match mtime.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(d) => (
@@ -242,13 +220,10 @@ pub fn set_mtime(path: &Path, mtime: SystemTime) -> io::Result<()> {
     utimensat(CWD, path, &times, AtFlags::empty()).map_err(Into::into)
 }
 
-/// Read-ahead hint (`posix_fadvise(WILLNEED)`, PRV-8). Best effort.
 pub fn advise_willneed(file: &File, offset: u64, len: u64) {
-    // Only a hint: failure changes nothing.
     let _ = fadvise(file, offset, len, Advice::WillNeed);
 }
 
-/// Effective user and group id of this process.
 pub fn effective_ids() -> (u32, u32) {
     (
         rustix::process::geteuid().as_raw(),
@@ -336,8 +311,6 @@ mod tests {
         match clone_file(&dst, &src) {
             Ok(()) => assert_eq!(std::fs::read(&b).unwrap(), b"reflink me"),
             Err(e) => {
-                // ext4/tmpfs have no reflinks: the error must be one the
-                // copy code treats as "fall back".
                 assert!(
                     matches!(e.raw_os_error(), Some(c) if [
                         Errno::OPNOTSUPP, Errno::XDEV, Errno::INVAL, Errno::NOTTY, Errno::NOSYS, Errno::BADF
@@ -359,7 +332,11 @@ mod tests {
         src.seek(SeekFrom::Start(1000)).unwrap();
         let dst = File::create(&b).unwrap();
         let mut last = 0;
-        let n = copy_range_all(&src, &dst, &mut |t| last = t).unwrap();
+        let n = copy_range_all(&src, &dst, &mut |t| {
+            last = t;
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(n, 299_000);
         assert_eq!(last, 299_000);
         assert_eq!(std::fs::read(&b).unwrap(), &data[1000..]);
@@ -370,7 +347,7 @@ mod tests {
         let d = tmp();
         let src = File::open(d.path()).unwrap();
         let dst = File::create(d.path().join("o")).unwrap();
-        assert!(copy_range_all(&src, &dst, &mut |_| {}).is_err());
+        assert!(copy_range_all(&src, &dst, &mut |_| Ok(())).is_err());
     }
 
     #[test]
@@ -385,10 +362,7 @@ mod tests {
         let age = SystemTime::now().duration_since(st.mtime).unwrap_or_default();
         assert!(age < Duration::from_secs(60));
         assert!(stat(d.path(), true).unwrap().is_dir());
-        if let Some(b) = st.btime {
-            let age = SystemTime::now().duration_since(b).unwrap_or_default();
-            assert!(age < Duration::from_secs(60));
-        }
+        assert_eq!(st.btime, std::fs::metadata(&f).unwrap().created().ok());
     }
 
     #[test]
@@ -435,6 +409,14 @@ mod tests {
     }
 
     #[test]
+    fn timestamp_at_the_limits_does_not_overflow() {
+        let top = SystemTime::UNIX_EPOCH + Duration::from_secs(i64::MAX.unsigned_abs());
+        assert_eq!(timestamp(i64::MAX, u32::MAX), top);
+        let bottom = SystemTime::UNIX_EPOCH - Duration::from_secs(i64::MIN.unsigned_abs());
+        assert_eq!(timestamp(i64::MIN, 5), bottom + Duration::from_nanos(5));
+    }
+
+    #[test]
     fn timestamp_handles_negative_seconds() {
         let t = timestamp(-10, 500_000_000);
         assert_eq!(
@@ -468,6 +450,9 @@ mod tests {
         assert!(v.used <= v.total);
         assert!(!v.read_only);
         assert!(v.name_max >= 100);
+        let f = File::create(d.path().join("f")).unwrap();
+        let by_fd = fstatvfs(std::os::fd::AsFd::as_fd(&f)).unwrap();
+        assert_eq!((by_fd.total, by_fd.name_max), (v.total, v.name_max));
     }
 
     #[test]
@@ -515,7 +500,6 @@ mod tests {
         let locked = d.path().join("locked");
         std::fs::create_dir(&locked).unwrap();
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
-        // Root may change any folder.
         assert_eq!(can_change(&locked), effective_ids().0 == 0);
     }
 
@@ -527,13 +511,5 @@ mod tests {
         h.write_all(b"x").unwrap();
         let (uid, _gid) = effective_ids();
         assert_eq!(stat(&f, true).unwrap().uid, uid);
-    }
-
-    #[test]
-    fn advise_does_not_panic_on_regular_file() {
-        let d = tmp();
-        let f = d.path().join("f");
-        std::fs::write(&f, "x").unwrap();
-        advise_willneed(&File::open(&f).unwrap(), 0, 1);
     }
 }

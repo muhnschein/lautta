@@ -1,24 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app context: one [`Core`] wires the stores, the location registry and
-//! the transfer engine together (SPEC §5.3) and offers the user-level
-//! actions the UI calls. Everything here is Qt-free; the Qt layer only
-//! forwards to these methods and turns results into model updates.
 
-use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteKind, RemoteLocation};
-use crate::browse_layout::BrowseLayout;
+use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteLocation};
 use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
+use crate::home_layout::HomeLayout;
 use crate::locations::{ConnectionState, Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
 use crate::org::recents::Recents;
 use crate::paths::AppPaths;
-use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
-use crate::questions::Questions;
 use crate::search::RecentSearches;
 use crate::settings::{LocationPrefsStore, Settings};
 use crate::sort::SortKey;
@@ -28,26 +22,23 @@ use crate::trash::Trash;
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::volumes::VolumeWatcher;
+use crate::watch::{DirWatch, DirWatcher, WatchEvent, DIR_DEBOUNCE};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
-use std::sync::atomic::AtomicBool;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::watch;
 
-/// Listings kept in memory (BRW-5).
 const DIRCACHE_ENTRIES: usize = 64;
 
-/// The result of starting an operation (OPS-1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Started {
-    /// Queued as a transfer.
     Transfer(TransferId),
-    /// Over the large-operation threshold: the UI shows the summary sheet and
-    /// calls [`Core::start_plan`] when the user confirms.
     NeedsSummary(Box<Plan>),
 }
 
-/// Shared application state. Create one per process with [`Core::open`].
 pub struct Core {
     pub paths: AppPaths,
     pub db: Db,
@@ -59,20 +50,18 @@ pub struct Core {
     pub recents: Recents,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
-    /// Hidden rows and row order of the Browse page (BRW-12).
-    pub browse_layout: BrowseLayout,
+    pub home_layout: HomeLayout,
     pub working_copies: WorkingCopies,
-    /// Pending prompts (bridge identity and sign-in questions, NVB-6).
-    pub questions: Arc<Questions>,
-    /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
     pub bridge: Option<BridgeClient>,
+    pub index: Option<crate::app_index::NameIndex>,
+    pub(crate) runtime: tokio::runtime::Handle,
     settings: Mutex<Settings>,
-    /// Counts the changes of `settings` (see [`Core::watch_settings`]).
     settings_changed: watch::Sender<u64>,
-    /// Follows the removable-media root for as long as the core lives
-    /// (LOC-3); `None` when inotify is not available, then Browse finds
-    /// volumes by rescanning when it refreshes.
     _volume_watch: Option<VolumeWatcher>,
+    dir_watcher: Mutex<Option<DirWatcher>>,
+    power_save: AtomicBool,
+    pub(crate) shown_images: crate::app_viewers::ShownImages,
+    pub(crate) locked_archives: crate::app_archives::LockedArchives,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -82,8 +71,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Moves local items to the Trash when their location keeps one (OPS-8);
-/// everything else is deleted permanently by the engine.
 struct LocalTrasher {
     locations: LocationRegistry,
     trash: Trash,
@@ -99,11 +86,7 @@ impl Trasher for LocalTrasher {
     }
 }
 
-/// Moves one item of a location that keeps a trash into the Trash, by copy
-/// where the sandbox mounts the two apart (§3.3), on a blocking thread
-/// (ARC-6). Returns its trash id.
 async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<()> {
-    // An unknown or vanished location is an error, not a permanent delete.
     locations.provider(&uri.location)?;
     let path = locations
         .to_local_path(uri)
@@ -117,22 +100,15 @@ async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Re
 }
 
 impl Core {
-    /// Opens the database and the stores, scans the locations and starts the
-    /// transfer engine. Must be called inside a tokio runtime.
     pub async fn open(paths: AppPaths) -> Result<Arc<Core>> {
         let bridge = BridgeConfig::for_app(&paths);
         Core::open_full(paths.clone(), LocationRegistry::new(paths), Some(bridge)).await
     }
 
-    /// As [`Core::open`] with a prepared registry (tests use a temporary
-    /// media root) and no bridge client.
     pub async fn open_with(paths: AppPaths, locations: LocationRegistry) -> Result<Arc<Core>> {
         Core::open_full(paths, locations, None).await
     }
 
-    /// As [`Core::open`] with a prepared registry and an optional bridge
-    /// configuration. Bridge locations join the registry as they come and
-    /// go (NVB-4); transfers wait while the bridge is away (NVB-12).
     pub async fn open_full(
         paths: AppPaths,
         locations: LocationRegistry,
@@ -156,24 +132,35 @@ impl Core {
         };
         let engine = Engine::new(deps, cfg);
         let settings = Settings::default();
-        let questions = Questions::new();
         let client = match bridge {
-            Some(cfg) => Some(BridgeClient::start(cfg, questions.clone())?),
+            Some(cfg) => Some(BridgeClient::start(cfg)?),
             None => None,
         };
+        let index_path = paths.index_database();
+        let index = tokio::task::spawn_blocking(move || crate::index::store::IndexStore::open(&index_path))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
+            .map_err(|e| log::warn!("search index not opened: {e}"))
+            .ok()
+            .map(crate::app_index::NameIndex::new);
         let core = Core {
+            index,
+            runtime: tokio::runtime::Handle::current(),
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
-            browse_layout: BrowseLayout::new(db.clone()),
+            home_layout: HomeLayout::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
-            questions: questions.clone(),
             bridge: client.clone(),
             settings: Mutex::new(settings),
             settings_changed: watch::channel(0).0,
             _volume_watch: volume_watch,
+            dir_watcher: Mutex::default(),
+            power_save: AtomicBool::new(false),
+            shown_images: Default::default(),
+            locked_archives: Default::default(),
             paths,
             db,
             locations,
@@ -182,19 +169,32 @@ impl Core {
         };
         let core = Arc::new(core);
         if let Some(client) = client {
+            spawn_network_sync(&core, &client);
             spawn_bridge_sync(&core, client);
+            crate::powersave::spawn(&core, zbus::Connection::system());
+            crate::powersave::spawn_charger(&core, zbus::Connection::system());
         }
         Ok(core)
+    }
+
+    pub fn power_save(&self) -> bool {
+        self.power_save.load(Ordering::Relaxed)
+    }
+
+    pub fn set_power_save(&self, on: bool) {
+        self.power_save.store(on, Ordering::Relaxed);
     }
 
     pub fn settings(&self) -> Settings {
         lock(&self.settings).clone()
     }
 
-    /// Applies settings stored by the UI (dconf, SPEC §18).
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
+        if let Some(index) = &self.index {
+            index.set_settings(settings.index_on_charger, settings.index_on_mobile);
+        }
         let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
         if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
             self.follow_thumbnail_budget(&settings);
@@ -204,14 +204,21 @@ impl Core {
         }
     }
 
-    /// A receiver whose value increases whenever the settings change, so
-    /// what is already on screen can follow them (BRW-4: folders open
-    /// while the view settings change show the new ones at once).
     pub fn watch_settings(&self) -> watch::Receiver<u64> {
         self.settings_changed.subscribe()
     }
 
-    /// The view settings every folder uses (BRW-4).
+    pub fn watch_dir(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
+        let watcher = {
+            let mut slot = lock(&self.dir_watcher);
+            match &*slot {
+                Some(w) => w.clone(),
+                None => slot.insert(DirWatcher::new(DIR_DEBOUNCE)?).clone(),
+            }
+        };
+        watcher.watch(dir)
+    }
+
     pub fn view_prefs(&self) -> ViewPrefs {
         view_defaults(&self.settings())
     }
@@ -224,8 +231,6 @@ impl Core {
         self.locations.get(id)
     }
 
-    /// Lists a folder: the cached listing first through `cached` (BRW-5),
-    /// then the fresh one, which also refreshes the cache.
     pub async fn list(&self, dir: &Uri, cached: impl FnOnce(Vec<Entry>)) -> Result<Vec<Entry>> {
         if let Ok(Some(hit)) = self.dircache.get(dir) {
             cached(hit.entries);
@@ -242,7 +247,6 @@ impl Core {
             .await
     }
 
-    /// New folder (exclusive create, §10 table).
     pub async fn make_folder(&self, parent: &Uri, name: &[u8]) -> Result<Uri> {
         let uri = parent.join(name)?;
         self.provider(&uri.location)?.make_dir(&uri.path, true).await?;
@@ -250,7 +254,6 @@ impl Core {
         Ok(uri)
     }
 
-    /// Renames without replacing (§10 table); favourites follow.
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -271,17 +274,10 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// True when deleting `uri` moves it to the Trash (OPS-8): the trash is
-    /// on and the item is in one of this device's folders. Every other
-    /// delete is permanent, and the UI asks first. The one place that
-    /// decides; [`Core::delete`] follows it.
     pub fn deletes_to_trash(&self, uri: &Uri) -> bool {
         self.settings().recently_deleted && self.locations.keeps_trash(&uri.location)
     }
 
-    /// Deletes items (OPS-8): to the Trash where [`Core::deletes_to_trash`]
-    /// says so, after the remorse timer; the rest permanently through the
-    /// transfer engine, after the confirmation.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
         let mut permanent = Vec::new();
         let mut failed = None;
@@ -306,14 +302,13 @@ impl Core {
         }
         let dest = permanent[0].parent().unwrap_or_else(|| permanent[0].clone());
         let plan = self.plan(OperationKind::Delete, permanent, dest).await?;
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.engine
             .add(plan, &title, TransferOptions::default())
             .await
             .map(Some)
     }
 
-    /// Plans an operation (OPS-1).
     pub async fn plan(&self, kind: OperationKind, sources: Vec<Uri>, dest: Uri) -> Result<Plan> {
         let settings = self.settings();
         let dest_is_local = self.locations.to_local_path(&dest).is_some();
@@ -327,8 +322,6 @@ impl Core {
         Planner::plan(kind, sources, dest, &self.locations, &opts, &cancel, &|_| {}).await
     }
 
-    /// Copy or move: plans, then queues small plans at once; large ones need
-    /// the summary sheet first (OPS-1).
     pub async fn copy_or_move(&self, kind: OperationKind, sources: Vec<Uri>, dest: Uri) -> Result<Started> {
         let plan = self.plan(kind, sources, dest).await?;
         if plan.needs_summary {
@@ -337,9 +330,16 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Queues a planned operation. Favourites follow a same-location move.
-    pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
+    pub async fn start_plan(&self, mut plan: Plan) -> Result<TransferId> {
+        let hold = std::mem::take(&mut plan.hold);
         let settings = self.settings();
+        if plan.kind == OperationKind::Extract {
+            let dest = &plan.destination;
+            self.provider(&dest.location)?.make_dir(&dest.path, false).await?;
+            if let Some(parent) = dest.parent() {
+                self.invalidate(&parent);
+            }
+        }
         if plan.kind == OperationKind::Move {
             for item in &plan.items {
                 if item.src.location == item.dst.location && item.src.parent() != item.dst.parent() {
@@ -354,12 +354,13 @@ impl Core {
             trash: settings.recently_deleted,
             ..TransferOptions::default()
         };
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.invalidate(&plan.destination);
-        self.engine.add(plan, &title, options).await
+        let id = self.engine.add(plan, &title, options).await;
+        drop(hold);
+        id
     }
 
-    /// Restores an item from the Trash to where it was.
     pub async fn restore(&self, id: i64) -> Result<Uri> {
         let trash = self.trash.clone();
         let locations = self.locations.clone();
@@ -377,39 +378,27 @@ impl Core {
         Ok(uri)
     }
 
-    /// Opens an archive as a read-only location (LOC-5) and returns its id.
-    pub async fn open_archive(&self, uri: &Uri) -> Result<String> {
-        let id = archive_location_id(uri);
-        if self.locations.get(&id).is_some() {
-            return Ok(id);
+    fn plan_title(&self, plan: &Plan) -> String {
+        let first = plan.items.first();
+        if plan.kind == OperationKind::Extract {
+            if let Some(archive) = first.and_then(|i| self.locations.get(&i.src.location)) {
+                return archive.name;
+            }
         }
-        let source = self.provider(&uri.location)?;
-        let cache = self.paths.cache_dir().join("archives");
-        tokio::fs::create_dir_all(&cache).await?;
-        let provider = ArchiveProvider::open(source, uri.path.clone(), cache).await?;
-        let name = uri
-            .path
-            .name()
-            .map(crate::vpath::display_name)
-            .unwrap_or_default();
-        let location = Location::remote(id.clone(), LocationKind::Archive, name, Some(uri.to_string()));
-        self.locations.register(location, Arc::new(provider));
-        Ok(id)
+        first
+            .and_then(|i| i.src.name().map(crate::vpath::display_name))
+            .unwrap_or_default()
     }
 
-    /// Drops the cached listing of a folder (after a change made by the app).
     pub fn invalidate(&self, dir: &Uri) {
         let _ = self.dircache.invalidate(dir);
     }
 
-    /// Sets a location's status shown in Browse (bridge reconnects, NVB-12).
     pub fn set_location_status(&self, id: &str, status: LocationStatus, attention: Option<String>) {
         self.locations.set_status(id, status, attention);
     }
 }
 
-/// Starts following mounts and unmounts below the media root (LOC-3). The
-/// app works without it, so a failure (no inotify, watch limit) is logged.
 fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
     match locations.watch_volumes() {
         Ok(watcher) => Some(watcher),
@@ -420,8 +409,22 @@ fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
     }
 }
 
-/// Keeps the registry's remote locations and the engine's bridge state in
-/// step with the bridge client. Holds only a weak reference to the core.
+fn spawn_network_sync(core: &Arc<Core>, client: &BridgeClient) {
+    let weak = Arc::downgrade(core);
+    let mut network = client.watch_network();
+    tokio::spawn(async move {
+        loop {
+            let Some(core) = weak.upgrade() else { return };
+            let now = *network.borrow_and_update();
+            core.index_set_conditions(|c| c.network = now);
+            drop(core);
+            if network.changed().await.is_err() {
+                return;
+            }
+        }
+    });
+}
+
 fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
     let weak = Arc::downgrade(core);
     let mut locations = client.watch_locations();
@@ -444,9 +447,6 @@ fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
     });
 }
 
-/// Registry entries for the bridge's locations: hidden unless the bridge
-/// is usable (UI-8), shown as connecting while it reconnects (NVB-12),
-/// otherwise with the connection state the bridge reports (NVB-4).
 fn remote_entries(
     client: &BridgeClient,
     remote: &[RemoteLocation],
@@ -459,14 +459,10 @@ fn remote_entries(
     remote
         .iter()
         .map(|r| {
-            let kind = match r.kind {
-                RemoteKind::Account => LocationKind::Server {
-                    provider: r.provider.clone(),
-                },
-                RemoteKind::AdHoc => LocationKind::AdHoc,
+            let kind = LocationKind::Server {
+                provider: r.provider.clone(),
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
-            // The states of the last list are stale while the bridge is away.
             location.connection = match status {
                 BridgeStatus::Reconnecting => ConnectionState::Connecting,
                 _ => r.connection.clone(),
@@ -500,13 +496,4 @@ fn view_defaults(s: &Settings) -> ViewPrefs {
         view_mode: ViewMode::parse(&s.view_mode).unwrap_or(base.view_mode),
         thumbnails: s.thumbnails_local,
     }
-}
-
-/// A short engineering title for the transfer list (the first item's
-/// name); the UI renders translated text from the kind and counts.
-fn plan_title(plan: &Plan) -> String {
-    plan.items
-        .first()
-        .and_then(|i| i.src.name().map(crate::vpath::display_name))
-        .unwrap_or_default()
 }

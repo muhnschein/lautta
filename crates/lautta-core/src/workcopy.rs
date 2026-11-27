@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Working copies: remote files opened in other apps (PRV-6).
-//!
-//! A working copy is a local copy under `~/Downloads/Lautta/Opened/` (SEC-4:
-//! readable by other apps while it exists, so every copy expires). The table
-//! row keeps the size and mtime of the local file right after the download,
-//! so a copy that another app changed is not removed under it.
 
 use crate::db::Db;
 use crate::entry::{system_time_to_ms, Kind};
@@ -14,13 +8,13 @@ use crate::provider::{no_progress, Lane, Provider, ReadOptions};
 use crate::transfer::clock::Clock;
 use crate::uri::Uri;
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::fd::OwnedFd;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Copies are removed this long after they were last downloaded (PRV-6).
 pub const EXPIRY_MS: i64 = 24 * 60 * 60 * 1000;
 
 pub type WorkingCopyId = i64;
@@ -30,20 +24,15 @@ pub struct WorkingCopy {
     pub id: WorkingCopyId,
     pub remote: Uri,
     pub local_path: PathBuf,
-    /// Size of the local file right after the last download.
     pub local_size: u64,
-    /// Local mtime right after the last download.
     pub local_mtime_ms: i64,
-    /// When the copy was last downloaded.
     pub fetched_ms: i64,
 }
 
-/// True when the local file changed since the last download.
 pub fn locally_changed(c: &WorkingCopy, size: u64, mtime_ms: i64) -> bool {
     c.local_mtime_ms != mtime_ms || c.local_size != size
 }
 
-/// True when a copy may be removed now (PRV-6).
 pub fn is_expired(c: &WorkingCopy, changed: bool, now_ms: i64) -> bool {
     !changed && now_ms - c.fetched_ms >= EXPIRY_MS
 }
@@ -53,6 +42,56 @@ pub struct WorkingCopies {
     db: Db,
     paths: AppPaths,
     clock: Arc<dyn Clock>,
+    opening: Opening,
+}
+
+#[derive(Clone, Default)]
+struct Opening(Arc<Mutex<HashMap<String, Queue>>>);
+
+struct Queue {
+    slot: Arc<tokio::sync::Mutex<Option<WorkingCopy>>>,
+    users: usize,
+}
+
+struct Turn {
+    opening: Opening,
+    key: String,
+    slot: Arc<tokio::sync::Mutex<Option<WorkingCopy>>>,
+}
+
+impl Opening {
+    fn map(&self) -> MutexGuard<'_, HashMap<String, Queue>> {
+        match self.0.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        }
+    }
+
+    fn join(&self, key: String) -> Turn {
+        let mut map = self.map();
+        let q = map.entry(key.clone()).or_insert_with(|| Queue {
+            slot: Arc::default(),
+            users: 0,
+        });
+        q.users += 1;
+        Turn {
+            opening: self.clone(),
+            key,
+            slot: q.slot.clone(),
+        }
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let mut map = self.opening.map();
+        if let Some(q) = map.get_mut(&self.key) {
+            q.users -= 1;
+            if q.users == 0 {
+                map.remove(&self.key);
+            }
+        }
+    }
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
@@ -61,7 +100,6 @@ pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + 
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
 }
 
-/// Size and mtime (ms) of a working file as it is now.
 pub fn local_stamp(path: &Path) -> Result<(u64, i64)> {
     let m = std::fs::metadata(path)?;
     let ms = m.modified().map(system_time_to_ms).unwrap_or(0);
@@ -75,7 +113,6 @@ fn name_of(remote: &Uri) -> Result<Vec<u8>> {
         .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "the location root is not a file"))
 }
 
-/// Creates a fresh, uniquely named folder under `base`.
 fn unique_dir(base: &Path, now_ms: i64) -> Result<PathBuf> {
     std::fs::create_dir_all(base)?;
     for n in 0..1000u32 {
@@ -92,12 +129,26 @@ fn unique_dir(base: &Path, now_ms: i64) -> Result<PathBuf> {
 
 impl WorkingCopies {
     pub fn new(db: Db, paths: AppPaths, clock: Arc<dyn Clock>) -> WorkingCopies {
-        WorkingCopies { db, paths, clock }
+        WorkingCopies {
+            db,
+            paths,
+            clock,
+            opening: Opening::default(),
+        }
     }
 
-    /// PRV-6: a copy for another app in `~/Downloads/Lautta/Opened/<unique>/name`.
-    /// An existing copy of the same file is downloaded again in place.
     pub async fn open_for_view(&self, provider: &dyn Provider, remote: &Uri) -> Result<WorkingCopy> {
+        let turn = self.opening.join(remote.to_string());
+        let mut made = turn.slot.lock().await;
+        if let Some(c) = made.as_ref() {
+            return Ok(c.clone());
+        }
+        let c = self.open_now(provider, remote).await?;
+        *made = Some(c.clone());
+        Ok(c)
+    }
+
+    async fn open_now(&self, provider: &dyn Provider, remote: &Uri) -> Result<WorkingCopy> {
         if let Some(existing) = self.reuse(remote).await? {
             return self.refresh(provider, existing).await;
         }
@@ -111,7 +162,7 @@ impl WorkingCopies {
         let (path, file) = blocking(move || {
             let dir = unique_dir(&base, now)?;
             let path = dir.join(OsStr::from_bytes(&name));
-            let file = std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
+            let file = std::fs::OpenOptions::new() // NOSONAR
                 .write(true)
                 .create_new(true)
                 .open(&path)?;
@@ -137,12 +188,11 @@ impl WorkingCopies {
         Ok(Some(c))
     }
 
-    /// Downloads a copy again over the old file.
     async fn refresh(&self, provider: &dyn Provider, c: WorkingCopy) -> Result<WorkingCopy> {
         let entry = provider.stat(&c.remote.path, true, Lane::Interactive).await?;
         let path = c.local_path.clone();
         let file = blocking(move || {
-            Ok(std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
+            Ok(std::fs::OpenOptions::new() // NOSONAR
                 .write(true)
                 .truncate(true)
                 .open(path)?)
@@ -171,8 +221,6 @@ impl WorkingCopies {
         blocking(move || query_all(&db.lock())).await
     }
 
-    /// Removes expired copies and their files (PRV-6). Copies another app
-    /// changed stay. Returns what was removed.
     pub async fn expire(&self) -> Result<Vec<WorkingCopy>> {
         let now = self.clock.now_ms();
         let mut gone = Vec::new();
@@ -190,25 +238,22 @@ impl WorkingCopies {
         Ok(gone)
     }
 
-    /// Deletes the copy, its folder and its row.
     pub async fn remove(&self, id: WorkingCopyId) -> Result<()> {
         let c = self.get(id).await?;
         self.discard_files(&c.local_path).await;
         self.delete_row(id).await
     }
 
-    /// Removes a working file and its unique folder, but only inside the
-    /// app's own Downloads folder.
     async fn discard_files(&self, file: &Path) {
         let (file, root) = (file.to_owned(), self.paths.opened_dir());
         let removed = blocking(move || {
             let dir = file.parent().map(Path::to_owned);
             match dir {
                 Some(d) if d.parent() == Some(root.as_path()) => {
-                    std::fs::remove_dir_all(d)?; // NOSONAR: runs on the blocking pool
+                    std::fs::remove_dir_all(d)?; // NOSONAR
                 }
                 _ => {
-                    let _ = std::fs::remove_file(&file); // NOSONAR: runs on the blocking pool
+                    let _ = std::fs::remove_file(&file); // NOSONAR
                 }
             }
             Ok(())
@@ -246,8 +291,6 @@ impl WorkingCopies {
         .await
     }
 
-    /// Records a fresh download: the local file as it is now, and the
-    /// expiry clock starts again.
     async fn refetched(&self, id: WorkingCopyId) -> Result<WorkingCopy> {
         let c = self.get(id).await?;
         let path = c.local_path.clone();
@@ -307,7 +350,6 @@ fn query_all(conn: &Connection) -> Result<Vec<WorkingCopy>> {
     Ok(out)
 }
 
-/// Downloads into `file` and checks the size.
 async fn download(
     provider: &dyn Provider,
     remote: &Uri,
@@ -484,6 +526,118 @@ mod tests {
         let fresh = r.wc.open_for_view(&r.remote, &uri("f")).await.unwrap();
         assert!(fresh.local_path.exists(), "downloaded again");
         assert_eq!(r.wc.list().await.unwrap(), vec![fresh]);
+    }
+
+    fn spawn_open(r: &Rig, path: &str) -> tokio::task::JoinHandle<Result<WorkingCopy>> {
+        let (wc, remote, u) = (r.wc.clone(), r.remote.clone(), uri(path));
+        tokio::spawn(async move { wc.open_for_view(&remote, &u).await })
+    }
+
+    fn downloads(r: &Rig) -> usize {
+        let calls = r.remote.calls();
+        calls.iter().filter(|c| c.starts_with("download_into ")).count()
+    }
+
+    async fn unhung<T>(step: impl std::future::Future<Output = T>) -> T {
+        tokio::time::timeout(std::time::Duration::from_secs(10), step)
+            .await
+            .expect("step hangs")
+    }
+
+    #[tokio::test]
+    async fn overlapping_opens_of_one_file_download_it_once() {
+        let r = rig();
+        r.remote.add_file("clip.mp4", b"v1", 1000);
+        let hold = r.remote.hold_next("stat", "clip.mp4");
+        let first = spawn_open(&r, "clip.mp4");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("clip.mp4");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        hold.release.send(()).unwrap();
+        let a = unhung(first).await.unwrap().unwrap();
+        let b = unhung(second).await.unwrap();
+        assert_eq!(b, a, "same copy");
+        assert_eq!(downloads(&r), 1);
+        assert_eq!(r.wc.list().await.unwrap(), vec![a.clone()]);
+        let opened = AppPaths::new(r.home.path()).opened_dir();
+        assert_eq!(std::fs::read_dir(opened).unwrap().count(), 1);
+        r.remote.add_file("clip.mp4", b"version two", 2000);
+        let later = r.wc.open_for_view(&r.remote, &u).await.unwrap();
+        assert_eq!(std::fs::read(&later.local_path).unwrap(), b"version two");
+        assert_eq!(
+            (later.id, downloads(&r)),
+            (a.id, 2),
+            "open after them downloads again"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_open_queued_behind_a_failed_one_downloads_for_the_rest_of_the_queue() {
+        let r = rig();
+        r.remote.add_file("f", b"v1", 1000);
+        let old = r.wc.open_for_view(&r.remote, &uri("f")).await.unwrap();
+        r.remote.add_file("f", b"version two", 2000);
+        r.remote
+            .fail_next("download_into", "f", Error::kind(ErrorKind::TimedOut));
+        let hold = r.remote.hold_next("stat", "f");
+        let first = spawn_open(&r, "f");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("f");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        let second_hold = r.remote.hold_next("stat", "f");
+        hold.release.send(()).unwrap();
+        assert_eq!(
+            unhung(first).await.unwrap().unwrap_err().kind,
+            ErrorKind::TimedOut
+        );
+        unhung(async {
+            tokio::select! {
+                _ = second.as_mut() => panic!("second open must wait in its stat"),
+                got = second_hold.reached => got.unwrap(),
+            }
+        })
+        .await;
+        let mut third = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(third.as_mut()).is_pending(),
+            "queued behind second"
+        );
+        second_hold.release.send(()).unwrap();
+        let b = unhung(second).await.unwrap();
+        assert_eq!(unhung(third).await.unwrap(), b, "same copy");
+        assert_eq!(std::fs::read(&b.local_path).unwrap(), b"version two");
+        assert_eq!((b.id, b.local_size), (old.id, 11), "refreshed in place");
+        assert_eq!(downloads(&r), 3, "first copy, failed one, then one for both");
+        assert_eq!(r.wc.list().await.unwrap(), vec![b]);
+    }
+
+    #[tokio::test]
+    async fn an_open_queued_behind_a_cancelled_one_downloads_itself() {
+        let r = rig();
+        r.remote.add_file("f", b"data", 1000);
+        let hold = r.remote.hold_next("stat", "f");
+        let first = spawn_open(&r, "f");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("f");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        first.abort();
+        assert!(unhung(first).await.unwrap_err().is_cancelled());
+        let b = unhung(second).await.unwrap();
+        assert_eq!(std::fs::read(&b.local_path).unwrap(), b"data");
+        assert_eq!(downloads(&r), 1);
+        assert_eq!(r.wc.list().await.unwrap(), vec![b]);
     }
 
     #[tokio::test]

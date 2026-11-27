@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
-// context menu and its More actions page, selection mode with drag
-// selection and a docked panel, paste bar, remorse (delete, move, and the
-// undo of a rename, OPS-9) and the placeholders for empty, not accessible,
-// offline, large and error.
 import QtQuick 2.6
 import QtQml.Models 2.2
 import Sailfish.Silica 1.0
@@ -11,8 +6,11 @@ import Sailfish.Share 1.0
 import Lautta 1.0
 import "../"
 import "../transfers"
+import "../viewers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
+import "../ServerWarning.js" as ServerWarning
+import "../Access.js" as Access
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
 import "Selection.js" as Selection
@@ -22,30 +20,33 @@ Item {
 
     property string uri
     property bool selectionMode
-    // True while selection mode waits for the first item (pulley Select).
     property bool selectionWaiting
     property bool detailsShown
+    property bool picking
+    property string rootTitle
     property alias model: dir
+    property alias leadArea: leadSlot
+    property alias placesArea: placesSlot
+    readonly property bool atRoot: picking && uri.length === 0
+    readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
+    readonly property bool canPaste: dir.writable && App.clipboardCount > 0 && App.canPasteInto(uri)
     property string pendingName
-    property string pendingShare
-    // The list or the grid, whichever is shown. Both have
-    // itemIndexAt(x, y): the item at that point of their content, -1 if none.
     readonly property Item flickable: gridMode ? grid : list
-    // The item renamed last while its remorse runs (OPS-9): { uri, oldUri,
-    // isDir, ends, revealed }. Its row shows the remorse (RenameRemorse.qml).
     property var renamed: null
     property bool renamingDir
-    // The item renamed back from its remorse: that rename has none.
     property string undoingUri
-    // The More actions page while it is open.
     property Item moreActionsPage
-    // The items Move to new folder moves, until their folder is made.
     property var toMove: []
+    property var made: []
+    readonly property real coveredHeight: panelSpace.height
+    readonly property real backTapWidth: Theme.itemSizeSmall
 
-    // Asks the host page to open a folder.
     signal openFolder(string uri)
+    signal ancestorPicked(string uri)
+    signal homePicked
+    signal flashed(string itemUri)
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -61,17 +62,22 @@ Item {
         dir.clearSelection()
     }
 
-    function openItem(itemUri, isDir, mimeType) {
+    function itemPressed(itemUri, isDir, mimeType) {
+        if (!selecting && !isDir)
+            prefetch.start(itemUri, mimeType)
+    }
+
+    function openItem(itemUri, isDir, mimeType, tileSize) {
         if (isDir)
             openFolder(itemUri)
         else
-            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
+            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri, tileSize)
     }
 
-    // The pulley's New asks for the name of a folder to make here. Move to new
-    // folder (OPS-13) asks the same, and once the folder is made here
-    // (folderMade) puts `moving` into it: the dialog is the confirmation, so
-    // no remorse.
+    function offered(isDir) {
+        return !picking || isDir
+    }
+
     function newFolder(moving) {
         var dialog = openDialog("../../dialogs/NewItemDialog.qml", { "parentUri": uri })
         dialog.accepted.connect(function () {
@@ -79,6 +85,28 @@ Item {
             view.toMove = moving || []
             dir.createFolder(dialog.itemName)
         })
+    }
+
+    function add() {
+        var dialog = openDialog("../../dialogs/AddDialog.qml", { "parentUri": uri })
+        dialog.picked.connect(function (choice, next) {
+            if (choice === "scan") {
+                next.owner = view
+                next.scan = scanMaker.createObject(view)
+                return
+            }
+            next.accepted.connect(function () {
+                view.pendingName = next.itemName
+                view.toMove = []
+                dir.createFolder(next.itemName)
+            })
+        })
+    }
+
+    function endScan(scan, savedUri) {
+        scan.destroy()
+        if (savedUri)
+            landed([savedUri], true)
     }
 
     function rename(info) {
@@ -90,7 +118,6 @@ Item {
         })
     }
 
-    // A rename is undone from a remorse on its row, not a banner (OPS-9).
     function renameDone(oldUri, newUri) {
         if (oldUri === undoingUri) {
             undoingUri = ""
@@ -102,10 +129,6 @@ Item {
         renamedTimer.restart()
     }
 
-    // Shows the remorse of the rename on `row` (a list row or grid cell) for
-    // the time left. Returns { rename, orphaned }; the row sets `orphaned`
-    // when it goes: its remorse ends with it then, and that is not running
-    // out.
     function showRenameRemorse(row) {
         var r = renamed
         var left = r ? r.ends - Date.now() : 0
@@ -127,8 +150,6 @@ Item {
         return shown
     }
 
-    // Silica keeps one remorse item per row for all its timers: `action`
-    // belongs to this one only.
     function onceCanceled(remorse, action) {
         var done = function () {
             remorse.canceled.disconnect(canceled)
@@ -149,7 +170,6 @@ Item {
         }
     }
 
-    // Tapping the remorse renames the item back.
     function undoRename(r) {
         forgetRename(r)
         undoingUri = r.uri
@@ -157,8 +177,6 @@ Item {
         dir.rename(r.uri, pendingName)
     }
 
-    // The renamed item may have moved out of sight: bring its row, and so
-    // its remorse, into view once the listing has it.
     function revealRenamed() {
         if (!renamed || renamed.revealed || dir.loading)
             return
@@ -166,12 +184,42 @@ Item {
         if (index < 0)
             return
         renamed.revealed = true
-        flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
+        showIndex(index)
+        flashed(renamed.uri)
     }
 
-    // As many grid rows as the items need (SPEC §15.3). Rows come and go at
-    // the end only, so the grid keeps its place: a new count as the model
-    // would start it anew at its top.
+    function showIndex(index) {
+        var f = flickable
+        var row = gridMode ? GridRows.rowOf(index, grid.columns) : index
+        f.positionViewAtIndex(row, ListView.Contain)
+        var covered = f.indexAt(f.width / 2, f.contentY + f.height - coveredHeight)
+        if (coveredHeight > 0 && covered >= 0 && row >= covered)
+            f.contentY = Math.min(f.contentY + coveredHeight, f.originY + f.contentHeight - f.height)
+    }
+
+    function landed(uris, relist) {
+        var bare = function (u) { return u.replace(/\/+$/, "") }
+        var here = uris.filter(function (u) { return bare(App.parentUri(u)) === bare(view.uri) })
+        if (here.length === 0)
+            return
+        made = made.concat(here)
+        if (relist)
+            dir.refresh()
+    }
+
+    function revealMade() {
+        if (made.length === 0 || dir.loading)
+            return
+        var found = made.filter(function (u) { return dir.indexOf(u) >= 0 })
+        made = []
+        if (found.length === 0)
+            return
+        var rows = found.map(function (u) { return dir.indexOf(u) })
+        showIndex(Math.max.apply(null, rows))
+        showIndex(Math.min.apply(null, rows))
+        found.forEach(function (u) { view.flashed(u) })
+    }
+
     function fitGridRows() {
         var wanted = gridMode ? GridRows.rowCount(dir.count, grid.columns) : 0
         if (gridRows.count > wanted)
@@ -183,14 +231,11 @@ Item {
             gridRows.append(more)
     }
 
-    // The popup holds one remorse: a new one first runs the one pending,
-    // as Silica does when the page goes.
     function settleRemorse() {
         if (remorsePopup.active)
             remorsePopup.trigger()
     }
 
-    // A copy starts at once, a cut moves after the remorse timer (OPS-9).
     function paste() {
         settleRemorse()
         if (App.clipboardCut) {
@@ -202,8 +247,6 @@ Item {
             Operations.copyTo(JSON.stringify(taken.items), uri)
     }
 
-    // The cut items stay cut while the remorse runs: tapping it cancels, and
-    // nothing has moved or been taken off the clipboard.
     function pasteCut() {
         var json = App.clipboardJson()
         var items = JSON.parse(json)
@@ -211,8 +254,6 @@ Item {
             return
         var folder = uri
         var action = function () {
-            // Only the cut that was pasted is consumed: a copy or a cut made
-            // since stays.
             if (App.clipboardCut && App.clipboardJson() === json)
                 App.clearClipboard()
             Operations.moveTo(json, folder)
@@ -225,8 +266,8 @@ Item {
                              : qsTrId("lautta-dir-moving-many", items.length), action, timeout)
     }
 
-    // A folder this view made is there: Move to new folder puts its items in.
     function folderMade(folderUri) {
+        landed([folderUri], false)
         var items = toMove
         toMove = []
         if (items.length > 0)
@@ -249,8 +290,6 @@ Item {
         moreActionsPage = pageStack.push(Qt.resolvedUrl("MoreActionsPage.qml"), { "owner": view, "info": info })
     }
 
-    // The More actions page of the selected items (SPEC §15.3, OPS-12),
-    // opened by the panel's More actions button.
     function moreSelection() {
         var uris = dir.selectedUris()
         if (uris.length === 0)
@@ -260,8 +299,6 @@ Item {
         })
     }
 
-    // A dialog opened from More actions takes that page's place, so that
-    // leaving the dialog returns to the folder.
     function openDialog(path, properties) {
         var url = Qt.resolvedUrl(path)
         if (moreActionsPage && pageStack.currentPage === moreActionsPage)
@@ -269,8 +306,6 @@ Item {
         return pageStack.push(url, properties)
     }
 
-    // OPS-8: to the Trash after the remorse timer; for good (volumes,
-    // servers, the Trash off) once the dialog is accepted, with no timer.
     function remove(uris, listItem) {
         var action = function () {
             Operations.remove(JSON.stringify(uris))
@@ -294,10 +329,15 @@ Item {
         }
     }
 
-    function share(uris, mimeType) {
+    function share(uris) {
+        var type = dir.shareType(JSON.stringify(uris))
         if (uris.length === 1 && !App.isLocal(uris[0])) {
-            pendingShare = uris[0]
-            App.prepareExternal(uris[0])
+            var getting = openDialog("../../dialogs/OpenRemoteDialog.qml", { "uri": uris[0], "share": true })
+            getting.fetched.connect(function (fileUrl) {
+                shareAction.resources = [fileUrl]
+                shareAction.mimeType = type
+                shareAction.trigger()
+            })
             return
         }
         var urls = []
@@ -307,38 +347,33 @@ Item {
                 urls.push(url)
         }
         shareAction.resources = urls
-        shareAction.mimeType = uris.length === 1 ? mimeType : "*/*"
+        shareAction.mimeType = type
         shareAction.trigger()
     }
 
-    // One action on one or more items; `info` describes the first item. A
-    // favourite is the item itself (ORG-1): a folder unless `info` says it
-    // is a file (the path menu's favourite is the folder shown).
     function runAction(id, uris, info, listItem) {
         switch (id) {
-        case "share": share(uris, info.mimeType); break
+        case "share": share(uris); break
         case "copy": App.copy(JSON.stringify(uris)); break
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
         case "moveToNewFolder": newFolder(uris); break
-        // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
+        case "extract": Operations.extract(uris[0], ""); break
+        case "checksums": openDialog("../../pages/ChecksumsPage.qml", { "uri": uris[0] }); break
+        case "verify": openDialog("../../pages/VerifyFilesPage.qml", { "uri": uris[0] }); break
         case "favourite":
             openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break
         }
     }
 
-    // The first of the selected `uris` as a row describes it; Rename and Add
-    // to favourites need to know whether their one item is a folder.
     function selectionInfo(uris) {
         return { "uri": uris[0], "mimeType": "", "isDir": dir.kindOf(uris[0]) === "folder" }
     }
 
-    // Actions of the selection panel and of its More actions page (board
-    // DirectorySelect).
     function runSelectionAction(id) {
         var uris = dir.selectedUris()
         if (uris.length === 0)
@@ -348,17 +383,27 @@ Item {
             endSelection()
     }
 
+    function hiddenTitle() {
+        //% "Files here are hidden"
+        return qsTrId("lautta-dir-hidden")
+    }
+
+    function hiddenHint() {
+        //% "Files you add show in Activity, not here"
+        return qsTrId("lautta-dir-hidden-hint")
+    }
+
     function placeholderKind() {
-        if (dir.count > 0 || dir.loading)
+        if (dir.count > 0 || dir.loading || atRoot)
             return ""
         if (dir.errorKind === "Sandbox" || dir.errorKind === "PermissionDenied")
             return "noaccess"
         if (dir.errorKind.length > 0)
             return "error"
-        return "empty"
+        return dir.readable ? "empty" : "hidden"
     }
 
-    function placeholderTitle(kind) {
+    function placeholderTitle(kind, errorKind) {
         switch (kind) {
         case "noaccess":
             //% "Not accessible"
@@ -366,11 +411,13 @@ Item {
         case "empty":
             //% "No files"
             return qsTrId("lautta-dir-empty")
+        case "hidden":
+            return hiddenTitle()
         }
-        switch (dir.errorKind) {
+        switch (errorKind) {
         case "AuthFailed":
-            //% "Sign-in failed"
-            return qsTrId("lautta-dir-err-auth")
+        case "ServerIdentityChanged":
+            return ServerWarning.title(errorKind)
         case "NotFound":
             //% "Folder not found"
             return qsTrId("lautta-dir-err-not-found")
@@ -386,32 +433,41 @@ Item {
         return qsTrId("lautta-dir-err-generic")
     }
 
-    function placeholderHint(kind) {
+    function placeholderHint(kind, errorKind) {
         switch (kind) {
         case "noaccess":
-            return dir.errorKind === "Sandbox"
+            return errorKind === "Sandbox"
                    //% "This link points outside the folders Lautta may read."
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
+        case "hidden":
+            return hiddenHint()
         case "empty":
-            return dir.writable
-                   //% "Pull down to create a folder or paste"
-                   ? qsTrId("lautta-dir-empty-hint")
-                   //% "This folder is empty"
-                   : qsTrId("lautta-dir-empty-hint-readonly")
+            if (picking && dir.writable)
+                //% "Save here, or pull down to create a folder"
+                return qsTrId("lautta-dir-empty-hint-picking")
+            if (!dir.writable)
+                //% "This folder is empty"
+                return qsTrId("lautta-dir-empty-hint-readonly")
+            return canPaste
+                   //% "Pull down to add or paste"
+                   ? qsTrId("lautta-dir-empty-hint-paste")
+                   //% "Pull down to add"
+                   : qsTrId("lautta-dir-empty-hint")
         }
-        var text = ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+        var text = ServerWarning.level(errorKind)
+                   ? ServerWarning.hint(errorKind, dir.locationName)
+                   : ErrorText.message(errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
         return detailsShown ? text + "\n\n" + dir.errorMessage : text
     }
 
-    function placeholderButtons(kind) {
+    function placeholderButtons(kind, errorKind) {
         if (kind !== "error")
             return []
         var buttons = []
-        if (dir.errorKind === "AuthFailed")
-            //% "Update sign-in"
-            buttons.push({ "text": qsTrId("lautta-dir-update-sign-in"), "action": "signIn" })
+        if (ServerWarning.level(errorKind))
+            buttons.push({ "text": ServerWarning.fixText(errorKind), "action": "account", "primary": true })
         else
             //% "Retry"
             buttons.push({ "text": qsTrId("lautta-dir-retry"), "action": "retry" })
@@ -424,8 +480,7 @@ Item {
         switch (action) {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
-        case "signIn":
-            // The sign-in is netvfs' to update, as from the Browse menu (NVB-5).
+        case "account":
             Bridge.editAccount("lautta://" + uri.split("/")[2] + "/")
             break
         }
@@ -448,7 +503,10 @@ Item {
                 view.undoingUri = ""
             view.notifyFailure(kind, message, view.pendingName)
         }
-        onStateChanged: view.revealRenamed()
+        onStateChanged: {
+            view.revealRenamed()
+            view.revealMade()
+        }
         onCountChanged: view.fitGridRows()
         onCreated: view.folderMade(uri)
         onCreateFailed: {
@@ -478,8 +536,6 @@ Item {
         id: remorsePopup
     }
 
-    // The remorse of the rename ran out, shown or not (its row may be out
-    // of view): the new name stays.
     Timer {
         id: renamedTimer
 
@@ -493,29 +549,23 @@ Item {
         onTriggered: dir.refresh()
     }
 
-    // A folder on a server is not watched: it is listed again when a transfer
-    // ends, as moves in and out of it change it.
     Connections {
         target: Transfers
+        onLanded: view.landed(JSON.parse(urisJson), true)
         onFinished: if (view.visible && Qt.application.state === Qt.ApplicationActive) dir.revisit()
     }
 
     Connections {
-        target: App
-        onExternalReady: {
-            if (uri === view.pendingShare) {
-                view.pendingShare = ""
-                shareAction.resources = [fileUrl]
-                shareAction.mimeType = "*/*"
-                shareAction.trigger()
-            }
-        }
-        onExternalFailed: {
-            if (uri === view.pendingShare) {
-                view.pendingShare = ""
-                view.notifyFailure(kind, message, App.nameOf(uri))
-            }
-        }
+        target: Operations
+        onJobFinished: if (ok && resultUri) view.landed([resultUri], true)
+    }
+
+    ViewerPrefetch { id: prefetch }
+
+    Component {
+        id: scanMaker
+
+        ScanModel { }
     }
 
     Component {
@@ -542,18 +592,18 @@ Item {
             }
 
             contentHeight: Theme.itemSizeMedium
-            menu: view.selecting || model.inaccessible ? null : contextMenu
-            enabled: !model.inaccessible
-            opacity: model.inaccessible ? Theme.opacityLow : 1
+            menu: view.selecting || view.picking || model.inaccessible ? null : contextMenu
+            enabled: !model.inaccessible && view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, icon.thumbnailReady ? icon.size : 0)
             }
-            // Outside selection the long-press menu opens; while selecting,
-            // holding flips the item and a drag goes on as in the grid.
             onPressAndHold: {
+                prefetch.stop()
                 if (!view.selecting)
                     return
                 DelegateModel.inPersistedItems = true
@@ -561,9 +611,11 @@ Item {
             }
             onPositionChanged: if (dragSelect.holder === item) dragSelect.move(mouse.x, mouse.y)
             onReleased: item.letGo()
-            onCanceled: item.letGo()
+            onCanceled: {
+                prefetch.stop()
+                item.letGo()
+            }
 
-            // Last: the view drops a row out of view once it is not held.
             function letGo() {
                 if (dragSelect.holder !== item)
                     return
@@ -583,6 +635,12 @@ Item {
                 uri: model.uri
             }
 
+            NewItemFlash {
+                anchors.fill: parent
+                owner: view
+                uri: model.uri
+            }
+
             FileIcon {
                 id: icon
 
@@ -595,7 +653,6 @@ Item {
                 thumbnailSource: model.thumbnailSource
                 mimeType: model.mimeType
                 selected: model.selected
-                // Coloured as the name beside it.
                 highlighted: item.highlighted || model.selected
             }
 
@@ -677,42 +734,63 @@ Item {
         BackgroundItem {
             id: cell
 
-            // A folder here (device, drives) shows its item count, asked for
-            // when the cell appears and again when the folder or the hidden
-            // files setting changed.
             readonly property string itemName: model.name
             readonly property int items: model.itemCount
             readonly property bool counting: model.isDir && dir.folderCounts
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
+            readonly property string previewKey: model.textThumb ? model.uri + "/" + model.modified + "/" + model.size : ""
+            property string previewAsked
             readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
 
-            // Its column in its row (gridRowDelegate), as tall as the row,
-            // which is as tall as its tallest cell.
             x: (index % grid.columns) * width
+            y: parent ? parent.lead : 0
             width: grid.cellWidth
-            height: parent ? parent.height : implicitHeight
+            height: parent ? parent.height - y : implicitHeight
+            enabled: view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
-            Component.onCompleted: cell.countItems()
+            onPreviewKeyChanged: cell.askPreview()
+            Component.onCompleted: {
+                cell.countItems()
+                cell.askPreview()
+            }
+            Component.onDestruction: {
+                if (previewAsked)
+                    dir.cancelPreview(previewAsked)
+            }
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, tileIcon.thumbnailReady ? Math.round(tileIcon.width) : 0)
             }
-            // As in Photos apps, holding an item selects it (starting selection
-            // mode) and the finger then selects a range (DragSelect, §15.3).
-            // Its row stays while it scrolls out of view (gridRowDelegate).
-            onPressAndHold: dragSelect.begin(cell, index, mouse.x, mouse.y)
+            onPressAndHold: {
+                prefetch.stop()
+                if (dir.readable && !view.picking)
+                    dragSelect.begin(cell, index, mouse.x, mouse.y)
+            }
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
-            onCanceled: cell.letGo()
+            onCanceled: {
+                prefetch.stop()
+                cell.letGo()
+            }
 
             function countItems() {
                 if (counting)
                     dir.requestCount(model.uri)
+            }
+
+            function askPreview() {
+                if (previewAsked && previewAsked !== model.uri)
+                    dir.cancelPreview(previewAsked)
+                previewAsked = model.textThumb ? model.uri : ""
+                if (previewAsked)
+                    dir.requestPreview(previewAsked)
             }
 
             function letGo() {
@@ -752,8 +830,18 @@ Item {
                     thumbnailSource: model.thumbnailSource
                     mimeType: model.mimeType
                     selected: model.selected
-                    // Coloured as the name under it.
+                    previewText: model.textPreview
+                    previewMono: model.textPreviewMono
+                    typeIcon: model.typeIcon
                     highlighted: cell.highlighted || model.selected
+                }
+
+                NewItemFlash {
+                    id: tileFlash
+
+                    anchors.fill: parent
+                    owner: view
+                    uri: model.uri
                 }
             }
 
@@ -769,20 +857,14 @@ Item {
                 metrics: gridMetrics
                 name: cell.itemName
                 captions: cell.captions
-                // A folder's count has its line while it is coming.
                 minLines: cell.counting && !model.inaccessible ? 1 : 0
                 emphasised: cell.highlighted || model.selected
                 pressed: cell.highlighted
+                glow: tileFlash.opacity
             }
         }
     }
 
-    // A row of the grid (SPEC §15.3): the items `first` to `first + columns
-    // - 1`, cells of gridDelegate, as tall as its tallest cell. Only rows the
-    // view makes are measured, never every name of a large folder (PRF-1,
-    // PRF-3).
-    // Its DelegateModel shows the row's items of the folder's model, group
-    // "inRow", so cells follow their item's roles as the list's rows do.
     Component {
         id: gridRowDelegate
 
@@ -790,36 +872,29 @@ Item {
             id: gridRow
 
             readonly property int first: index * grid.columns
-            // Past its last item; changes with the columns, also in row 0.
             readonly property int end: (index + 1) * grid.columns
-            // The row holds the cell a drag holds: it stays, and so the cell
-            // and its finger, while it scrolls out of view (DragSelect).
             readonly property bool holding: !!dragSelect.holder && dragSelect.holder.parent === gridRow
+            readonly property real lead: index === 0 ? gridMetrics.firstRowLead : 0
 
-            // Its items in group "inRow", the others out of it. A cell that
-            // stays in the row is kept, not made anew. From the columns
-            // themselves: `first` may not have followed them yet.
             function regroup() {
                 var all = rowCells.items
-                var from = index * grid.columns
-                var to = Math.min(from + grid.columns, all.count)
+                var span = GridRows.span(index, grid.columns, all.count)
                 var kept = []
                 for (var i = inRow.count - 1; i >= 0; --i) {
                     var at = inRow.get(i).itemsIndex
-                    if (at < from || at >= to)
+                    if (at < span.from || at >= span.to)
                         inRow.remove(i, 1)
                     else
                         kept.push(at)
                 }
-                for (var j = from; j < to; ++j) {
+                for (var j = span.from; j < span.to; ++j) {
                     if (kept.indexOf(j) < 0)
                         all.addGroups(j, 1, "inRow")
                 }
             }
 
             width: grid.width
-            // The cells are its children; so is the Repeater, of no height.
-            height: GridRows.tallest(children)
+            height: lead + GridRows.tallest(children)
             onEndChanged: regroup()
             onHoldingChanged: DelegateModel.inPersistedItems = holding
             Component.onCompleted: regroup()
@@ -837,7 +912,6 @@ Item {
                 filterOnGroup: "inRow"
             }
 
-            // Items came, went or moved: the row's items are others.
             Connections {
                 target: rowCells.items
                 onChanged: gridRow.regroup()
@@ -857,19 +931,11 @@ Item {
         id: gridRows
     }
 
-    // One flickable owns the pulley, as on any Silica page: pulling moves
-    // header and content together, menu above the header at the top of the
-    // page. PullDownMenu draws at the top of its flickable: on the list or
-    // grid it would come out under the header. Host never scrolls (content
-    // as big as itself), so the header stays while list or grid scrolls;
-    // those have no menu, so stop at their top and a pull there goes on to
-    // the host (SPEC §15.3).
     SilicaFlickable {
         id: pulleyHost
 
         objectName: "folderPulleyHost"
         anchors.fill: parent
-        // A flickable's content is 0x0 until told; anchors to parent go to it.
         contentWidth: width
         contentHeight: height
 
@@ -877,12 +943,6 @@ Item {
             owner: view
         }
 
-        // The folder's header, its progress line, path menu and notices stay at
-        // the top of the page while the list or grid scrolls under them (SPEC
-        // §15.3). They are not the header of the list: a list keeps its contentY
-        // when its header grows, so a notice that came after the rows scrolled
-        // the list away from its top. Stacked by anchors, not a Column: the
-        // height follows a notice at once, not at the next polish.
         Item {
             id: top
 
@@ -896,28 +956,69 @@ Item {
             height: errorNotice.y + errorNotice.height
 
             Item {
-                id: headerBar
+                id: leadSlot
 
                 width: parent.width
-                height: pageHeader.height
+                height: childrenRect.height
+            }
+
+            Item {
+                id: headerBar
+
+                objectName: "folderHeaderBar"
+                anchors.top: leadSlot.bottom
+                width: parent.width
+                height: view.picking ? band.space : pageHeader.height + crumbs.menuHeight
+
+                Loader {
+                    id: band
+
+                    readonly property real space: item ? item.height + item.menuHeight : 0
+
+                    width: parent.width
+                    active: view.picking
+                    sourceComponent: PathBand {
+                        objectName: "folderBand"
+                        title: view.atRoot ? view.rootTitle : dir.title
+                        pathModel: path
+                        menuHost: headerBar
+                        menuMost: Math.max(0, Math.floor((view.height - leadSlot.height) / Theme.itemSizeSmall) - 1)
+                        homeText: view.rootTitle
+                        onPicked: view.ancestorPicked(uri)
+                        onHome: view.homePicked()
+                    }
+                }
 
                 PageHeader {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
-                    // No breadcrumb (as in iOS Files): the path menu shows the way up.
-                    // No description either, also while selecting: the count takes
-                    // the name's place (as Sailfish pickers' "Accept %n"), so the
-                    // header keeps its height and nothing under it jumps.
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting
-                    onClicked: pathMenu.open = !pathMenu.open
+                    visible: !view.picking
+                    leftMargin: view.backTapWidth
+                    description: !view.selecting && Operations.isArchive(view.uri)
+                                 //% "Compressed file · read only"
+                                 ? qsTrId("lautta-dir-compressed-readonly")
+                                 : ""
+                    extraContent.children: [
+                        PathCrumbs {
+                            id: crumbs
+
+                            objectName: "folderCrumbs"
+                            anchors.fill: parent
+                            title: view.selecting
+                                   //% "%n selected"
+                                   ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                                   : dir.title
+                            pathShown: !view.selecting
+                            pathModel: path
+                            titleTop: pageHeader.topMargin
+                            menuHost: headerBar
+                            menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
+                            homeInset: view.width / 4 - view.backTapWidth
+                            onPicked: view.ancestorPicked(uri)
+                            onHome: view.homePicked()
+                        }
+                    ]
                 }
             }
 
@@ -928,23 +1029,40 @@ Item {
                 running: dir.loading
             }
 
-            PathMenu {
-                id: pathMenu
+            Item {
+                id: accessNotice
 
-                objectName: "folderPathMenu"
+                objectName: "folderAccessNotice"
                 anchors.top: progress.bottom
-                // The rest of the page less a strip of the list; longer, it scrolls.
-                maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
-                pathModel: path
-                currentUri: view.uri
-                onNavigate: view.openFolder(uri)
-                onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
+                width: parent.width
+                visible: dir.access.length > 0
+                height: visible ? accessRow.height + Theme.paddingMedium : 0
+
+                Row {
+                    id: accessRow
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Theme.paddingSmall
+
+                    HighlightImage {
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "image://theme/icon-s-secure"
+                        color: Theme.secondaryHighlightColor
+                    }
+                    Label {
+                        objectName: "folderAccessLevel"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Access.name(dir.access)
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                    }
+                }
             }
 
             InfoBanner {
                 id: offlineNotice
 
-                anchors.top: pathMenu.bottom
+                anchors.top: accessNotice.bottom
                 visible: dir.offline
                 height: visible ? implicitHeight : 0
                 //% "Offline. Showing the copy from %1. Changes aren't possible."
@@ -987,7 +1105,7 @@ Item {
                 anchors.top: gridNotice.bottom
                 visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
                 height: visible ? implicitHeight : 0
-                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
                 actionText: qsTrId("lautta-dir-retry")
                 onAction: dir.refresh()
             }
@@ -1007,23 +1125,30 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: !view.gridMode
+            visible: !view.gridMode && !view.atRoot
             model: view.gridMode ? null : dir
             delegate: listDelegate
             footer: Item {
                 width: list.width
-                height: panelSpace.height
+                height: (hiddenNote.visible ? hiddenNote.y + hiddenNote.height : 0) + panelSpace.height
+
+                FolderPlaceholder {
+                    id: hiddenNote
+
+                    visible: !dir.readable && dir.count > 0
+                    x: Theme.horizontalPageMargin
+                    y: Theme.itemSizeLarge
+                    title: view.hiddenTitle()
+                    hint: view.hiddenHint()
+                }
             }
 
             VerticalScrollDecorator { }
         }
 
-        // The grid: a list of rows (gridRowDelegate), each as tall as its
-        // tallest cell; a GridView gives every cell one height.
         SilicaListView {
             id: grid
 
-            // Landscape keeps the tile size of portrait.
             readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
             readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
             readonly property real cellWidth: width / columns
@@ -1039,31 +1164,48 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: view.gridMode
+            visible: view.gridMode && !view.atRoot
             model: gridRows
             delegate: gridRowDelegate
             onColumnsChanged: view.fitGridRows()
             footer: Item {
                 width: grid.width
-                height: panelSpace.height
+                height: (hiddenNote.visible ? hiddenNote.y + hiddenNote.height : 0) + panelSpace.height
+
+                FolderPlaceholder {
+                    id: hiddenNote
+
+                    visible: !dir.readable && dir.count > 0
+                    x: Theme.horizontalPageMargin
+                    y: Theme.itemSizeLarge
+                    title: view.hiddenTitle()
+                    hint: view.hiddenHint()
+                }
             }
 
             VerticalScrollDecorator { }
         }
+
+        Item {
+            id: placesSlot
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            visible: view.atRoot
+        }
     }
 
-    // Room for the docked panels and the activity bar at the end of the list.
     Item {
         id: panelSpace
 
         width: 1
-        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
+        height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
-    // The loading, empty and error states sit in the content of the list or
-    // grid, as Silica's ViewPlaceholder does, so pulling the pulley moves
-    // them with the content. As siblings of the views they stayed put, and in
-    // an empty folder they are all there is below the header.
     Item {
         id: stateLayer
 
@@ -1088,10 +1230,11 @@ Item {
             objectName: "folderPlaceholder"
             visible: kind.length > 0
             x: Theme.horizontalPageMargin
-            y: Math.round(parent.height * 0.38)
-            title: view.placeholderTitle(kind)
-            hint: view.placeholderHint(kind)
-            buttons: view.placeholderButtons(kind)
+            y: Math.max(0, Math.min(Math.round(parent.height * 0.38), parent.height - height - Theme.paddingLarge))
+            level: ServerWarning.level(dir.errorKind)
+            title: view.placeholderTitle(kind, dir.errorKind)
+            hint: view.placeholderHint(kind, dir.errorKind)
+            buttons: view.placeholderButtons(kind, dir.errorKind)
             onTriggered: view.placeholderAction(action)
         }
     }
@@ -1116,11 +1259,10 @@ Item {
         owner: view
     }
 
-    // Above the paste bar; out of the way while selecting (XFR-13).
     ActivityBar {
         id: activityBar
 
-        allowed: !view.selecting
+        allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
     }
 }

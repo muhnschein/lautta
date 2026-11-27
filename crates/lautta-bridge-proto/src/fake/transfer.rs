@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Jobs and listings of the fake: the work behind `List`, `Upload`,
-//! `Download`, `CopyAcross`, `RemoveTree` and `Walk`. Local data moves through
-//! the file descriptors the client passed, at explicit offsets for regular
-//! files and sequentially for pipes (netvfs XB-11).
 
 use super::args::{CopyOpts, Disposition, TransferOpts, WalkOpts};
 use super::fail::Fail;
-use super::iface::{ask_question, Iface};
-use super::state::{InfoValue, JobFailure, RecordedAnswer, Session, Shared};
+use super::iface::Iface;
+use super::state::{JobFailure, Session, Shared};
 use super::tree::Tree;
-use crate::wire::{WireEntry, WireWalkItem};
+use crate::access::{self, After};
+use crate::wire::{check_changed, WireCheckItem, WireCheckResult, WireEntry, WireWalkItem, MAX_LIST_BATCH};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -24,7 +21,6 @@ const WALK_BATCH: usize = 64;
 
 type Extra = HashMap<String, Value<'static>>;
 
-/// What a running request needs to talk to its client.
 pub(super) struct Env {
     pub shared: Arc<Shared>,
     pub session: Arc<Session>,
@@ -32,10 +28,6 @@ pub(super) struct Env {
 }
 
 impl Env {
-    pub async fn ask(&self, kind: &str, details: &[(String, InfoValue)]) -> Option<RecordedAnswer> {
-        ask_question(&self.shared, &self.session, &self.ctx, kind, details).await
-    }
-
     fn chunk(&self) -> usize {
         self.shared.with(|s| s.chunk)
     }
@@ -50,7 +42,6 @@ impl Env {
     async fn progress(&self, job: u32, done: u64, total: Option<u64>) {
         let done = i64::try_from(done).unwrap_or(i64::MAX);
         let total = total.map_or(-1, |t| i64::try_from(t).unwrap_or(i64::MAX));
-        // A closed client misses its progress.
         let _ = Iface::job_progress(&self.ctx, job, done, total).await;
     }
 
@@ -89,7 +80,6 @@ fn bytes_extra(done: u64) -> Extra {
     extra
 }
 
-/// A local file the client passed: a regular file or a pipe.
 pub(super) struct Source {
     file: Arc<File>,
     fifo: bool,
@@ -160,14 +150,11 @@ impl Source {
 
 fn io_fail(e: &std::io::Error) -> Fail {
     if e.raw_os_error() == Some(EBADF) {
-        // The descriptor was not opened for what the job needs (XB-11).
         Fail::net("PermissionDenied", "The descriptor does not allow this access")
     } else {
         Fail::net("Io", &e.to_string())
     }
 }
-
-// ---- listing -----------------------------------------------------------
 
 pub(super) async fn run_list(
     env: Env,
@@ -205,23 +192,21 @@ async fn send_batches(
     Ok(())
 }
 
-// ---- upload ------------------------------------------------------------
-
 pub(super) async fn run_upload(
     env: Env,
     job: u32,
     cancel: Arc<AtomicBool>,
-    loc: String,
-    path: Vec<u8>,
+    (loc, path, call): (String, Vec<u8>, After),
     src: Source,
     opts: TransferOpts,
 ) {
     let failure = env.job_failure("Upload");
     let result = upload(&env, job, &cancel, (&loc, &path), &src, &opts, failure).await;
+    env.shared
+        .with(|s| s.after_call(&loc, &path, call, result.as_ref().err().map(Fail::bare)));
     env.finish(job, result).await;
 }
 
-/// Where the data goes in the destination, or the error of the disposition.
 fn upload_start(tree: &Tree, path: &[u8], opts: &TransferOpts) -> Result<usize, Fail> {
     let existing = tree.node(path).is_some();
     match opts.disposition {
@@ -275,7 +260,6 @@ async fn upload(
             }
         }
     }
-    // A failed upload leaves what arrived in place so that it can be resumed (XB-13).
     env.shared
         .with(|s| s.tree_mut(loc).write_file(path, at, &data, opts.mtime_ms))?;
     outcome.map(|()| bytes_extra(done))
@@ -307,8 +291,6 @@ async fn upload_step(
     env.pause().await;
     Ok(moved)
 }
-
-// ---- download ----------------------------------------------------------
 
 pub(super) async fn run_download(
     env: Env,
@@ -369,8 +351,6 @@ async fn download(
     Ok(bytes_extra(done))
 }
 
-// ---- tree jobs ---------------------------------------------------------
-
 pub(super) async fn run_remove_tree(env: Env, job: u32, cancel: Arc<AtomicBool>, loc: String, path: Vec<u8>) {
     let failure = env.job_failure("RemoveTree");
     let result = if cancel.load(Ordering::SeqCst) {
@@ -395,18 +375,131 @@ pub(super) async fn run_walk(
     env: Env,
     job: u32,
     cancel: Arc<AtomicBool>,
-    loc: String,
-    root: Vec<u8>,
+    (loc, root, folders_only): (String, Vec<u8>, bool),
     opts: WalkOpts,
 ) {
     let listing = env
         .shared
         .with(|s| s.tree_mut(&loc).walk(&root, opts.max_depth, opts.post_order))
-        .map_err(Fail::from);
+        .map_err(Fail::from)
+        .map(|mut items| {
+            items.retain(|(_, e)| !folders_only || access::is_folder(e.kind, e.target_kind));
+            items
+        });
     let result = match listing {
         Ok(items) => walk_batches(&env, job, &cancel, items).await,
         Err(f) => Err(f),
     };
+    env.finish(job, result).await;
+}
+
+pub(super) async fn run_search(
+    env: Env,
+    job: u32,
+    cancel: Arc<AtomicBool>,
+    (loc, root, folders_only): (String, Vec<u8>, bool),
+    (text, limit): (String, usize),
+) {
+    let needle = text.to_lowercase();
+    let listing = env
+        .shared
+        .with(|s| s.tree_mut(&loc).walk(&root, -1, false))
+        .map_err(Fail::from)
+        .map(|mut items| {
+            items.retain(|(_, e)| !folders_only || access::is_folder(e.kind, e.target_kind));
+            items.retain(|(_, e)| String::from_utf8_lossy(&e.name).to_lowercase().contains(&needle));
+            items.truncate(limit);
+            let below = if root.is_empty() { 0 } else { root.len() + 1 };
+            for (path, _) in &mut items {
+                *path = path.get(below..).unwrap_or_default().to_vec();
+            }
+            items
+        });
+    let result = match listing {
+        Ok(items) => walk_batches(&env, job, &cancel, items).await,
+        Err(f) => Err(f),
+    };
+    env.finish(job, result).await;
+}
+
+fn check_folder(
+    tree: &Tree,
+    (index, item): (u32, &WireCheckItem),
+    folders_only: bool,
+) -> (Vec<WireCheckResult>, bool) {
+    let result = |error: &str, entry: WireEntry, listed, children| WireCheckResult {
+        index,
+        error: error.to_owned(),
+        entry,
+        listed,
+        children,
+    };
+    let entry = match tree.stat(&item.path, false) {
+        Ok(entry) => entry,
+        Err(e) => {
+            return (
+                vec![result(e.name, WireEntry::default(), false, Vec::new())],
+                false,
+            )
+        }
+    };
+    if !check_changed(&item.etag, item.mtime_ms, &entry, tree.now_ms) {
+        return (vec![result("", entry, false, Vec::new())], false);
+    }
+    let mut children = match tree.list(&item.path) {
+        Ok(children) => children,
+        Err(e) => {
+            return (
+                vec![result(e.name, WireEntry::default(), false, Vec::new())],
+                false,
+            )
+        }
+    };
+    children.retain(|e| !folders_only || access::is_folder(e.kind, e.target_kind));
+    if children.is_empty() {
+        return (vec![result("", entry, true, Vec::new())], true);
+    }
+    let parts = children
+        .chunks(MAX_LIST_BATCH as usize)
+        .map(|c| result("", entry.clone(), true, c.to_vec()))
+        .collect();
+    (parts, true)
+}
+
+pub(super) async fn run_check(
+    env: Env,
+    job: u32,
+    cancel: Arc<AtomicBool>,
+    loc: String,
+    (items, folders_only): (Vec<WireCheckItem>, Vec<bool>),
+) {
+    let (mut folders, mut listed) = (0_i64, 0_i64);
+    let mut outcome = Ok(());
+    let mut index = 0_u32;
+    for (chunk, only) in items.chunks(WALK_BATCH).zip(folders_only.chunks(WALK_BATCH)) {
+        if cancel.load(Ordering::SeqCst) {
+            outcome = Err(canceled());
+            break;
+        }
+        env.pause().await;
+        let mut batch = Vec::new();
+        for (item, only) in chunk.iter().zip(only) {
+            let (results, was_listed) = env
+                .shared
+                .with(|s| check_folder(s.tree_mut(&loc), (index, item), *only));
+            index += 1;
+            folders += 1;
+            listed += i64::from(was_listed);
+            batch.extend(results);
+        }
+        let _ = Iface::check_batch(&env.ctx, job, batch).await;
+    }
+    let result = outcome.map(|()| {
+        let mut extra = Extra::new();
+        extra.insert("folders".to_owned(), Value::from(folders));
+        extra.insert("listed".to_owned(), Value::from(listed));
+        extra
+    });
     env.finish(job, result).await;
 }
 
@@ -455,6 +548,16 @@ pub(super) async fn run_copy_across(
     } else {
         copy_across(&env, &src, &dst, &opts)
     };
+    if !opts.recursive {
+        env.shared.with(|s| {
+            s.after_call(
+                &dst.0,
+                &dst.1,
+                After::Created,
+                result.as_ref().err().map(Fail::bare),
+            )
+        });
+    }
     if let Ok(extra) = &result {
         let bytes = extra
             .get("bytes")

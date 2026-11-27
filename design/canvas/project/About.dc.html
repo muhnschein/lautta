@@ -20,9 +20,9 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
 .mono{font-family:'Source Code Pro',monospace}
@@ -114,11 +114,37 @@ body{margin:0}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
 </style>
 </helmet>
-<div class="amb {{amb}}" style="width: 400px; height: 1100px">
-<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">About</div></div><div style="display:flex;flex-direction:column;align-items:center;padding:24px 18px 12px;color:var(--hl)"><svg viewBox="0 0 96 96" width="96" height="96" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 50h68l-8 16H26z"/><path d="M30 50V36h30v14M38 36v-8h14v8M36 42h.01M45 42h.01M54 42h.01"/><path d="M8 78c6 0 6-4 12-4s6 4 12 4 6-4 12-4 6 4 12 4 6-4 12-4 6 4 12 4"/></svg><div class="xl" style="color:var(--pri);margin-top:14px">Lautta</div><div class="sec small" style="margin-top:2px">Version 1.0.0</div></div><div style="padding:12px 30px;font-size:19px;line-height:1.4;text-align:center">A file manager for Sailfish OS.</div><div class="sh">Network locations</div><div class="di"><span class="di-l">Status</span><span class="di-v">Connected to netvfs bridge</span></div><div class="di"><span class="di-l">Bridge</span><span class="di-v">netvfs 2.1</span></div><div class="di"><span class="di-l">Access</span><span class="di-v">Allowed</span></div><div class="sh">Permissions</div><div style="padding:6px 18px;text-align:right">Your folders, Removable media, Audio</div><div class="small sec" style="padding:2px 18px 6px;text-align:right">Lautta never opens network connections itself.</div><div class="sh">Licence</div><div style="padding:6px 18px;text-align:right" class="small">[LICENCE]</div><div style="padding:6px 18px;text-align:right"><span class="hl">Source code</span></div>
+<div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">About</div></div><div style="display:flex;flex-direction:column;align-items:center;padding:18px 18px 6px"><svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 86 86">
+<defs>
+<linearGradient id="lautta-ad" gradientUnits="userSpaceOnUse" x1="43" y1="8" x2="43" y2="82">
+<stop offset="0" stop-color="#27B6E6"/>
+<stop offset="1" stop-color="#0B58A8"/>
+</linearGradient>
+<linearGradient id="lautta-am" gradientUnits="userSpaceOnUse" x1="6" y1="42" x2="80" y2="86">
+<stop offset="0" stop-color="#FFD23F"/>
+<stop offset="1" stop-color="#F0603A"/>
+</linearGradient>
+<linearGradient id="lautta-pg" gradientUnits="userSpaceOnUse" x1="14" y1="9" x2="62" y2="54">
+<stop offset="0" stop-color="#FFFFFF"/>
+<stop offset="0.5" stop-color="#FFFFFF"/>
+<stop offset="1" stop-color="#B4C8DF"/>
+</linearGradient>
+<clipPath id="lautta-c">
+<path d="M1.723,0.300H43.000A42.7,42.7 0 0 1 85.700,43.000V43.000A42.7,42.7 0 0 1 43.000,85.700H43.000A42.7,42.7 0 0 1 0.300,43.000V1.723A1.423,1.423 0 0 1 1.723,0.300Z"/>
+</clipPath>
+</defs>
+<path fill="url(#lautta-ad)" d="M1.723,0.300H43.000A42.7,42.7 0 0 1 85.700,43.000V43.000A42.7,42.7 0 0 1 43.000,85.700H43.000A42.7,42.7 0 0 1 0.300,43.000V1.723A1.423,1.423 0 0 1 1.723,0.300Z"/>
+<g clip-path="url(#lautta-c)">
+<path fill="url(#lautta-pg)" d="M13.500,9.000H45.000A30,30 0 0 1 75.000,39.000V75.000A0,0 0 0 1 75.000,75.000H11.000A0,0 0 0 1 11.000,75.000V11.500A2.5,2.5 0 0 1 13.500,9.000Z"/>
+<path d="M20,21H44" stroke="#3F8FD2" stroke-width="5.6" stroke-linecap="round"/>
+<path d="M20,32H62" stroke="#C5CED8" stroke-width="5.6" stroke-linecap="round"/>
+<path fill="url(#lautta-am)" d="M-6,42H33C36,42 37.5,43.5 39,46S42,50 45,50H92V92H-6Z"/>
+</g>
+</svg><div class="xl" style="color:var(--pri);margin-top:12px">Lautta</div><div class="sec small">Version 1.0.0</div></div><div style="padding:10px 36px 6px;text-align:center;line-height:1.35">A better file manager for Sailfish OS.</div><div class="sh">Network locations</div><div class="di"><span class="di-l">Status</span><span class="di-v">Connected to netvfs bridge</span></div><div class="di"><span class="di-l">Access</span><span class="di-v">Set per server</span></div><div class="small sec" style="padding:4px 18px 8px;text-align:right;line-height:1.35">Change it in Settings › Accounts › Apps using network locations.</div><div class="sh">Licence and source</div><div class="di"><span class="di-l">Licence</span><span class="di-v">LGPL-2.1-or-later</span></div><a class="di" href="https://github.com/muhnschein/lautta"><span class="di-l">Source code</span><span class="di-v">On GitHub</span></a>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":1100}}'>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
 class Component extends DCLogic {
 renderVals() {
 return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };

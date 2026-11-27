@@ -1,0 +1,10 @@
+disable-default-queries: true
+queries:
+  - uses: ./.github/codeql/rust-queries/code-scanning.qls
+paths-ignore:
+  - .github/codeql/rust-queries-tests
+  - crates/*/tests
+  - crates/*/src/**/tests.rs
+  - crates/*/src/**/tests
+  - tests
+  - third_party

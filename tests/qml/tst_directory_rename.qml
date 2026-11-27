@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// RenameDialog on the target (real Silica): the plain dialog header titled
-// Rename with Silica's own accept and cancel texts, and the name field,
-// nothing else. The name is selected without its extension, and a name that
-// is taken shows as an error in the field's label.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,6 +6,7 @@ import "../../qml/dialogs"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -18,7 +15,6 @@ ApplicationWindow {
             console.error("FAILED: " + what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -35,9 +31,8 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), "lautta://user-documents/taken.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), "lautta://user-documents/taken.md"), "fixture installed")
         pageStack.push(dialogComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
         var dialog = pageStack.currentPage
         var header = findAll(dialog, function(x) { return x.defaultAcceptText !== undefined }, [])
         var field = findAll(dialog, function(x) { return x.errorHighlight !== undefined && x.visible }, [])
@@ -55,10 +50,13 @@ ApplicationWindow {
         expect(field[0].selectedText === "draft-v7", "selected without the extension: " + field[0].selectedText)
         expect(!field[0].errorHighlight && dialog.canAccept === false, "the old name is no error, nor a rename")
         field[0].text = "taken.md"
+        for (var i = 0; i < 200 && !dialog.taken; ++i)
+            tools.pump(50)
         expect(field[0].errorHighlight && field[0].label !== field[0].placeholderText && !dialog.canAccept,
                "a taken name is an error in the label: " + field[0].label)
         field[0].text = "fresh.odt"
         expect(!field[0].errorHighlight && dialog.canAccept && dialog.newName === "fresh.odt", "a free name")
+        reachedEnd = true
     }
 
     Component {

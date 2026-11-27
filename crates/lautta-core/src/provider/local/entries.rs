@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `Entry` construction from `statx` results (BRW-1, BRW-10).
 
 use super::names::Names;
 use crate::entry::{Entry, EntryFlags, Kind};
@@ -9,7 +8,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// Turns stat results into entries. Shared by all blocking tasks of one provider.
 pub struct EntryBuilder {
     root: PathBuf,
     names: Arc<Names>,
@@ -29,9 +27,6 @@ pub fn kind_of(st: &FileStat) -> Kind {
     }
 }
 
-/// True when the process may not write to something owned by `uid:gid` with
-/// `mode`. Supplementary groups are not consulted, so a group-writable file
-/// that only a secondary group may write shows as read-only: the safe side.
 pub fn is_readonly(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
     if euid == 0 {
         return false;
@@ -46,7 +41,6 @@ pub fn is_readonly(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool 
     mode & bit == 0
 }
 
-/// Normalises `.` and `..` lexically (no file system access).
 pub fn lexical_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for comp in path.components() {
@@ -76,8 +70,6 @@ impl EntryBuilder {
         }
     }
 
-    /// Builds the entry for `name` at `path` from `st` (which may come from
-    /// `lstat` or, for followed symlinks, `stat`).
     pub fn build(&self, name: &[u8], path: &Path, st: &FileStat) -> Entry {
         let kind = kind_of(st);
         let mut e = Entry::new(name, kind);
@@ -94,13 +86,10 @@ impl EntryBuilder {
         } else if is_readonly(st.mode, st.uid, st.gid, self.euid, self.egid) {
             e.flags |= EntryFlags::READONLY;
         }
+        e.content_type = crate::mime::sniff_local(name, path).map(str::to_owned);
         e
     }
 
-    /// Sets `target_kind` and the flags for a symlink (BRW-10): a target that
-    /// cannot be read, or that does not exist outside the root (where the
-    /// sandbox hides it), is "not accessible"; a dangling link inside the
-    /// root is merely a link with an unknown target.
     fn resolve_link(&self, e: &mut Entry, path: &Path) {
         match sys::stat(path, true) {
             Ok(t) => e.target_kind = kind_of(&t),
@@ -131,7 +120,6 @@ impl EntryBuilder {
         resolved.starts_with(lexical_normalize(&self.root))
     }
 
-    /// One `read_dir` item; `None` when it vanished meanwhile.
     pub fn entry_from_dirent(&self, item: &std::fs::DirEntry) -> Option<Entry> {
         let name = item.file_name();
         let path = item.path();
@@ -142,7 +130,6 @@ impl EntryBuilder {
         }
     }
 
-    /// `stat`/`lstat` of one path as an entry named `name`.
     pub fn stat_entry(&self, path: &Path, name: &[u8], follow: bool) -> io::Result<Entry> {
         let lst = sys::stat(path, false)?;
         if follow && lst.is_symlink() {
@@ -175,16 +162,13 @@ mod tests {
 
     #[test]
     fn readonly_follows_the_permission_class_of_the_caller() {
-        // owner, group and other each decide when they are the matching class
         assert!(is_readonly(0o444, 1000, 1000, 1000, 1000));
         assert!(!is_readonly(0o644, 1000, 1000, 1000, 1000));
         assert!(is_readonly(0o644, 0, 1000, 1000 + 1, 1000));
         assert!(!is_readonly(0o664, 0, 1000, 1001, 1000));
         assert!(is_readonly(0o644, 0, 0, 1001, 1001));
         assert!(!is_readonly(0o666, 0, 0, 1001, 1001));
-        // the owner class wins even if the group would allow
         assert!(is_readonly(0o464, 1000, 1000, 1000, 1000));
-        // root can write anything
         assert!(!is_readonly(0o000, 5, 5, 0, 0));
     }
 
@@ -212,6 +196,34 @@ mod tests {
         assert_eq!(
             e.owner.as_deref(),
             Some(Names::default().user(sys::stat(&f, true).unwrap().uid).as_str())
+        );
+    }
+
+    #[test]
+    fn ts_entries_carry_sniffed_type() {
+        let d = tempfile::tempdir().unwrap();
+        let mut stream = vec![0u8; 188 * 4];
+        for start in (0..stream.len()).step_by(188) {
+            stream[start] = 0x47;
+        }
+        std::fs::write(d.path().join("rec.ts"), &stream).unwrap();
+        std::fs::write(d.path().join("app.ts"), "let x: number = 1;\n").unwrap();
+        symlink("rec.ts", d.path().join("link.ts")).unwrap();
+        let b = builder(d.path());
+        let entry = |name: &str| {
+            b.stat_entry(&d.path().join(name), name.as_bytes(), false)
+                .unwrap()
+        };
+        assert_eq!(entry("rec.ts").content_type.as_deref(), Some("video/mp2t"));
+        assert_eq!(
+            crate::mime::category_of(&entry("rec.ts")),
+            crate::mime::FileCategory::Video
+        );
+        assert_eq!(entry("link.ts").content_type.as_deref(), Some("video/mp2t"));
+        assert_eq!(entry("app.ts").content_type, None);
+        assert_eq!(
+            crate::mime::category_of(&entry("app.ts")),
+            crate::mime::FileCategory::Code
         );
     }
 
@@ -270,7 +282,6 @@ mod tests {
             assert!(e.flags.contains(EntryFlags::NOT_ACCESSIBLE), "{name}");
             assert!(!e.is_dir());
         }
-        // following a link that cannot be resolved falls back to the link entry
         let e = b.stat_entry(&d.path().join("abs"), b"abs", true).unwrap();
         assert_eq!(e.kind, Kind::Symlink);
     }

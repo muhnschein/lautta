@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// About (SPEC §2.2, §3.4, NVB-2, NVB-3; design: About). The network section
-// appears only when a netvfs bridge is present; standalone mode shows
-// nothing about it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components/FileIcons.js" as FileIcons
 
 Page {
     id: page
 
-    // The bridge singleton belongs to the browse area.
     readonly property string bridgeStatus: typeof Bridge !== "undefined" ? String(Bridge.status) : "absent"
-    readonly property string denialReason: typeof Bridge !== "undefined" && Bridge.consentReason
-                                           ? String(Bridge.consentReason) : ""
     readonly property bool hasBridge: bridgeStatus !== "absent" && bridgeStatus !== "undefined"
 
     function statusText() {
@@ -29,27 +24,8 @@ Page {
         case "consentUnknown":
             //% "Waiting for your permission"
             return qsTrId("lautta-about-status-consent-unknown")
-        case "consentDenied":
-            //% "Access was denied"
-            return qsTrId("lautta-about-status-consent-denied")
         default:
             return ""
-        }
-    }
-
-    function accessText() {
-        switch (bridgeStatus) {
-        case "consentDenied":
-            //% "Denied"
-            return qsTrId("lautta-about-access-denied")
-        case "consentUnknown":
-            //% "Not asked yet"
-            return qsTrId("lautta-about-access-unknown")
-        case "connecting":
-            return ""
-        default:
-            //% "Allowed"
-            return qsTrId("lautta-about-access-allowed")
         }
     }
 
@@ -76,8 +52,13 @@ Page {
                 HighlightImage {
                     id: logo
 
+                    objectName: "aboutIcon"
                     anchors.centerIn: parent
-                    source: "image://theme/icon-l-storage"
+                    width: Theme.iconSizeExtraLarge
+                    height: width
+                    sourceSize.width: width
+                    sourceSize.height: height
+                    source: FileIcons.source("lautta", Theme.pixelRatio)
                     color: Theme.highlightColor
                 }
             }
@@ -104,7 +85,7 @@ Page {
                 bottomPadding: Theme.paddingLarge
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
-                //% "A file manager for Sailfish OS."
+                //% "A better file manager for Sailfish OS."
                 text: qsTrId("lautta-about-tagline")
             }
 
@@ -119,72 +100,30 @@ Page {
                 label: qsTrId("lautta-about-status")
                 value: page.statusText()
             }
-            DetailItem {
-                visible: page.hasBridge && value.length > 0
-                //% "Access"
-                label: qsTrId("lautta-about-access")
-                value: page.accessText()
-            }
-            DetailItem {
-                visible: page.bridgeStatus === "consentDenied" && page.denialReason.length > 0
-                //% "Reason"
-                label: qsTrId("lautta-about-reason")
-                value: page.denialReason
-            }
 
             SectionHeader {
-                //% "Permissions"
-                text: qsTrId("lautta-about-permissions")
+                //% "Licence and source"
+                text: qsTrId("lautta-about-licence-source")
             }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                wrapMode: Text.Wrap
-                //% "Your folders, Removable media, Audio"
-                text: qsTrId("lautta-about-permission-list")
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "Lautta never opens network connections itself."
-                text: qsTrId("lautta-about-no-network")
-            }
-
-            SectionHeader {
+            DetailItem {
                 //% "Licence"
-                text: qsTrId("lautta-about-licence")
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                font.pixelSize: Theme.fontSizeSmall
+                label: qsTrId("lautta-about-licence")
                 //% "LGPL-2.1-or-later"
-                text: qsTrId("lautta-about-licence-name")
+                value: qsTrId("lautta-about-licence-name")
             }
-
             BackgroundItem {
+                objectName: "sourceCode"
                 width: column.width
-                height: Theme.itemSizeSmall
+                height: source.height
                 onClicked: Qt.openUrlExternally("https://github.com/muhnschein/lautta")
 
-                Label {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: Theme.horizontalPageMargin
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    horizontalAlignment: Text.AlignRight
+                DetailItem {
+                    id: source
+
                     //% "Source code"
-                    text: qsTrId("lautta-about-source")
-                    color: Theme.highlightColor
+                    label: qsTrId("lautta-about-source")
+                    //% "On GitHub"
+                    value: qsTrId("lautta-about-source-github")
                 }
             }
         }

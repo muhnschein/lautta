@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app database (SPEC DAT-1, DAT-2): SQLite in WAL mode, schema versioned
-//! with `PRAGMA user_version`, forward migrations only.
 
 use crate::error::{Error, ErrorKind, Result};
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Migrations in order; index + 1 is the schema version they produce.
 const MIGRATIONS: &[&str] = &[
-    // 1: DAT-2 tables.
     r#"
     CREATE TABLE favourites (
         id INTEGER PRIMARY KEY,
@@ -108,7 +104,6 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
-    // 2: where reading stopped in a viewer (PRV-12), forgotten with recents.
     r#"
     CREATE TABLE reading_positions (
         uri TEXT PRIMARY KEY,
@@ -117,7 +112,6 @@ const MIGRATIONS: &[&str] = &[
         at_ms INTEGER NOT NULL
     );
     "#,
-    // 3: BRW-12, what the Browse page shows and in which order.
     r#"
     CREATE TABLE browse_layout (
         section TEXT NOT NULL,
@@ -127,33 +121,45 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
-    // 4: `trash_items.bin`, unused: nothing reads or writes it (OPS-8). The
-    // column stays, as dropping it takes a migration of its own.
     r#"
     ALTER TABLE trash_items ADD COLUMN bin BLOB;
     "#,
-    // 5: ORG-1, files can be favourites too; the rows before were folders.
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
-    // 6: ORG-1, the icon chosen for a favourite (a name of
-    // `org::favourites::ICONS`). NULL for the rows before and for no choice:
-    // the default icon.
     r#"
     ALTER TABLE favourites ADD COLUMN icon TEXT;
     "#,
-    // 7: `trash_drain`, unused: nothing reads or writes it (OPS-8). The table
-    // stays, as dropping it takes a migration of its own.
     r#"
     CREATE TABLE trash_drain (due INTEGER NOT NULL);
     INSERT INTO trash_drain VALUES (1);
+    "#,
+    r#"
+    DROP TABLE adhoc_servers;
+    DELETE FROM favourites WHERE uri LIKE 'lautta://nv-adhoc:%';
+    DELETE FROM recents WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM location_prefs WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM browse_layout WHERE item LIKE 'nv-adhoc:%';
+    DELETE FROM dircache WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM recent_searches WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM reading_positions WHERE location_id LIKE 'nv-adhoc:%';
+    "#,
+    r#"
+    INSERT OR REPLACE INTO browse_layout(section, item, hidden)
+        SELECT 'recents', 'section', 1 FROM browse_layout
+        WHERE section = 'device' AND item = 'recents' AND hidden = 1;
+    DELETE FROM browse_layout WHERE section = 'device' AND item = 'recents';
+    "#,
+    r#"
+    ALTER TABLE browse_layout RENAME TO home_layout;
+    "#,
+    r#"
+    ALTER TABLE location_prefs ADD COLUMN index_names INTEGER NOT NULL DEFAULT 0;
     "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 
-/// Shared handle to the database. All access is serialised; callers run on
-/// blocking threads, never on the GUI thread.
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
@@ -216,7 +222,6 @@ fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// SEC-5: private files are 0600.
 fn restrict_mode(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
@@ -260,7 +265,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v4.db");
         {
-            // A database as schema 4 left it, with one favourite.
             let c = Connection::open(&path).unwrap();
             for sql in &MIGRATIONS[..4] {
                 c.execute_batch(sql).unwrap();
@@ -284,11 +288,67 @@ mod tests {
     }
 
     #[test]
+    fn ad_hoc_servers_and_their_data_go_accounts_stay() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v7.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..7] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 7).unwrap();
+            let mut rows =
+                String::from("INSERT INTO adhoc_servers VALUES ('nv-adhoc:a-1', 'sftp://h/', 'h', 1);");
+            for (n, loc) in ["nv-adhoc:a-1", "nv-account:1"].iter().enumerate() {
+                rows += &format!(
+                    "INSERT INTO favourites(uri, label, position) VALUES ('lautta://{loc}/x', 'x', {n}); \
+                     INSERT INTO recents(uri, name, kind, location_id, at_ms) \
+                       VALUES ('lautta://{loc}/x', 'x', 'opened', '{loc}', 1); \
+                     INSERT INTO location_prefs(location_id) VALUES ('{loc}'); \
+                     INSERT INTO browse_layout(section, item) VALUES ('servers', '{loc}'); \
+                     INSERT INTO dircache VALUES ('lautta://{loc}/', '{loc}', 1, x'00'); \
+                     INSERT INTO recent_searches(location_id, query, at_ms) VALUES ('{loc}', 'q', 1); \
+                     INSERT INTO reading_positions VALUES ('lautta://{loc}/x', '{loc}', 1, 1);"
+                );
+            }
+            c.execute_batch(&rows).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let conn = db.lock();
+        let tables: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'adhoc_servers'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 0);
+        for (table, column) in [
+            ("favourites", "uri"),
+            ("recents", "location_id"),
+            ("location_prefs", "location_id"),
+            ("home_layout", "item"),
+            ("dircache", "location_id"),
+            ("recent_searches", "location_id"),
+            ("reading_positions", "location_id"),
+        ] {
+            let mut stmt = conn.prepare(&format!("SELECT {column} FROM {table}")).unwrap();
+            let left: Vec<String> = stmt
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<std::result::Result<_, _>>()
+                .unwrap();
+            assert_eq!(left.len(), 1, "{table}: {left:?}");
+            assert!(left[0].contains("nv-account:1"), "{table}: {left:?}");
+        }
+    }
+
+    #[test]
     fn favourites_from_before_icons_keep_their_default_icon() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v5.db");
         {
-            // A database as schema 5 left it, with a folder and a file.
             let c = Connection::open(&path).unwrap();
             for sql in &MIGRATIONS[..5] {
                 c.execute_batch(sql).unwrap();
@@ -314,7 +374,7 @@ mod tests {
             "rows from before keep label and colour and have no icon chosen"
         );
         assert_eq!(list[0].icon_source(), "image://theme/icon-m-favorite");
-        assert_eq!(list[1].icon_source(), "file-document");
+        assert_eq!(list[1].icon_source(), "file-pdf");
         let uni = crate::uri::Uri::parse("lautta://user-documents/Uni").unwrap();
         let saved = favourites
             .save(&uni, "Uni", Some("#e7a33c"), Some("home"), true)
@@ -325,6 +385,78 @@ mod tests {
         let reopened = crate::org::favourites::Favourites::new(Db::open(&path).unwrap());
         let again = reopened.get_by_uri(&uni).unwrap().unwrap();
         assert_eq!(again.icon.as_deref(), Some("home"), "the icon is stored");
+    }
+
+    fn layout_after_schema_8(rows: &str) -> Vec<(String, String, i64, Option<i64>)> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v8.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..8] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 8).unwrap();
+            c.execute_batch(rows).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let mut stmt = conn
+            .prepare("SELECT section, item, hidden, position FROM home_layout ORDER BY section, item")
+            .unwrap();
+        let mut rows = stmt.query([]).unwrap();
+        let mut out = Vec::new();
+        while let Some(r) = rows.next().unwrap() {
+            out.push((
+                r.get(0).unwrap(),
+                r.get(1).unwrap(),
+                r.get(2).unwrap(),
+                r.get(3).unwrap(),
+            ));
+        }
+        out
+    }
+
+    #[test]
+    fn a_hidden_recents_row_becomes_the_recents_section_switched_off() {
+        let left = layout_after_schema_8(
+            "INSERT INTO browse_layout VALUES ('device', 'recents', 1, 2); \
+             INSERT INTO browse_layout VALUES ('device', 'deleted', 1, 3); \
+             INSERT INTO browse_layout VALUES ('servers', 'section', 1, NULL);",
+        );
+        let row = |s: &str, i: &str, p: Option<i64>| (s.to_owned(), i.to_owned(), 1, p);
+        assert_eq!(
+            left,
+            [
+                row("device", "deleted", Some(3)),
+                row("recents", "section", None),
+                row("servers", "section", None),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_shown_recents_row_leaves_the_recents_section_on() {
+        let left = layout_after_schema_8(
+            "INSERT INTO browse_layout VALUES ('device', 'recents', 0, 1); \
+             INSERT INTO browse_layout VALUES ('device', 'user-music', 0, 0);",
+        );
+        assert_eq!(left, [("device".to_owned(), "user-music".to_owned(), 0, Some(0))]);
+    }
+
+    #[test]
+    fn the_layout_table_is_renamed_with_its_rows() {
+        let left = layout_after_schema_8("INSERT INTO browse_layout VALUES ('device', 'user-music', 1, 4);");
+        assert_eq!(left, [("device".to_owned(), "user-music".to_owned(), 1, Some(4))]);
+        let db = Db::open_in_memory().unwrap();
+        let old: i64 = db
+            .lock()
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'browse_layout'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(old, 0, "no table under the old name");
     }
 
     #[test]
@@ -370,9 +502,6 @@ mod tests {
 
     #[test]
     fn a_device_database_at_schema_7_keeps_opening_with_its_trash_rows() {
-        // The database on the device is at schema 7, with trash rows that
-        // name a bin. A migration that ran there may not be dropped or
-        // renumbered, or this app would call that database newer than itself.
         const DEVICE_SCHEMA: usize = 7;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v7.db");

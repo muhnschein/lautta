@@ -1,0 +1,7 @@
+name: lautta/rust-queries-tests
+version: 0.0.0
+extractor: rust
+tests: .
+dependencies:
+  codeql/rust-all: "*"
+  lautta/rust-queries: "*"

@@ -1,0 +1,21 @@
+#select
+| test.rs:16:19:16:19 | p | test.rs:15:29:15:39 | ...::null(...) | test.rs:16:19:16:19 | p | This operation dereferences a pointer that may be $@. | test.rs:15:29:15:39 | ...::null(...) | invalid |
+| test.rs:26:10:26:10 | p | test.rs:25:28:25:28 | p | test.rs:26:10:26:10 | p | This operation dereferences a pointer that may be $@. | test.rs:25:28:25:28 | p | invalid |
+| test.rs:37:5:37:14 | ...::null::<...>(...) | test.rs:37:5:37:14 | ...::null::<...>(...) | test.rs:37:5:37:14 | ...::null::<...>(...) | This operation dereferences a pointer that may be $@. | test.rs:37:5:37:14 | ...::null::<...>(...) | invalid |
+edges
+| test.rs:15:13:15:13 | p | test.rs:16:19:16:19 | p | provenance |  |
+| test.rs:15:29:15:39 | ...::null(...) | test.rs:15:13:15:13 | p | provenance | Src:MaD:2  |
+| test.rs:25:28:25:28 | p | test.rs:26:10:26:10 | p | provenance | Src:MaD:1  |
+| test.rs:37:5:37:14 | ...::null::<...>(...) | test.rs:37:5:37:14 | ...::null::<...>(...) | provenance | Src:MaD:2  |
+models
+| 1 | Source: core::ptr::drop_in_place; Argument[0]; pointer-invalidate |
+| 2 | Source: core::ptr::null; ReturnValue; pointer-invalidate |
+nodes
+| test.rs:15:13:15:13 | p | semmle.label | p |
+| test.rs:15:29:15:39 | ...::null(...) | semmle.label | ...::null(...) |
+| test.rs:16:19:16:19 | p | semmle.label | p |
+| test.rs:25:28:25:28 | p | semmle.label | p |
+| test.rs:26:10:26:10 | p | semmle.label | p |
+| test.rs:37:5:37:14 | ...::null::<...>(...) | semmle.label | ...::null::<...>(...) |
+| test.rs:37:5:37:14 | ...::null::<...>(...) | semmle.label | ...::null::<...>(...) |
+subpaths

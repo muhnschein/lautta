@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Texts of the transfers area: titles, status lines and reasons, built from
-// the raw numbers and engineering names the Transfers models give (QML
-// formats sizes and times, doc/QML-API.md).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 .import "../PlaceText.js" as PlaceText
@@ -22,7 +19,6 @@ function percent(done, total) {
     return total > 0 ? Math.min(100, Math.floor(done * 100 / total)) : 0
 }
 
-// The three forms of a task's name: what to do, what runs, what ended.
 var IMPERATIVE = 0
 var ONGOING = 1
 var ENDED = 2
@@ -34,7 +30,6 @@ function withArgs(texts, first, second) {
     })
 }
 
-// r: { kind, direction, title, itemsTotal, destName }
 function forms(r) {
     var one = r.itemsTotal <= 1
     var n = r.itemsTotal
@@ -133,15 +128,10 @@ function forms(r) {
         qsTrId("lautta-xfr-title-uploaded-one")], r.title, r.destName)
 }
 
-// "Copy 37 items to NAS", "Upload figure-3.png to NAS", "Download holiday.mp4";
-// completed ones in the past tense ("Deleted 4 items").
-// r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
     return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
 }
 
-// The title split around the destination's name (PlaceText.around), for
-// a line that marks a server's name with its icon (§15.5).
 function titleParts(r) {
     return PlaceText.around(function (dest) {
         var marked = {}
@@ -152,23 +142,18 @@ function titleParts(r) {
     }, r.destName)
 }
 
-// Whether a transfer's destination is on a server (LOC-7): uploads and
-// transfers between servers go to one.
 function toServer(direction) {
     return direction === "upload" || direction === "remote"
 }
 
-// "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".
 function ended(r) {
     return forms(r)[ENDED]
 }
 
-// "Copying 37 items to NAS", "Deleting notes.md": what runs now.
 function ongoing(r) {
     return forms(r)[ONGOING]
 }
 
-// "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"
 function progressLine(done, total, rate, eta) {
     //% "%1 of %2"
     var text = qsTrId("lautta-xfr-progress").arg(size(done)).arg(size(total))
@@ -180,7 +165,6 @@ function progressLine(done, total, rate, eta) {
     return text
 }
 
-// "about 4 min left" for the details page.
 function etaLine(rate, eta) {
     if (rate <= 0)
         return ""
@@ -197,7 +181,7 @@ function waitReason(reason) {
         //% "Waiting for network"
         return qsTrId("lautta-xfr-wait-network")
     case "volume":
-        //% "Insert the card to continue"
+        //% "Waiting for the memory card or USB drive"
         return qsTrId("lautta-xfr-wait-volume")
     case "bridge":
         //% "Waiting for the connection"
@@ -213,8 +197,6 @@ function needsAnswer(questions) {
     return qsTrId("lautta-xfr-needs-answer", questions)
 }
 
-// The second line of a transfer row. r is a TransfersModel row.
-// restored: add "resumes from where it stopped" to paused rows.
 function status(r, restored) {
     switch (r.group) {
     case "active":
@@ -241,7 +223,7 @@ function historyLine(r) {
     var at = r.finishedMs >= 0 ? when(r.finishedMs) : ""
     var text
     if (r.state === "canceled")
-        //% "Canceled"
+        //% "Cancelled"
         text = qsTrId("lautta-xfr-canceled")
     else if (r.state === "failed" && r.itemsFailed > 0 && r.itemsDone > 0)
         //% "Completed with %n failures"
@@ -268,6 +250,10 @@ function directionIcon(direction) {
     }
 }
 
+function itemState(state, transferState) {
+    return transferState === "canceled" && state === "pending" ? "canceled" : state
+}
+
 function itemIcon(state) {
     switch (state) {
     case "done":
@@ -275,6 +261,7 @@ function itemIcon(state) {
     case "failed":
         return "image://theme/icon-m-warning"
     case "skipped":
+    case "canceled":
         return "image://theme/icon-m-dismiss"
     case "needs-answer":
         return "image://theme/icon-m-question"
@@ -285,8 +272,49 @@ function itemIcon(state) {
     }
 }
 
-// "Uploading · 6.8 MB", "Queued · 5.1 MB", "Completed · 7.2 MB" (details page).
-function itemStatus(state, kind, sizeBytes, direction) {
+function pendingBody(autoResume) {
+    return autoResume
+        //% "They resume when you open Lautta again."
+        ? qsTrId("lautta-xfr-note-pending-body")
+        //% "Resume them in Activity when you open Lautta."
+        : qsTrId("lautta-xfr-note-pending-manual-body")
+}
+
+function pendingCover(count, autoResume) {
+    return autoResume
+        //% "%n tasks will resume when you open Lautta again"
+        ? qsTrId("lautta-xfr-cover-pending", count)
+        //% "%n tasks stopped"
+        : qsTrId("lautta-xfr-cover-stopped", count)
+}
+
+function itemRunning(op, direction) {
+    if (direction === "upload")
+        //% "Uploading"
+        return qsTrId("lautta-xfr-item-uploading")
+    if (direction === "download")
+        //% "Downloading"
+        return qsTrId("lautta-xfr-item-downloading")
+    switch (op) {
+    case "move":
+        //% "Moving"
+        return qsTrId("lautta-xfr-item-moving")
+    case "delete":
+        //% "Deleting"
+        return qsTrId("lautta-xfr-item-deleting")
+    case "compress":
+        //% "Compressing"
+        return qsTrId("lautta-xfr-item-compressing")
+    case "extract":
+        //% "Extracting"
+        return qsTrId("lautta-xfr-item-extracting")
+    default:
+        //% "Copying"
+        return qsTrId("lautta-xfr-item-copying")
+    }
+}
+
+function itemStatus(state, kind, sizeBytes, direction, op) {
     var label
     switch (state) {
     case "done":
@@ -294,14 +322,7 @@ function itemStatus(state, kind, sizeBytes, direction) {
         label = qsTrId("lautta-xfr-completed")
         break
     case "running":
-        label = direction === "upload"
-            //% "Uploading"
-            ? qsTrId("lautta-xfr-item-uploading")
-            : direction === "download"
-                //% "Downloading"
-                ? qsTrId("lautta-xfr-item-downloading")
-                //% "Copying"
-                : qsTrId("lautta-xfr-item-copying")
+        label = itemRunning(op, direction)
         break
     case "skipped":
         //% "Skipped"
@@ -311,6 +332,10 @@ function itemStatus(state, kind, sizeBytes, direction) {
         //% "Needs an answer"
         label = qsTrId("lautta-xfr-item-needs-answer")
         break
+    case "canceled":
+        //% "Cancelled"
+        label = qsTrId("lautta-xfr-canceled")
+        break
     default:
         //% "Queued"
         label = qsTrId("lautta-xfr-queued")
@@ -318,8 +343,6 @@ function itemStatus(state, kind, sizeBytes, direction) {
     return kind === "dir" || sizeBytes <= 0 ? label : label + " · " + size(sizeBytes)
 }
 
-// The activity bar (XFR-13). mode is Transfers.barMode, s the lead transfer's
-// summary (Transfers.summaryJson), others how many more are unfinished.
 function barTitle(mode, s) {
     if (mode === "done")
         return ended(s)
@@ -329,7 +352,6 @@ function barTitle(mode, s) {
     return mode === "running" && s.bytesTotal > 0 ? text + " · " + percent(s.bytesDone, s.bytesTotal) + "%" : text
 }
 
-// "120 MB of 290 MB · 1 min · 2 more", "Waiting for your answer", "Completed with 1 failure".
 function barDetail(mode, s, others, questions) {
     var text
     switch (mode) {
@@ -352,10 +374,26 @@ function barDetail(mode, s, others, questions) {
             text = qsTrId("lautta-xfr-items-progress").arg(s.itemsDone).arg(s.itemsTotal)
         break
     default:
+        if (mode === "failed" && s.refusedLevel)
+            return refused(s.refusedLevel, s.refusedName)
         return historyLine({ "state": s.state, "itemsFailed": s.itemsFailed, "itemsDone": s.itemsDone, "finishedMs": -1 })
     }
     //% "%n more"
     return others > 0 ? text + " · " + qsTrId("lautta-xfr-bar-more", others) : text
+}
+
+function refused(level, place) {
+    switch (level) {
+    case "read":
+        //% "Lautta may now only read on %1"
+        return qsTrId("lautta-xfr-refused-read").arg(place)
+    case "read-add":
+        //% "Lautta may now only read and add on %1"
+        return qsTrId("lautta-xfr-refused-read-add").arg(place)
+    default:
+        //% "Lautta may now only add on %1"
+        return qsTrId("lautta-xfr-refused-add").arg(place)
+    }
 }
 
 function barIcon(mode, direction) {

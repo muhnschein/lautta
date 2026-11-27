@@ -3,7 +3,7 @@
   "attachments": {},
   "boards": {
     "About.dc.html": {
-      "h": 1100,
+      "h": 860,
       "is_interactive": true,
       "title": "About",
       "w": 400,
@@ -50,34 +50,34 @@
       "x": 2880,
       "y": 8200
     },
-    "BrowsePulley.dc.html": {
+    "HomePulley.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 pulley open",
+      "title": "Home \u00b7 pulley open",
       "w": 400,
       "x": 480,
       "y": 0
     },
-    "BrowseServerMenu.dc.html": {
+    "HomeServerMenu.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 server menu & consent",
+      "title": "Home \u00b7 server menu & consent",
       "w": 400,
       "x": 1440,
       "y": 0
     },
-    "BrowseStandalone.dc.html": {
+    "HomeStandalone.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 standalone, pulley",
+      "title": "Home \u00b7 standalone, pulley",
       "w": 400,
       "x": 960,
       "y": 0
     },
-    "BrowseVolume.dc.html": {
+    "HomeVolume.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 volume menu",
+      "title": "Home \u00b7 volume menu",
       "w": 400,
       "x": 1920,
       "y": 0
@@ -97,14 +97,6 @@
       "w": 400,
       "x": 960,
       "y": 4860
-    },
-    "ConnectServer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Connect to server",
-      "w": 400,
-      "x": 2880,
-      "y": 0
     },
     "Covers.dc.html": {
       "h": 860,
@@ -178,14 +170,6 @@
       "x": 480,
       "y": 14440
     },
-    "Extract.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Extract archive",
-      "w": 400,
-      "x": 3360,
-      "y": 4860
-    },
     "FavouriteEdit.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -193,22 +177,6 @@
       "w": 400,
       "x": 4320,
       "y": 0
-    },
-    "FolderPicker.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Copy to\u2026 picker",
-      "w": 400,
-      "x": 0,
-      "y": 4860
-    },
-    "FolderPickerPulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Picker \u00b7 new folder",
-      "w": 400,
-      "x": 2880,
-      "y": 14440
     },
     "GridIcons.dc.html": {
       "h": 2250,
@@ -245,7 +213,7 @@
     "Main.dc.html": {
       "h": 1640,
       "is_interactive": true,
-      "title": "Browse (bridge mode)",
+      "title": "Home (bridge mode)",
       "w": 400,
       "x": 0,
       "y": 0
@@ -266,6 +234,14 @@
       "x": 3840,
       "y": 2060
     },
+    "NearbySetup.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Nearby server \u00b7 set up as account",
+      "w": 400,
+      "x": 3360,
+      "y": 960
+    },
     "Notifications.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -282,10 +258,10 @@
       "x": 4800,
       "y": 8200
     },
-    "PathMenu.dc.html": {
+    "PathFolded.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path menu & edit path",
+      "title": "Folded path",
       "w": 400,
       "x": 2400,
       "y": 2060
@@ -353,22 +329,6 @@
       "w": 400,
       "x": 480,
       "y": 9480
-    },
-    "ServerAdhocMenu.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Ad-hoc server menu",
-      "w": 400,
-      "x": 4320,
-      "y": 14440
-    },
-    "ServerQuestion.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Ad-hoc server question",
-      "w": 400,
-      "x": 3360,
-      "y": 0
     },
     "Settings.dc.html": {
       "h": 820,
@@ -521,6 +481,454 @@
       "w": 400,
       "x": 1440,
       "y": 8200
+    },
+    "TextThumbFullPlainIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 fade and type icon",
+      "w": 400,
+      "x": 5720,
+      "y": 2060
+    },
+    "DocumentGlyph.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Document glyph \u00b7 aligned with JetBrains text",
+      "w": 860,
+      "x": 6200,
+      "y": 2060
+    },
+    "ServerIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Server icon \u00b7 server and globe variants",
+      "w": 860,
+      "x": 7080,
+      "y": 2060
+    },
+    "ScanEntry.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 folder pulley",
+      "w": 400,
+      "x": 0,
+      "y": 15600
+    },
+    "NewScanType.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Add \u00b7 nothing picked yet",
+      "w": 400,
+      "x": 480,
+      "y": 15600
+    },
+    "NewScan.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Add \u00b7 scan document picked",
+      "w": 400,
+      "x": 960,
+      "y": 15600
+    },
+    "ScanCamera.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 camera",
+      "w": 400,
+      "x": 1440,
+      "y": 15600
+    },
+    "ScanCaptured.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page captured, edges found",
+      "w": 400,
+      "x": 1920,
+      "y": 15600
+    },
+    "ScanPageView.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page view",
+      "w": 400,
+      "x": 2400,
+      "y": 15600
+    },
+    "ScanPageViewNext.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page view, next page with its own colour",
+      "w": 400,
+      "x": 2880,
+      "y": 15600
+    },
+    "ScanCrop.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 adjust corners",
+      "w": 400,
+      "x": 3360,
+      "y": 15600
+    },
+    "ScanPages.dc.html": {
+      "h": 940,
+      "is_interactive": true,
+      "title": "Scan \u00b7 save dialog",
+      "w": 400,
+      "x": 3840,
+      "y": 15600
+    },
+    "ScanPagesDrag.dc.html": {
+      "h": 940,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page held and dragged to reorder",
+      "w": 400,
+      "x": 4320,
+      "y": 15600
+    },
+    "ScanNoCamera.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 camera not available",
+      "w": 400,
+      "x": 4800,
+      "y": 15600
+    },
+    "AccessNotification.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 consent notification",
+      "w": 400,
+      "x": 0,
+      "y": 17100
+    },
+    "AccessSettings.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, apps using network locations",
+      "w": 400,
+      "x": 1920,
+      "y": 17100
+    },
+    "AccessSettingsMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, level menu open",
+      "w": 400,
+      "x": 2880,
+      "y": 17100
+    },
+    "AccessHome.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Home \u00b7 no level shown",
+      "w": 400,
+      "x": 0,
+      "y": 18260
+    },
+    "AccessReadOnly.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only \u00b7 folder pulley",
+      "w": 400,
+      "x": 480,
+      "y": 18260
+    },
+    "AccessReadAdd.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read and add \u00b7 folder pulley",
+      "w": 400,
+      "x": 960,
+      "y": 18260
+    },
+    "AccessItemMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only, read and add \u00b7 item menu",
+      "w": 400,
+      "x": 1440,
+      "y": 18260
+    },
+    "AccessSelect.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only, read and add \u00b7 selection",
+      "w": 400,
+      "x": 1920,
+      "y": 18260
+    },
+    "AccessConflict.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read and add \u00b7 conflict",
+      "w": 400,
+      "x": 2400,
+      "y": 18260
+    },
+    "AccessPicker.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Copy to\u2026 \u00b7 read-only server greyed out",
+      "w": 400,
+      "x": 3360,
+      "y": 18260
+    },
+    "AccessNarrowed.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Access narrowed during a transfer",
+      "w": 400,
+      "x": 3840,
+      "y": 18260
+    },
+    "AccessAbout.dc.html": {
+      "h": 520,
+      "is_interactive": true,
+      "title": "About \u00b7 access level",
+      "w": 400,
+      "x": 4320,
+      "y": 18260
+    },
+    "AccessSettingsApp.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, one app per account",
+      "w": 400,
+      "x": 2400,
+      "y": 17100
+    },
+    "AccessRequest.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 first request, full screen",
+      "w": 400,
+      "x": 480,
+      "y": 17100
+    },
+    "AccessRequestMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 first request, level menu open",
+      "w": 400,
+      "x": 960,
+      "y": 17100
+    },
+    "AccessRequestNew.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 request for a new account",
+      "w": 400,
+      "x": 1440,
+      "y": 17100
+    },
+    "AccessAddOnly.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Add only \u00b7 folder pulley",
+      "w": 400,
+      "x": 2880,
+      "y": 18260
+    },
+    "MarkdownMore.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Markdown \u00b7 further down",
+      "w": 400,
+      "x": 3840,
+      "y": 8200
+    },
+    "TextProse.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Plain text \u00b7 prose",
+      "w": 400,
+      "x": 4320,
+      "y": 8200
+    },
+    "ShareLocations.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 Locations",
+      "w": 400,
+      "x": 0,
+      "y": 4860
+    },
+    "SharePulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 new folder",
+      "w": 400,
+      "x": 2880,
+      "y": 14440
+    },
+    "RecentsDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Recents \u00b7 date while scrolling",
+      "w": 400,
+      "x": 2880,
+      "y": 0
+    },
+    "RecentsGridDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Recents grid \u00b7 date while scrolling",
+      "w": 400,
+      "x": 3360,
+      "y": 0
+    },
+    "TransfersDatesRunning.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity \u00b7 running tasks at the top",
+      "w": 400,
+      "x": 5260,
+      "y": 6580
+    },
+    "TransfersDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity \u00b7 date while scrolling",
+      "w": 400,
+      "x": 5740,
+      "y": 6580
+    },
+    "FileGlyphOptions.dc.html": {
+      "h": 1560,
+      "is_interactive": true,
+      "title": "File type glyphs (#44) \u00b7 options A B C D",
+      "w": 860,
+      "x": 0,
+      "y": 62200
+    },
+    "FileGlyphsToday.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs today",
+      "w": 860,
+      "x": 940,
+      "y": 62200
+    },
+    "FileGlyphsA.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs A, content",
+      "w": 860,
+      "x": 1880,
+      "y": 62200
+    },
+    "FileGlyphsB.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs B, folded corner",
+      "w": 860,
+      "x": 2820,
+      "y": 62200
+    },
+    "FileGlyphsD.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs D, folded corner, content of a",
+      "w": 860,
+      "x": 3760,
+      "y": 62200
+    },
+    "FileGlyphsC.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs C, extension label",
+      "w": 860,
+      "x": 4700,
+      "y": 62200
+    },
+    "FileGlyphsCompare.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs today, A, B, C",
+      "w": 1660,
+      "x": 10440,
+      "y": 62200
+    },
+    "NewKindOptions.dc.html": {
+      "h": 1300,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 options P S H",
+      "w": 860,
+      "x": 0,
+      "y": 64000
+    },
+    "NewKindsCompare.dc.html": {
+      "h": 1000,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 today, P, S, H",
+      "w": 1660,
+      "x": 1740,
+      "y": 64000
+    },
+    "FolderGlyphOptions.dc.html": {
+      "h": 1220,
+      "is_interactive": true,
+      "title": "Folder glyphs \u00b7 options A B C",
+      "w": 860,
+      "x": 0,
+      "y": 60300
+    },
+    "HomeFoldersToday.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Home \u00b7 folder glyphs today",
+      "w": 860,
+      "x": 940,
+      "y": 60300
+    },
+    "HomeFoldersA.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Home \u00b7 folder glyphs A, line emblem",
+      "w": 860,
+      "x": 1880,
+      "y": 60300
+    },
+    "HomeFoldersB.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Home \u00b7 folder glyphs B, soft emblem",
+      "w": 860,
+      "x": 2820,
+      "y": 60300
+    },
+    "HomeFoldersC.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Home \u00b7 folder glyphs C, corner badge",
+      "w": 860,
+      "x": 3760,
+      "y": 60300
+    },
+    "HomeFoldersCompare.dc.html": {
+      "h": 1160,
+      "is_interactive": true,
+      "title": "Home \u00b7 folder glyphs today, A, B, C",
+      "w": 1660,
+      "x": 8700,
+      "y": 60300
+    },
+    "CoversList.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Cover in list view \u00b7 options A, B",
+      "w": 1660,
+      "x": 0,
+      "y": 65600
+    },
+    "PdfPages.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF pages",
+      "w": 400,
+      "x": 5280,
+      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -535,7 +943,7 @@
     "r0": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Browse & locations",
+      "text": "Home & locations",
       "w": 240,
       "x": 0,
       "y": -300
@@ -611,17 +1019,74 @@
       "w": 240,
       "x": 0,
       "y": 14140
+    },
+    "r10": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Scan documents",
+      "w": 240,
+      "x": 0,
+      "y": 15300
+    },
+    "r11": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Access levels \u00b7 netvfs notification and Settings",
+      "w": 240,
+      "x": 0,
+      "y": 16800
+    },
+    "r12": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Access levels \u00b7 Lautta",
+      "w": 240,
+      "x": 0,
+      "y": 17960
+    },
+    "r19": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "File type glyphs (#44): list and grid (options A, B, C)",
+      "w": 240,
+      "x": 0,
+      "y": 61900
+    },
+    "r20": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "New file kinds (#44): mail, calendar, contacts, keys, programs, fonts, disk images, CAD, OneNote",
+      "w": 240,
+      "x": 0,
+      "y": 63700
+    },
+    "r18": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Home \u00b7 glyphs for the On this device folders (options A, B, C)",
+      "w": 240,
+      "x": 0,
+      "y": 60000
+    },
+    "r21": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Cover follows list view: folder, Recents, Trash (options A, B)",
+      "w": 240,
+      "x": 0,
+      "y": 65300
     }
   },
   "order": [
     "Main.dc.html",
-    "BrowsePulley.dc.html",
-    "BrowseStandalone.dc.html",
-    "BrowseServerMenu.dc.html",
-    "BrowseVolume.dc.html",
+    "HomePulley.dc.html",
+    "HomeStandalone.dc.html",
+    "HomeServerMenu.dc.html",
+    "HomeVolume.dc.html",
     "Recents.dc.html",
-    "ConnectServer.dc.html",
-    "ServerQuestion.dc.html",
+    "RecentsDates.dc.html",
+    "RecentsGridDates.dc.html",
+    "NearbySetup.dc.html",
     "FavouriteEdit.dc.html",
     "ShareTarget.dc.html",
     "Directory.dc.html",
@@ -629,12 +1094,15 @@
     "DirectoryContext.dc.html",
     "DirectorySelect.dc.html",
     "DirectoryGrid.dc.html",
-    "PathMenu.dc.html",
+    "PathFolded.dc.html",
     "DirectoryRemorse.dc.html",
     "ViewOptions.dc.html",
     "NewItem.dc.html",
     "Rename.dc.html",
     "GridIcons.dc.html",
+    "TextThumbFullPlainIcon.dc.html",
+    "DocumentGlyph.dc.html",
+    "ServerIcon.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
@@ -642,11 +1110,10 @@
     "StateIdentity.dc.html",
     "StateLarge.dc.html",
     "StateReconnecting.dc.html",
-    "FolderPicker.dc.html",
+    "ShareLocations.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
     "Compress.dc.html",
-    "Extract.dc.html",
     "RecentlyDeleted.dc.html",
     "Transfers.dc.html",
     "TransfersPulley.dc.html",
@@ -658,7 +1125,10 @@
     "ImageExif.dc.html",
     "TextViewer.dc.html",
     "Markdown.dc.html",
+    "MarkdownMore.dc.html",
+    "TextProse.dc.html",
     "PdfViewer.dc.html",
+    "PdfPages.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",
@@ -671,14 +1141,59 @@
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
     "RecentlyDeletedEmpty.dc.html",
-    "FolderPickerPulley.dc.html",
+    "SharePulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
-    "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
-    "ActivityBarDone.dc.html"
+    "ActivityBarDone.dc.html",
+    "TransfersDatesRunning.dc.html",
+    "TransfersDates.dc.html",
+    "ScanEntry.dc.html",
+    "NewScanType.dc.html",
+    "NewScan.dc.html",
+    "ScanCamera.dc.html",
+    "ScanCaptured.dc.html",
+    "ScanPageView.dc.html",
+    "ScanPageViewNext.dc.html",
+    "ScanCrop.dc.html",
+    "ScanPages.dc.html",
+    "ScanPagesDrag.dc.html",
+    "ScanNoCamera.dc.html",
+    "AccessNotification.dc.html",
+    "AccessRequest.dc.html",
+    "AccessRequestMenu.dc.html",
+    "AccessRequestNew.dc.html",
+    "AccessSettings.dc.html",
+    "AccessSettingsApp.dc.html",
+    "AccessSettingsMenu.dc.html",
+    "AccessHome.dc.html",
+    "AccessReadOnly.dc.html",
+    "AccessReadAdd.dc.html",
+    "AccessItemMenu.dc.html",
+    "AccessSelect.dc.html",
+    "AccessConflict.dc.html",
+    "AccessAddOnly.dc.html",
+    "AccessPicker.dc.html",
+    "AccessNarrowed.dc.html",
+    "AccessAbout.dc.html",
+    "FileGlyphOptions.dc.html",
+    "FileGlyphsToday.dc.html",
+    "FileGlyphsA.dc.html",
+    "FileGlyphsB.dc.html",
+    "FileGlyphsD.dc.html",
+    "FileGlyphsC.dc.html",
+    "FileGlyphsCompare.dc.html",
+    "NewKindOptions.dc.html",
+    "NewKindsCompare.dc.html",
+    "FolderGlyphOptions.dc.html",
+    "HomeFoldersToday.dc.html",
+    "HomeFoldersA.dc.html",
+    "HomeFoldersB.dc.html",
+    "HomeFoldersC.dc.html",
+    "HomeFoldersCompare.dc.html",
+    "CoversList.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

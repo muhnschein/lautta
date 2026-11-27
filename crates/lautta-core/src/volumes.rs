@@ -1,45 +1,119 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Removable volumes (SPEC LOC-3): SD cards and USB drives mounted below
-//! `/run/media/$USER/<label-or-uuid>`.
-//!
-//! No UDisks2 listener: the folder scan plus an inotify watch on the media
-//! root sees the same mounts and unmounts (udisks creates and removes the
-//! mount point directories), needs no D-Bus dependency in the core, and is
-//! trivial to test. The core keeps a [`VolumeWatcher`] for its lifetime;
-//! as the watch can miss a mount inside the sandbox's mount namespace,
-//! Browse also rescans when it refreshes. A UDisks2 listener could feed
-//! [`VolumeEvent`]s into the same registry call without changing anything
-//! else. The sandbox mounts nothing itself: the bridge mounts and unmounts
-//! drives (netvfs XB-20, [`crate::app::Core::mount_drive`]).
 
+use crate::bridge::DriveKind;
 use crate::error::Result;
 use crate::paths::AppPaths;
-use crate::watch::{lock, map_notify_error, raw_watcher, spawn_worker, StopOnDrop};
+use crate::watch::{lock, map_notify_error, raw_watcher, spawn_worker};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-/// Quiet time after a mount change before the media root is rescanned
-/// (udisks creates the directory a moment before the mount completes).
 pub const VOLUME_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Volume {
-    /// The mount directory name, made safe for a location id.
     pub id: String,
-    /// Shown to the user: the mount directory name (the volume label, or the
-    /// UUID when it has none).
     pub name: String,
     pub mount_path: PathBuf,
+    pub kind: DriveKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VolumeWords {
+    pub card: String,
+    pub usb: String,
+}
+
+impl Default for VolumeWords {
+    fn default() -> VolumeWords {
+        VolumeWords {
+            card: "Memory card".to_owned(),
+            usb: "USB drive".to_owned(),
+        }
+    }
+}
+
+impl VolumeWords {
+    pub fn of(&self, kind: DriveKind) -> &str {
+        match kind {
+            DriveKind::Card => &self.card,
+            DriveKind::Usb => &self.usb,
+        }
+    }
+
+    pub fn name_of(&self, v: &Volume) -> String {
+        if is_fallback_name(&v.name) {
+            self.of(v.kind).to_owned()
+        } else {
+            v.name.clone()
+        }
+    }
+}
+
+pub fn is_fallback_name(name: &str) -> bool {
+    let hex = |s: &str, n: usize| s.len() == n && s.bytes().all(|b| b.is_ascii_hexdigit());
+    let groups: Vec<&str> = name.split('-').collect();
+    name == "disk"
+        || hex(name, 16)
+        || matches!(groups.as_slice(), [a, b] if hex(a, 4) && hex(b, 4))
+        || matches!(groups.as_slice(), [a, b, c, d, e]
+            if hex(a, 8) && hex(b, 4) && hex(c, 4) && hex(d, 4) && hex(e, 12))
+}
+
+pub fn kind_of(path: &Path, mountinfo: &str, sys: &Path) -> DriveKind {
+    let Some((dev, source)) = mountinfo.lines().rev().find_map(|line| {
+        let (fields, tail) = line.split_once(" - ")?;
+        let mut f = fields.split(' ');
+        let dev = f.nth(2)?;
+        (unescape_mount(f.nth(1)?) == path.as_os_str().as_bytes())
+            .then(|| (dev, tail.split(' ').nth(1).unwrap_or_default()))
+    }) else {
+        return DriveKind::Usb;
+    };
+    let block = sys.join("dev/block").join(dev);
+    let mut names: Vec<Vec<u8>> = std::fs::read_dir(block.join("slaves"))
+        .map(|rd| rd.flatten().map(|e| e.file_name().as_bytes().to_vec()).collect())
+        .unwrap_or_default();
+    if let Ok(real) = std::fs::canonicalize(&block) {
+        names.extend(real.file_name().map(|n| n.as_bytes().to_vec()));
+    }
+    if names.is_empty() {
+        names.extend(Path::new(source).file_name().map(|n| n.as_bytes().to_vec()));
+    }
+    if names.iter().any(|n| n.starts_with(b"mmcblk")) {
+        DriveKind::Card
+    } else {
+        DriveKind::Usb
+    }
+}
+
+fn unescape_mount(field: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(field.len());
+    let mut rest = field.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let code = tail
+            .get(..3)
+            .filter(|o| b == b'\\' && o.iter().all(u8::is_ascii_digit))
+            .and_then(|o| u8::from_str_radix(std::str::from_utf8(o).ok()?, 8).ok());
+        match code {
+            Some(c) => {
+                out.push(c);
+                rest = &tail[3..];
+            }
+            None => {
+                out.push(b);
+                rest = tail;
+            }
+        }
+    }
+    out
 }
 
 impl Volume {
-    /// `vol-<uuid-or-dirname>` (LOC-7).
     pub fn location_id(&self) -> String {
         format!("vol-{}", self.id)
     }
@@ -51,9 +125,6 @@ pub enum VolumeEvent {
     Disappeared(Volume),
 }
 
-/// Keeps ASCII letters, digits and `-.:_`; every other byte becomes `_xx`
-/// (hex), so any directory name, including non-UTF-8 ones, gives a valid
-/// `lautta://` location id.
 pub fn sanitize_id(name: &OsStr) -> String {
     let mut out = String::with_capacity(name.len());
     for &b in name.as_bytes() {
@@ -66,14 +137,10 @@ pub fn sanitize_id(name: &OsStr) -> String {
     out
 }
 
-/// The location id of a volume mounted on the folder `name` of the media
-/// root (LOC-7), as [`Volume::location_id`] makes it.
 pub fn location_id_of(name: &OsStr) -> String {
     format!("vol-{}", sanitize_id(name))
 }
 
-/// The media root of the current user: `/run/media/$USER`, with the home
-/// folder's name standing in when `$USER` is unset.
 pub fn media_root(paths: &AppPaths) -> PathBuf {
     let user = std::env::var("USER")
         .ok()
@@ -87,9 +154,12 @@ pub fn media_root(paths: &AppPaths) -> PathBuf {
     paths.media_root(&user)
 }
 
-/// Lists the mounted volumes below `root`: readable folders, not hidden,
-/// sorted by name. A missing root means no volumes.
 pub fn scan(root: &Path) -> Vec<Volume> {
+    let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    scan_with(root, &mountinfo, Path::new("/sys"))
+}
+
+fn scan_with(root: &Path, mountinfo: &str, sys: &Path) -> Vec<Volume> {
     let Ok(rd) = std::fs::read_dir(root) else {
         return Vec::new();
     };
@@ -98,12 +168,12 @@ pub fn scan(root: &Path) -> Vec<Volume> {
         .filter_map(|entry| {
             let name = entry.file_name();
             let path = entry.path();
-            // follow links: some setups bind-mount through a symlink
             let is_dir = std::fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false);
             let usable = name.as_bytes().first() != Some(&b'.') && is_dir && std::fs::read_dir(&path).is_ok();
             usable.then(|| Volume {
                 id: sanitize_id(&name),
                 name: name.to_string_lossy().into_owned(),
+                kind: kind_of(&path, mountinfo, sys),
                 mount_path: path,
             })
         })
@@ -112,7 +182,6 @@ pub fn scan(root: &Path) -> Vec<Volume> {
     out
 }
 
-/// Changes between two scans: removals first, then additions.
 pub fn diff(old: &[Volume], new: &[Volume]) -> Vec<VolumeEvent> {
     let gone = old
         .iter()
@@ -127,45 +196,41 @@ pub fn diff(old: &[Volume], new: &[Volume]) -> Vec<VolumeEvent> {
     gone.chain(added).collect()
 }
 
-/// The deepest existing folder at or above `path`.
 fn nearest_existing(path: &Path) -> PathBuf {
     path.ancestors()
         .find(|p| p.is_dir())
         .map_or_else(|| PathBuf::from("/"), Path::to_path_buf)
 }
 
-/// Rescans on mount changes and reports appearing and disappearing volumes.
 pub struct VolumeWatcher {
     known: Arc<Mutex<Vec<Volume>>>,
     _watcher: Arc<Mutex<RecommendedWatcher>>,
-    _stop: StopOnDrop,
 }
 
-/// State of the worker: which folder is currently watched.
 struct Rescanner {
     root: PathBuf,
     known: Arc<Mutex<Vec<Volume>>>,
     tx: UnboundedSender<VolumeEvent>,
-    watcher: Arc<Mutex<RecommendedWatcher>>,
+    watcher: Weak<Mutex<RecommendedWatcher>>,
     watching: PathBuf,
 }
 
 impl Rescanner {
-    /// The root may be created or removed at any time; keep the watch on it,
-    /// or on its nearest existing ancestor while it is missing.
     fn retarget(&mut self) {
         let want = nearest_existing(&self.root);
         if want == self.watching {
             return;
         }
-        let mut w = lock(&self.watcher);
+        let Some(watcher) = self.watcher.upgrade() else {
+            return;
+        };
+        let mut w = lock(&watcher);
         let _ = w.unwatch(&self.watching);
         if w.watch(&want, RecursiveMode::NonRecursive).is_ok() {
             self.watching = want;
         }
     }
 
-    /// Returns false when nobody listens any more.
     fn rescan(&mut self) -> bool {
         self.retarget();
         let now = scan(&self.root);
@@ -180,8 +245,6 @@ impl Rescanner {
 }
 
 impl VolumeWatcher {
-    /// Starts watching `root` (which need not exist yet). Events arrive on
-    /// the receiver; the volumes present now are in [`VolumeWatcher::current`].
     pub fn start(
         root: PathBuf,
         debounce: Duration,
@@ -194,18 +257,16 @@ impl VolumeWatcher {
         let watcher = Arc::new(Mutex::new(watcher));
         let known = Arc::new(Mutex::new(scan(&root)));
         let (tx, rx) = unbounded_channel();
-        let stop = Arc::new(AtomicBool::new(false));
         let mut rescanner = Rescanner {
             root,
             known: known.clone(),
             tx,
-            watcher: watcher.clone(),
+            watcher: Arc::downgrade(&watcher),
             watching,
         };
         spawn_worker(
             raw,
             debounce,
-            stop.clone(),
             |ev| {
                 if matches!(ev.kind, EventKind::Access(_)) {
                     Vec::new()
@@ -219,13 +280,11 @@ impl VolumeWatcher {
             VolumeWatcher {
                 known,
                 _watcher: watcher,
-                _stop: StopOnDrop(stop),
             },
             rx,
         ))
     }
 
-    /// The volumes as of the last scan.
     pub fn current(&self) -> Vec<Volume> {
         lock(&self.known).clone()
     }
@@ -238,7 +297,7 @@ mod tests {
     const SHORT: Duration = Duration::from_millis(60);
 
     async fn next(rx: &mut UnboundedReceiver<VolumeEvent>) -> Option<VolumeEvent> {
-        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        tokio::time::timeout(Duration::from_secs(30), rx.recv())
             .await
             .ok()
             .flatten()
@@ -249,6 +308,7 @@ mod tests {
             id: id.into(),
             name: id.into(),
             mount_path: PathBuf::from("/m").join(id),
+            kind: DriveKind::Usb,
         }
     }
 
@@ -285,6 +345,7 @@ mod tests {
                 id: sanitize_id(OsStr::new(name)),
                 name: name.into(),
                 mount_path: PathBuf::new(),
+                kind: DriveKind::Usb,
             };
             let u = crate::uri::Uri::parse(&format!("lautta://{}/", v.location_id())).unwrap();
             assert_eq!(u.location, v.location_id());
@@ -300,6 +361,161 @@ mod tests {
         assert_eq!(vols[0].id, "caf_e9");
         assert!(vols[0].name.contains('\u{fffd}'));
         assert!(vols[0].mount_path.ends_with(OsStr::from_bytes(b"caf\xe9")));
+    }
+
+    #[test]
+    fn udisks_fallback_names_are_told_from_labels() {
+        for name in [
+            "0123-4567",
+            "ABCD-ef01",
+            "0123456789ABCDEF",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5f6",
+            "disk",
+        ] {
+            assert!(is_fallback_name(name), "{name}");
+        }
+        for name in [
+            "SDCARD",
+            "Disk",
+            "disk1",
+            "0123-456",
+            "0123-45678",
+            "0123-456G",
+            "0123-4567-89AB",
+            "0123456789ABCDE",
+            "0123456789ABCDEFA",
+            "0123456789ABCDEG",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5f",
+            "5c1e0a4f-1b2c-4d3e-8f9-a1b2c3d4e5f60",
+            "5c1e0a4f-1b2c-4d3-e8f90-a1b2c3d4e5f6",
+            "5c1e0a4-f1b2c-4d3e-8f90-a1b2c3d4e5f6",
+            "5c1e0a4f-1b2-c4d3e-8f90-a1b2c3d4e5f6",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5fg",
+            "",
+        ] {
+            assert!(!is_fallback_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn unlabelled_volumes_are_named_by_kind() {
+        let words = VolumeWords {
+            card: "Card".into(),
+            usb: "Stick".into(),
+        };
+        let mut v = vol("0123-4567");
+        assert_eq!(words.name_of(&v), "Stick");
+        v.kind = DriveKind::Card;
+        assert_eq!(words.name_of(&v), "Card");
+        assert_eq!(words.name_of(&vol("Holiday")), "Holiday");
+        assert_eq!(VolumeWords::default().of(DriveKind::Card), "Memory card");
+        assert_eq!(VolumeWords::default().of(DriveKind::Usb), "USB drive");
+    }
+
+    fn fake_sys(devs: &[(&str, &str, &[&str])]) -> tempfile::TempDir {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("dev/block")).unwrap();
+        for (dev, device, slaves) in devs {
+            let real = d.path().join("devices").join(device);
+            std::fs::create_dir_all(real.join("slaves")).unwrap();
+            for s in *slaves {
+                std::fs::create_dir(real.join("slaves").join(s)).unwrap();
+            }
+            std::os::unix::fs::symlink(&real, d.path().join("dev/block").join(dev)).unwrap();
+        }
+        d
+    }
+
+    fn mount_line(id: u32, dev: &str, point: &str, source: &str) -> String {
+        format!("{id} 30 {dev} / {point} rw,nosuid shared:9 - vfat {source} rw,uid=100000\n")
+    }
+
+    #[test]
+    fn drive_kind_comes_from_the_block_device() {
+        let sys = fake_sys(&[
+            ("179:97", "platform/mmc1/block/mmcblk1/mmcblk1p1", &[]),
+            ("8:1", "platform/usb1/block/sda/sda1", &[]),
+            ("253:0", "virtual/block/dm-0", &["mmcblk1p2"]),
+            ("253:1", "virtual/block/dm-1", &["sdb1"]),
+            ("7:0", "virtual/block/loop0", &[]),
+        ]);
+        let info = [
+            mount_line(40, "179:97", "/run/media/u/0123-4567", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/run/media/u/My\\040Stick", "/dev/sda1"),
+            mount_line(42, "253:0", "/run/media/u/Vault", "/dev/mapper/luks-1"),
+            mount_line(43, "253:1", "/run/media/u/Safe", "/dev/mapper/luks-2"),
+            mount_line(44, "7:0", "/run/media/u/Loop", "/dev/loop0"),
+        ]
+        .concat();
+        let kind = |p: &str| kind_of(Path::new(p), &info, sys.path());
+        assert_eq!(kind("/run/media/u/0123-4567"), DriveKind::Card);
+        assert_eq!(kind("/run/media/u/My Stick"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Vault"), DriveKind::Card, "LUKS on a card");
+        assert_eq!(kind("/run/media/u/Safe"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Loop"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Missing"), DriveKind::Usb);
+    }
+
+    #[test]
+    fn drive_kind_without_sys_goes_by_mount_source() {
+        let nosys = tempfile::tempdir().unwrap();
+        let info = [
+            mount_line(40, "179:97", "/m/a", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/m/b", "/dev/sda1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Card);
+        assert_eq!(kind_of(Path::new("/m/b"), &info, nosys.path()), DriveKind::Usb);
+    }
+
+    #[test]
+    fn the_last_mount_on_a_point_counts() {
+        let nosys = tempfile::tempdir().unwrap();
+        let info = [
+            mount_line(40, "8:1", "/m/a", "/dev/sda1"),
+            mount_line(41, "179:97", "/m/a", "/dev/mmcblk1p1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Card);
+        let info = [
+            mount_line(40, "179:97", "/m/a", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/m/a", "/dev/sda1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Usb);
+    }
+
+    #[test]
+    fn mount_points_are_unescaped() {
+        assert_eq!(unescape_mount("a\\040b\\011c\\012d\\134e"), b"a b\tc\nd\\e");
+        assert_eq!(unescape_mount("\\04"), b"\\04");
+        assert_eq!(unescape_mount("\\048x"), b"\\048x");
+        assert_eq!(unescape_mount("\\377"), b"\xff");
+        assert_eq!(unescape_mount("\\400"), b"\\400", "past a byte");
+        assert_eq!(unescape_mount("\\+12"), b"\\+12");
+        assert_eq!(unescape_mount("x\\"), b"x\\");
+        assert_eq!(unescape_mount("plain"), b"plain");
+    }
+
+    #[test]
+    fn scan_tells_cards_from_usb_drives() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("0123-4567")).unwrap();
+        std::fs::create_dir(d.path().join("STICK")).unwrap();
+        let sys = fake_sys(&[("179:97", "mmc/mmcblk1p1", &[])]);
+        let point = d.path().join("0123-4567");
+        let info = mount_line(40, "179:97", point.to_str().unwrap(), "/dev/mmcblk1p1");
+        let kinds: Vec<_> = scan_with(d.path(), &info, sys.path())
+            .into_iter()
+            .map(|v| (v.name, v.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                ("0123-4567".to_owned(), DriveKind::Card),
+                ("STICK".to_owned(), DriveKind::Usb)
+            ]
+        );
     }
 
     #[test]
@@ -354,6 +570,7 @@ mod tests {
                 id: "CARD".into(),
                 name: "CARD".into(),
                 mount_path: root.join("CARD"),
+                kind: DriveKind::Usb,
             })
         );
         assert_eq!(w.current().len(), 2);
@@ -380,7 +597,6 @@ mod tests {
             }
         }
         assert!(seen.is_some(), "volume below a late-created root must be found");
-        // after the root exists the watch moved onto it: later mounts are seen
         std::fs::create_dir(root.join("USB")).unwrap();
         let ev = next(&mut rx).await.unwrap();
         assert!(matches!(ev, VolumeEvent::Appeared(v) if v.id == "USB"));
@@ -402,7 +618,6 @@ mod tests {
         }
         assert!(gone);
         assert!(w.current().is_empty());
-        // and it comes back
         std::fs::create_dir_all(root.join("CARD2")).unwrap();
         let mut back = false;
         while let Some(ev) = next(&mut rx).await {

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Viewers area facades (doc/QML-API.md, "Viewers"): text, Markdown and
-//! EXIF sources, the folder's images, PDFs, the image providers for
-//! remote files and PDF pages, and the media source for QtMultimedia. The logic lives in
-//! `lautta_core::app_viewers`; these types only forward and publish.
 
+pub mod audio;
 pub mod docs;
 pub mod exif;
 pub mod images;
@@ -16,8 +13,8 @@ use lautta_core::{Result, Uri};
 use qmetaobject::{QObject, QPointer, QString};
 use std::future::Future;
 
-/// Registers this area's QML types under `Lautta 1.0`.
 pub fn register() {
+    audio::register();
     docs::register();
     exif::register();
     images::register();
@@ -34,8 +31,6 @@ pub(crate) fn qstr(s: &str) -> QString {
     QString::from(s)
 }
 
-/// Runs `fut` on the runtime and hands its result to `done` with the object
-/// (when it still exists, UI-4: nothing blocks the GUI thread).
 pub(crate) fn run_then<O, T, F>(me: &O, fut: F, done: impl FnOnce(&mut O, Result<T>) + 'static)
 where
     O: QObject + 'static,

@@ -1,6 +1,6 @@
 # Jolla Gallery's image viewer (adapted)
 
-The image viewer (SPEC PRV-4) is Jolla Gallery's. These files are adapted
+The image viewer is Jolla Gallery's. These files are adapted
 copies, BSD-3-Clause, © Jolla Ltd., Open Mobile Platform LLC and Jolla Mobile
 Ltd (the licence and its copyright lines: [`BSD-3-Clause.txt`](BSD-3-Clause.txt);
 each file keeps its own SPDX header):
@@ -22,8 +22,18 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
   `../ZoomMath.js`), with a double tap besides the pinch. Its drag detector
   is private C++, so a zoomed image holds the swipes and the page's back
   navigation until it is zoomed out.
-- Images turn upright themselves (`autoTransform`); remote images come
-  through `image://lautta-file/`.
+- Images come through `image://lautta-file/`, upright, decoded in
+  parallel at the size they show at (the screen asked as `sourceSize`), and
+  stay in Qt's pixmap cache: `../ViewerPrefetch.qml` starts the opened one
+  at finger down, swipes back reuse them. The placeholder is the camera's
+  EXIF thumbnail, else, for the opened photo only and only once the grid
+  showed it, the folder grid's tile (system thumbnailer cache, square crop)
+  placed where it sits in the photo, its edges drawn out and blurred over
+  the rest of the photo's shape (`../TileFill.qml`): a tile missing from the
+  cache is made on Qt's one image thread and holds back the photo. Server images: the
+  cached grid thumbnail.
+- Neighbours load only once the current image has, so it gets the cores
+  first.
 - The overlay's buttons are lautta's actions, signalled to the page
   (`../../../viewers/ImageViewer.qml`): details, Delete, Open with (where the
   Gallery's Edit is), Share, More (the app's own `qml/icons/more.svg`, a

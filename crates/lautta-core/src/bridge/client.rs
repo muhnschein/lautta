@@ -1,20 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The bridge client the rest of the app talks to: status, consent, locations,
-//! nearby servers, drives, handoff and ad-hoc servers (SPEC NVB-1..6, NVB-12,
-//! LOC-3). The connection itself is kept by the supervisor in
-//! [`super::session`].
 
-use super::convert::map_error;
 use super::link::{rpc, Link};
 use super::nearby::Settle;
 use super::types::{
-    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, Drive, NearbyServer,
-    RemoteLocation,
+    bridge_id, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer, Network, RemoteLocation,
 };
 use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
-use crate::questions::Questions;
-use lautta_bridge_proto::{OptsBuilder, Zeroizing};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -27,27 +19,20 @@ use tokio::task::JoinHandle;
 pub(super) struct Info {
     pub link: Option<Arc<Link>>,
     pub bridge_version: Option<String>,
-    /// What `GetFeatures` answered on the current connection (NVB-13).
     pub features: Vec<String>,
     pub consent: Option<Consent>,
-    /// Hub ids of questions the bridge asked on the current connection.
-    pub questions: Vec<String>,
-    /// Newest `ListLocations` request that was applied.
     pub applied_refresh: u64,
-    /// Newest `ListDrives` request that was applied.
     pub applied_drives: u64,
-    /// Nearby servers while a restarted discovery settles.
     pub nearby: Settle,
 }
 
 pub(super) struct Inner {
     pub config: BridgeConfig,
-    pub questions: Arc<Questions>,
     pub status: watch::Sender<BridgeStatus>,
     pub locations: watch::Sender<Arc<Vec<RemoteLocation>>>,
     pub nearby: watch::Sender<Arc<Vec<NearbyServer>>>,
-    /// The drives while the bridge has them (LOC-3, feature `drives`).
     pub drives: watch::Sender<Arc<Vec<Drive>>>,
+    pub network: watch::Sender<Network>,
     pub foreground: watch::Sender<bool>,
     pub wake: Notify,
     pub discover: AtomicBool,
@@ -72,26 +57,23 @@ impl Inner {
     }
 }
 
-/// Handle to the bridge connection; cheap to clone.
 #[derive(Clone)]
 pub struct BridgeClient {
     pub(super) inner: Arc<Inner>,
 }
 
 impl BridgeClient {
-    /// Starts discovery and the connection in the background (NVB-1, NVB-2).
-    /// Needs a running tokio runtime.
-    pub fn start(config: BridgeConfig, questions: Arc<Questions>) -> Result<BridgeClient> {
+    pub fn start(config: BridgeConfig) -> Result<BridgeClient> {
         let runtime = tokio::runtime::Handle::try_current()
             .map_err(|_| Error::new(ErrorKind::Internal, "the bridge client needs a tokio runtime"))?;
         let inner = Arc::new(Inner {
             foreground: watch::channel(config.foreground).0,
             config,
-            questions,
             status: watch::channel(BridgeStatus::Absent).0,
             locations: watch::channel(Arc::new(Vec::new())).0,
             nearby: watch::channel(Arc::new(Vec::new())).0,
             drives: watch::channel(Arc::new(Vec::new())).0,
+            network: watch::channel(Network::Unknown).0,
             wake: Notify::new(),
             discover: AtomicBool::new(false),
             refreshes: AtomicU64::new(0),
@@ -105,12 +87,10 @@ impl BridgeClient {
         Ok(BridgeClient { inner })
     }
 
-    /// [`BridgeClient::start`] with the app's defaults for `paths`.
-    pub fn start_for_app(paths: &AppPaths, questions: Arc<Questions>) -> Result<BridgeClient> {
-        BridgeClient::start(BridgeConfig::for_app(paths), questions)
+    pub fn start_for_app(paths: &AppPaths) -> Result<BridgeClient> {
+        BridgeClient::start(BridgeConfig::for_app(paths))
     }
 
-    /// Stops the connection; the client is unusable afterwards.
     pub fn shutdown(&self) {
         if let Some(task) = self
             .inner
@@ -127,17 +107,24 @@ impl BridgeClient {
         self.inner.set_status(BridgeStatus::Absent);
     }
 
-    // ---- state ---------------------------------------------------------
-
     pub fn status(&self) -> BridgeStatus {
         *self.inner.status.borrow()
+    }
+
+    pub fn access(&self, location: &str) -> Option<Level> {
+        let id = bridge_id(location);
+        self.inner
+            .locations
+            .borrow()
+            .iter()
+            .find(|l| l.bridge_id == id)
+            .map(|l| l.access)
     }
 
     pub fn watch_status(&self) -> watch::Receiver<BridgeStatus> {
         self.inner.status.subscribe()
     }
 
-    /// Resolves once the status satisfies `pred`.
     pub async fn wait_status(&self, pred: impl Fn(BridgeStatus) -> bool) -> BridgeStatus {
         let mut rx = self.watch_status();
         loop {
@@ -151,7 +138,6 @@ impl BridgeClient {
         }
     }
 
-    /// The bridge locations (remote locations, LOC-7); empty until consent.
     pub fn locations(&self) -> Arc<Vec<RemoteLocation>> {
         self.inner.locations.borrow().clone()
     }
@@ -160,7 +146,6 @@ impl BridgeClient {
         self.inner.locations.subscribe()
     }
 
-    /// A location by internal id (`nv-account:1`).
     pub fn location(&self, id: &str) -> Option<RemoteLocation> {
         let bridge = bridge_id(id);
         self.locations().iter().find(|l| l.bridge_id == bridge).cloned()
@@ -174,23 +159,18 @@ impl BridgeClient {
         self.inner.nearby.subscribe()
     }
 
-    /// The consent the bridge reported on this connection (NVB-3).
     pub fn consent(&self) -> Option<Consent> {
         self.inner.info().consent
     }
 
-    /// How many times the client has tried to connect, for diagnostics.
     pub fn connection_attempts(&self) -> u64 {
         self.inner.attempts.load(Ordering::SeqCst)
     }
 
-    /// The bridge's own version, for *About*.
     pub fn bridge_version(&self) -> Option<String> {
         self.inner.info().bridge_version.clone()
     }
 
-    /// The memory cards and USB drives the bridge can mount, mounted or not
-    /// (LOC-3); none while it is not connected or has no `drives` (NVB-13).
     pub fn drives(&self) -> Arc<Vec<Drive>> {
         self.inner.drives.borrow().clone()
     }
@@ -199,17 +179,18 @@ impl BridgeClient {
         self.inner.drives.subscribe()
     }
 
-    /// True when the connected bridge offers `feature` (NVB-13,
-    /// [`lautta_bridge_proto::feature`]); false while there is none.
+    pub fn network(&self) -> Network {
+        *self.inner.network.borrow()
+    }
+
+    pub fn watch_network(&self) -> watch::Receiver<Network> {
+        self.inner.network.subscribe()
+    }
+
     pub fn offers(&self, feature: &str) -> bool {
         self.inner.info().features.iter().any(|f| f == feature)
     }
 
-    // ---- lifecycle -------------------------------------------------------
-
-    /// Tells the client whether the app is in the foreground. Coming back
-    /// checks for the socket at once; while in the background it does not
-    /// reconnect (NVB-1, NVB-12).
     pub fn set_foreground(&self, foreground: bool) {
         let changed = self.inner.foreground.send_if_modified(|f| {
             let changed = *f != foreground;
@@ -221,14 +202,10 @@ impl BridgeClient {
         }
     }
 
-    /// Looks for the bridge now (the socket appeared, a *Retry* was tapped).
     pub fn poke(&self) {
         self.inner.wake.notify_one();
     }
 
-    // ---- calls -----------------------------------------------------------
-
-    /// The live connection, whatever the consent.
     pub(crate) fn link(&self) -> Result<Arc<Link>> {
         match self.inner.info().link.clone() {
             Some(link) => Ok(link),
@@ -236,7 +213,6 @@ impl BridgeClient {
         }
     }
 
-    /// The live connection if locations may be used (consent granted).
     pub(crate) fn files_link(&self) -> Result<Arc<Link>> {
         let status = self.status();
         if status == BridgeStatus::Ready {
@@ -245,13 +221,10 @@ impl BridgeClient {
         Err(unavailable(status))
     }
 
-    /// Asks again for the permission (NVB-3 *Ask again*).
     pub async fn request_consent(&self) -> Result<()> {
         rpc(self.link()?.proxy().request_consent().await)
     }
 
-    /// Starts or stops looking for servers nearby (LOC-6). The wish is kept and
-    /// applied again after a reconnect.
     pub async fn discover(&self, on: bool) -> Result<()> {
         self.inner.discover.store(on, Ordering::SeqCst);
         match self.files_link() {
@@ -261,17 +234,14 @@ impl BridgeClient {
                 }
                 rpc(link.proxy().discover(on).await)
             }
-            // Applied when the bridge becomes ready.
             Err(_) => Ok(()),
         }
     }
 
-    /// *Add server*: opens the netvfs account creation (NVB-5).
     pub async fn add_account(&self, provider: &str) -> Result<()> {
         rpc(self.files_link()?.proxy().add_account(provider).await)
     }
 
-    /// *Edit*, *Update sign-in*, *Review server identity*: opens Settings (NVB-5).
     pub async fn open_account_settings(&self, loc: &str) -> Result<()> {
         rpc(self
             .files_link()?
@@ -280,79 +250,36 @@ impl BridgeClient {
             .await)
     }
 
-    /// *Open Storage settings* of a volume (LOC-3): the bridge opens Settings ›
-    /// Storage, which the sandbox cannot (NVB-13). Needs no consent.
+    pub async fn is_removed(&self, loc: &str) -> bool {
+        let Ok(link) = self.files_link() else {
+            return false;
+        };
+        matches!(
+            rpc(link.proxy().disconnect(bridge_id(loc)).await),
+            Err(e) if e.kind == ErrorKind::NotFound
+        )
+    }
+
     pub async fn open_storage_settings(&self) -> Result<()> {
         rpc(self.link()?.proxy().open_storage_settings().await)
     }
 
-    /// *Mount* (LOC-3, netvfs XB-20): where the drive is mounted. Needs no
-    /// consent.
     pub async fn mount_drive(&self, drive: &str) -> Result<PathBuf> {
         let point = rpc(self.link()?.proxy().mount(drive).await)?;
         Ok(PathBuf::from(OsStr::from_bytes(&point)))
     }
 
-    /// *Unmount* (LOC-3, netvfs XB-20). Needs no consent.
     pub async fn unmount_drive(&self, drive: &str) -> Result<()> {
         rpc(self.link()?.proxy().unmount(drive).await)
     }
-
-    /// *Connect to server* (NVB-6). The secret is wiped before this returns,
-    /// whatever the outcome; identity prompts arrive as questions.
-    pub async fn connect_adhoc(
-        &self,
-        url: &str,
-        secret: Zeroizing<Vec<u8>>,
-        opts: AdHocOptions,
-    ) -> Result<String> {
-        let mut secret = secret;
-        self.connect_adhoc_wiping(url, &mut secret, &opts).await
-    }
-
-    /// [`BridgeClient::connect_adhoc`] on a buffer the caller keeps: it is empty
-    /// afterwards, also when the call fails or is dropped.
-    pub async fn connect_adhoc_wiping(
-        &self,
-        url: &str,
-        secret: &mut Zeroizing<Vec<u8>>,
-        opts: &AdHocOptions,
-    ) -> Result<String> {
-        let link = match self.files_link() {
-            Ok(link) => link,
-            Err(e) => {
-                zeroize::Zeroize::zeroize(&mut **secret);
-                return Err(e);
-            }
-        };
-        let mut wire = OptsBuilder::new();
-        if let Some(user) = &opts.user {
-            wire = wire.str("user", user);
-        }
-        if let Some(profile) = &opts.security_profile {
-            wire = wire.str("security_profile", profile);
-        }
-        let loc = link
-            .connection()
-            .connect_ad_hoc_wiping(url, secret, &wire.build())
-            .await
-            .map_err(map_error)?;
-        Ok(location_id(&loc))
-    }
-
-    /// Forgets an ad-hoc server and the identity pinned for it (XB-14).
-    pub async fn forget_adhoc(&self, loc: &str) -> Result<()> {
-        rpc(self.files_link()?.proxy().forget_ad_hoc(bridge_id(loc)).await)
-    }
 }
 
-/// Why a call cannot be made in `status` (SPEC §20 "bridge gone").
 pub(super) fn unavailable(status: BridgeStatus) -> Error {
     match status {
         BridgeStatus::Reconnecting => Error::new(ErrorKind::ConnectionLost, "reconnecting to the bridge"),
-        BridgeStatus::ConsentUnknown | BridgeStatus::ConsentDenied => Error::new(
+        BridgeStatus::ConsentUnknown => Error::new(
             ErrorKind::PermissionDenied,
-            "the user has not allowed this app to use network locations",
+            "the user has not decided yet what this app may do",
         ),
         _ => Error::new(ErrorKind::BridgeUnavailable, "network locations are unavailable"),
     }
@@ -373,10 +300,6 @@ mod tests {
             ErrorKind::PermissionDenied
         );
         assert_eq!(
-            unavailable(BridgeStatus::ConsentDenied).kind,
-            ErrorKind::PermissionDenied
-        );
-        assert_eq!(
             unavailable(BridgeStatus::Absent).kind,
             ErrorKind::BridgeUnavailable
         );
@@ -389,9 +312,7 @@ mod tests {
     #[test]
     fn starting_without_a_runtime_is_an_error() {
         let paths = AppPaths::new("/nonexistent-home");
-        let e = BridgeClient::start_for_app(&paths, Questions::new())
-            .err()
-            .unwrap();
+        let e = BridgeClient::start_for_app(&paths).err().unwrap();
         assert_eq!(e.kind, ErrorKind::Internal);
     }
 }

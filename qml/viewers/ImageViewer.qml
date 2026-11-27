@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Image viewer (PRV-4, boards ImageViewer, ImageExif, ImageDeleteRemote):
-// Jolla Gallery's full-screen viewer (components/viewers/gallery, BSD-3-Clause,
-// after jolla-gallery's GalleryFullscreenPage). The folder's images in its
-// order, swiped sideways; a tap shows or hides the overlay (details, close,
-// Delete, Open with, Share, More), a pinch or a double tap zooms and puts the
-// overlay away, a tap zooms out again; a swipe down or up goes back. Local
-// images are shown directly, remote ones through image://lautta-file/ (EXIF
-// orientation applied by the provider).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,17 +10,16 @@ FullscreenContentPage {
     id: page
 
     property string uri
-    // The folder to swipe through; the image's own folder by default.
+    readonly property string coverKind: "file"
+    readonly property string coverUri: currentUri
     property string folderUri: App.parentUri(uri)
+    property int tileSize
 
-    // The listing has had the image: the view stays on the folder when the
-    // image is deleted (to its neighbour) or renamed.
     property bool listed
-    // indexOf is a method: images.count makes the binding follow the listing.
     readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
-    readonly property string currentUri: slideshow.currentItem ? slideshow.currentItem.imageUri : uri
+    readonly property var slideshow: viewLoader.item
+    readonly property string currentUri: slideshow && slideshow.currentItem ? slideshow.currentItem.imageUri : uri
     readonly property int total: inFolder ? images.count : 1
-    // Where the view was when an image was deleted, to land next to it.
     property int keepIndex: -1
 
     function sourceFor(imageUri) {
@@ -42,9 +33,6 @@ FullscreenContentPage {
             Operations.remove(JSON.stringify([target]))
         }
         if (Operations.deletesPermanently(JSON.stringify([target]))) {
-            // For good (volumes, servers, the Trash off, OPS-8): ask, with no
-            // timer after. Accepting for the last image leaves the viewer
-            // too: the stack cannot pop while the dialog closes.
             var props = { "uris": [target] }
             var below = pageStack.previousPage(page)
             if (page.total <= 1 && below) {
@@ -69,8 +57,6 @@ FullscreenContentPage {
         }, App.setting("remorse_seconds") * 1000)
     }
 
-    // More › Rename: the dialog only asks, so the viewer renames, and keeps
-    // showing the image under its new name.
     function askRename() {
         var target = page.currentUri
         var dialog = pageStack.replace(Qt.resolvedUrl("../dialogs/RenameDialog.qml"), { "uri": target, "isDir": false })
@@ -86,7 +72,10 @@ FullscreenContentPage {
     }
 
     function showMore() {
-        var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), { "uri": page.currentUri })
+        var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), {
+            "uri": page.currentUri, "changeable": App.canChange(page.currentUri),
+            "writable": App.canAddTo(App.parentUri(page.currentUri))
+        })
         more.renameChosen.connect(page.askRename)
     }
 
@@ -95,19 +84,14 @@ FullscreenContentPage {
         notice.show()
     }
 
-    // On the image the viewer opened with (or renamed) once the folder's
-    // listing shows it. Called when the view takes up the listing as well:
-    // that may come after the listing's own change.
     function place() {
         if (page.inFolder && page.keepIndex < 0)
             slideshow.currentIndex = images.indexOf(page.uri)
     }
 
     allowedOrientations: Orientation.All
-    // Zoomed in, drags pan the image; a tap zooms out and swipes go back.
-    backNavigation: !slideshow.zoomed
+    backNavigation: !(slideshow && slideshow.zoomed)
 
-    // Renames only (no folder listed).
     DirectoryModel {
         id: renamer
 
@@ -141,19 +125,35 @@ FullscreenContentPage {
 
     onCurrentUriChanged: tools.noteViewed(currentUri)
 
-    // The images, swiped, with the overlay over them.
-    FlickableImageView {
-        id: slideshow
-
-        objectName: "flickableView"
+    Loader {
+        id: viewLoader
         anchors.fill: parent
-        model: page.inFolder ? images : [page.uri]
-        held: remorse.active
-        onModelChanged: page.place()
+        sourceComponent: page.inFolder ? folderView : imageView
     }
 
-    // Declared after the view: the page's children go in this order when it
-    // is destroyed, and Silica's PagedView crashes when its model went first.
+    Component {
+        id: imageView
+        FlickableImageView {
+            objectName: "flickableView"
+            model: [page.uri]
+            held: remorse.active
+            tileUri: page.uri
+            tileSize: page.tileSize
+        }
+    }
+
+    Component {
+        id: folderView
+        FlickableImageView {
+            objectName: "flickableView"
+            model: images
+            held: remorse.active
+            tileUri: page.uri
+            tileSize: page.tileSize
+            currentIndex: Math.max(0, images.indexOf(page.uri))
+        }
+    }
+
     ImageListModel {
         id: images
         folderUri: page.folderUri
@@ -171,8 +171,14 @@ FullscreenContentPage {
         }
     }
 
+    Binding {
+        target: page.slideshow ? page.slideshow.overlay : null
+        property: "changeable"
+        value: App.canChange(page.folderUri)
+    }
+
     Connections {
-        target: slideshow.overlay
+        target: page.slideshow ? page.slideshow.overlay : null
         onDetails: page.showDetails()
         onRemove: page.remove()
         onOpenWith: external.openWith()
@@ -182,6 +188,7 @@ FullscreenContentPage {
 
     VerticalPageBackHint {
         pageActive: page.status === PageStatus.Active
+        bottomMargin: page.slideshow ? page.slideshow.overlay.toolbarSpace : 0
     }
 
     RemorsePopup { id: remorse }

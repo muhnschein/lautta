@@ -1,11 +1,11 @@
 # Verifying an RPM
 
-Same commit, same RPM, byte for byte (SPEC PKG-4). Check one:
+Same commit, same RPM, byte for byte. Check one:
 
 ```
 $ git clone https://github.com/muhnschein/lautta.git
 $ cd lautta
-$ tools/verify-rpm.sh --ref <commit> harbour-lautta-0.1.0-1.aarch64.rpm
+$ tools/verify-rpm.sh --ref <commit> harbour-lautta-<version>-1.aarch64.rpm
 ```
 
 `<commit>`: full hash, branch or tag the RPM was built from. CI artifact
@@ -23,7 +23,7 @@ clone under `~/.cache/lautta-verify`, never in your tree: ~4 GB, checks for
 | Result | Exit | Meaning |
 |---|---|---|
 | `VERIFIED` | 0 | Same file as the rebuild. |
-| `SAME FILES` | 1 | Every file, mode, owner inside matches; packaging (build time, file dates, host) differs. Expected for RPMs built before PKG-4. |
+| `SAME FILES` | 1 | Every file, mode, owner inside matches; packaging (build time, file dates, host) differs. Expected for RPMs built before reproducible builds. |
 | `DIFFERENT` | 2 | Files differ. Please open an issue with the output. |
 | | 3 | Couldn't check (no Docker, no such commit, build failed). |
 
@@ -31,6 +31,9 @@ clone under `~/.cache/lautta-verify`, never in your tree: ~4 GB, checks for
 
 - Package build time and file dates: commit's time (`SOURCE_DATE_EPOCH`, set
   by `tools/ci/build-rpm.sh`); build host fixed (spec).
+- Built from a copy of the tracked files without `.git`
+  (`tools/ci/build-rpm.sh`): mb2 takes the version from the spec, not from
+  git tags.
 - Build paths: binary records none. `tools/ci/cross-build.sh` maps lifted
   SDK and cargo home to `/sdk`, `/cargo` (rustc `--remap-path-prefix`, gcc
   `-ffile-prefix-map`); cargo names the workspace's own sources relative to

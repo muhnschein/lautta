@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Move to new folder on the More
-// actions page (SPEC OPS-13). Two selected items, then the long-press menu's
-// More actions of one item: the row opens the dialog of the pulley's New
-// (titled New folder), and accepting it makes the folder here and moves the
-// items into it with no remorse; selection ends. A failed folder leaves its
-// items where they are and does not carry them to the next folder made. An
-// archive, which is read-only, offers no such row, for a selection or an
-// item. Fails when the row is missing or out of place, the items do not end
-// up in the new folder, selection stays, or an item moves after a failure.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,6 +7,7 @@ import "../../qml/components/directory/ContextActions.js" as Actions
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/MoveNew/"
     property string archiveRoot
@@ -29,7 +21,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -45,14 +37,12 @@ ApplicationWindow {
         return ok
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
         return expect(done(), "timed out waiting for " + (typeof what === "function" ? what() : what))
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -68,7 +58,6 @@ ApplicationWindow {
         return out
     }
 
-    // What `model` lists, to say in a failure.
     function names(model) {
         var out = []
         for (var i = 0; i < model.count; ++i)
@@ -76,9 +65,6 @@ ApplicationWindow {
         return JSON.stringify(out)
     }
 
-    // `name` is listed in `model` as a `kind` ("" for not at all). A local
-    // folder is watched; asking again, now and then, is for a missed event
-    // (asking at every look would keep the model loading).
     function listed(model, name, kind) {
         var looks = 0
         model.refresh()
@@ -91,13 +77,11 @@ ApplicationWindow {
         })
     }
 
-    // The folder view of the page on top.
     function folderView() {
         var views = findAll(pageStack.currentPage, function (x) { return x.runSelectionAction !== undefined }, [])
         return views.length === 1 ? views[0] : null
     }
 
-    // Headless, no render loop polishes the list: lay it out by hand.
     function layOut() {
         var views = findAll(window.contentItem, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -112,16 +96,13 @@ ApplicationWindow {
         return rows.length > 0 ? rows[0] : null
     }
 
-    // The ids of the rows on the More actions page now on top.
     function moreIds(view) {
         waitFor(function () { return view.moreActionsPage && pageStack.currentPage === view.moreActionsPage && !pageStack.busy },
                 "the More actions page")
         return view.moreActionsPage.actions.map(function (a) { return a.id })
     }
 
-    // Taps the row of action `id` on the More actions page.
     function tapMore(view, id) {
-        // The window shows few rows: scroll to the end for the last ones.
         findAll(view.moreActionsPage, function (x) { return x.positionViewAtEnd !== undefined }, []).forEach(function (v) {
             v.positionViewAtEnd()
         })
@@ -135,7 +116,6 @@ ApplicationWindow {
             rows[0].clicked(null)
     }
 
-    // Opens the long-press menu of the row of `uri` and taps More actions.
     function contextMore(uri) {
         var menu
         waitFor(function () {
@@ -151,7 +131,6 @@ ApplicationWindow {
             menu._activatedMenuItem(items[0])
     }
 
-    // Types `name` in the dialog that took the More page's place and accepts.
     function nameAndAccept(name) {
         var dialog
         waitFor(function () {
@@ -186,7 +165,6 @@ ApplicationWindow {
         }, "the folder open")
     }
 
-    // The selection's More actions: both items go into the folder named.
     function checkSelection() {
         var view = folderView()
         view.startSelection()
@@ -208,7 +186,6 @@ ApplicationWindow {
         expect(here.nameKind("c.md") === "file" && here.nameKind("d.md") === "file", "the rest stays")
     }
 
-    // One item, from its context menu.
     function checkItem() {
         var view = folderView()
         contextMore(base + "c.md")
@@ -224,8 +201,6 @@ ApplicationWindow {
         expect(here.nameKind("d.md") === "file", "the rest stays")
     }
 
-    // A folder that cannot be made moves nothing, and its items are not
-    // kept to be moved into the next folder made.
     function checkFailure() {
         var view = folderView()
         view.toMove = [base + "d.md"]
@@ -236,9 +211,8 @@ ApplicationWindow {
         listed(inside, "d.md", "")
     }
 
-    // An archive is read-only: no row for a selection or for an item.
     function checkArchive() {
-        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip")
+        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
         var archivePage = pageStack.push(pageComponent, { "uri": window.archiveRoot }, PageStackAction.Immediate)
         var view
@@ -251,12 +225,14 @@ ApplicationWindow {
         view.model.selectAll()
         view.moreSelection()
         var ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for a selection in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for a selection in an archive: " + JSON.stringify(ids))
         pageStack.pop(archivePage, PageStackAction.Immediate)
         view.endSelection()
         view.moreActions({ "uri": view.model.uriAt(0), "isDir": true })
         ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for an item in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for an item in an archive: " + JSON.stringify(ids))
         pageStack.pop(folderPage, PageStackAction.Immediate)
     }
 
@@ -266,5 +242,6 @@ ApplicationWindow {
         checkItem()
         checkFailure()
         checkArchive()
+        reachedEnd = true
     }
 }

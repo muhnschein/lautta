@@ -1,3 +1,2 @@
 <!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
-<!-- 32-unit grid, stroke 1: edges on whole units, so whole pixels at 64, 96 and 128 px (list at scale 1.0, 1.5, 2.0). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="20" height="24" rx="1.5" fill="#ffffff" fill-opacity="0.5" stroke="none"/><path d="M11 10h10M11 14h10M11 18h10M11 22h5" stroke-width="2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5h11.5l6 6V26a1.5 1.5 0 0 1 -1.5 1.5H8A1.5 1.5 0 0 1 6.5 26V6A1.5 1.5 0 0 1 8 4.5z"/><path d="M19.5 4.5V9a1.5 1.5 0 0 0 1.5 1.5h4.5z" fill="#ffffff" fill-opacity="0.6" stroke="none"/><path d="M11 10.5h7"/><path d="M11 15h10M11 18.5h10M11 22h7" stroke-opacity="0.6"/></svg>

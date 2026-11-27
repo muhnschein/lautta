@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of PlaceText.around (§15.5): a line that names a location is
-// split around the name wherever its translation puts it, so that a
-// server's name gets its icon right before it; a line that does not name
-// it is left whole.
 import QtQuick 2.6
 import "../../../qml/components/PlaceText.js" as PlaceText
 
 QtObject {
+    property bool reachedEnd
     function same(got, want, what) {
         var g = JSON.stringify(got)
         var w = JSON.stringify(want)
@@ -29,5 +26,12 @@ QtObject {
              { "before": "", "rest": "Deleted 4 items", "named": false }, "a line without the name")
         same(PlaceText.around(line("Copied to %1"), ""),
              { "before": "", "rest": "Copied to ", "named": false }, "no name to mark")
+        same(PlaceText.shown("NAS › /Photos", true), "NAS › /Photos", "a known server as it is")
+        same(PlaceText.shown("Documents › Uni", false), "Documents › Uni", "a place on this device as it is")
+        same(PlaceText.shown("/Photos", true), "lautta-place-server › /Photos", "an unknown server named Server")
+        same(PlaceText.shown("/", true), "lautta-place-server", "an unknown server's top folder")
+        same(PlaceText.shown("", true), "lautta-place-server", "a transferred item on an unknown server")
+        same(PlaceText.shown("", false), "", "no place on this device stays empty")
+        reachedEnd = true
     }
 }

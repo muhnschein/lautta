@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Opening a remote file in another app (PRV-5, PRV-6, board OpenRemote): the
-// file is copied to ~/Downloads/Lautta/Opened so the sandboxed app can read
-// it, then handed to the system. The first use explains the copy in one
-// line (SEC-4).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
@@ -13,11 +9,14 @@ Page {
     id: page
 
     property string uri
+    property bool share
 
     readonly property string fileName: App.nameOf(uri)
     property bool working: true
     property string errorKind
     property string errorMessage
+
+    signal fetched(string fileUrl)
 
     function start() {
         working = true
@@ -27,9 +26,13 @@ Page {
 
     function finish(fileUrl) {
         working = false
-        tools.noteOpened(uri)
         hint.value = true
-        Qt.openUrlExternally(fileUrl)
+        if (share) {
+            fetched(fileUrl)
+        } else {
+            tools.noteOpened(uri)
+            Qt.openUrlExternally(fileUrl)
+        }
         pageStack.pop()
     }
 
@@ -38,7 +41,6 @@ Page {
 
     ViewerTools { id: tools }
 
-    // Remembers that the explanation has been shown.
     ConfigurationValue {
         id: hint
         key: "/apps/harbour-lautta/hints/open-remote-seen"
@@ -83,7 +85,7 @@ Page {
             wrapMode: Text.Wrap
             color: page.errorKind !== "" ? Theme.highlightColor : Theme.secondaryHighlightColor
             text: page.errorKind !== ""
-                  ? ErrorText.message(page.errorKind, { "item": page.fileName, "location": App.locationName(page.uri) })
+                  ? ErrorText.message(page.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
                   //% "Getting %1"
                   : qsTrId("lautta-viewers-getting").arg(page.fileName)
         }

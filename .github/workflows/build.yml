@@ -8,13 +8,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: sonar-${{ github.ref }}
+  group: sonar-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
 jobs:
-  # Docs-only pull request: no scan, as ci.yml. Rules: tools/ci/changes.sh.
   changes:
     name: What changed
     runs-on: ubuntu-24.04
@@ -22,13 +21,14 @@ jobs:
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-          fetch-depth: 2  # the merge commit and its base parent
+          fetch-depth: ${{ github.event_name != 'push' && 2 || 0 }}
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: ./tools/ci/changes.sh >> "$GITHUB_OUTPUT"
 
   sonarqube:
@@ -38,33 +38,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      # Prebuilt, same version as install-host-deps.sh: building it takes minutes.
-      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+          fetch-depth: 0
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91
         with:
           tool: cargo-llvm-cov@0.6.16
       - name: Install dependencies
         run: ./tools/ci/install-host-deps.sh coverage
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
       - name: Coverage and clippy reports
         run: |
           make coverage
           make clippy-report
       - name: Cache SonarQube packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: No open issues or hotspots
-        if: success() || failure()  # also list the findings when the gate failed
+        if: success() || failure()
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_SCOPE: ${{ github.event_name == 'pull_request' && format('pullRequest={0}', github.event.pull_request.number) || format('branch={0}', github.ref_name) }}

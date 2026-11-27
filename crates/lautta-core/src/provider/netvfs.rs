@@ -1,40 +1,34 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! netvfs provider: forwards to the bridge (NVB-7..12). Names and paths cross
-//! as bytes (NVB-8), local data crosses as file descriptors only (NVB-9), and
-//! every request that can carry a lane hint carries one (NVB-7).
 
 use super::{
-    no_progress, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle,
-    ReadOptions, RenameMode, SpaceInfo, WriteOptions,
+    check_one_by_one, no_progress, AttributeChanges, CopyOptions, Disposition, FolderCheck, KnownFolder,
+    Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode, SpaceInfo, WriteOptions,
 };
-use crate::bridge::convert::{capabilities_from_wire, entry_from_wire};
+use crate::bridge::convert::{capabilities_from_wire, entry_from_wire, finished_error};
+use crate::bridge::feature;
 use crate::bridge::link::{rpc, JobOutcome, Link};
-use crate::bridge::{bridge_id, location_id, BridgeClient};
+use crate::bridge::{bridge_id, location_id, BridgeClient, Level};
 use crate::entry::{cap, system_time_to_ms, Capabilities, Entry};
 use crate::error::{Error, ErrorKind, Result};
 use crate::uri::LocationId;
 use crate::vpath::VPath;
 use async_trait::async_trait;
 use lautta_bridge_proto::zvariant::Fd;
-use lautta_bridge_proto::{Opts, OptsBuilder, MAX_READ_BYTES};
+use lautta_bridge_proto::{
+    Opts, OptsBuilder, WireCheckItem, WireCheckResult, WireWalkItem, MAX_CHECK_ITEMS, MAX_READ_BYTES,
+};
+use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 
-/// A location served by the bridge.
 pub struct NetvfsProvider {
     client: BridgeClient,
-    /// The bridge's id (`account:1`).
     loc: String,
-    /// `None` until fetched from the bridge.
     caps: RwLock<Option<Capabilities>>,
 }
 
 impl NetvfsProvider {
-    /// A provider for `location` (`nv-account:1` or `account:1`). Capabilities
-    /// are fetched by [`NetvfsProvider::refresh_capabilities`], which
-    /// [`Provider::known_capabilities`] does on first use; until then only
-    /// `Write` is assumed.
     pub fn new(client: BridgeClient, location: &str) -> NetvfsProvider {
         NetvfsProvider {
             client,
@@ -43,19 +37,16 @@ impl NetvfsProvider {
         }
     }
 
-    /// [`NetvfsProvider::new`] plus the capabilities of the location.
     pub async fn connect(client: BridgeClient, location: &str) -> Result<NetvfsProvider> {
         let provider = NetvfsProvider::new(client, location);
         provider.refresh_capabilities().await?;
         Ok(provider)
     }
 
-    /// The internal location id (`nv-account:1`, LOC-7).
     pub fn location(&self) -> LocationId {
         location_id(&self.loc)
     }
 
-    /// Reads `Capabilities(loc)` again, e.g. after a reconnect.
     pub async fn refresh_capabilities(&self) -> Result<()> {
         let wire = rpc(self.link()?.proxy().capabilities(&self.loc).await)?;
         *self
@@ -65,7 +56,6 @@ impl NetvfsProvider {
         Ok(())
     }
 
-    /// Whether the capabilities came from the bridge yet.
     pub fn has_capabilities(&self) -> bool {
         self.caps
             .read()
@@ -77,8 +67,6 @@ impl NetvfsProvider {
         self.client.files_link()
     }
 
-    /// Removes a folder with everything below it in one bridge job
-    /// (`RemoveTree`); progress counts the removed entries.
     pub async fn remove_tree(&self, path: &VPath, progress: ProgressSink) -> Result<JobOutcome> {
         let link = self.link()?;
         link.run_job(link.proxy().remove_tree(&self.loc, path.as_bytes()), &progress)
@@ -87,14 +75,11 @@ impl NetvfsProvider {
 }
 
 impl BridgeClient {
-    /// The provider of a bridge location.
     pub fn provider(&self, location: &str) -> NetvfsProvider {
         NetvfsProvider::new(self.clone(), location)
     }
 }
 
-/// `Upload.opts` for `opts` (netvfs `args.cpp`): a resume sends the offset and
-/// the length counted from it; resuming at 0 is just a fresh write.
 fn upload_opts(opts: &WriteOptions) -> Opts {
     let resume = opts.disposition == Disposition::Resume && opts.offset > 0;
     let disposition = match opts.disposition {
@@ -138,18 +123,71 @@ fn to_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
 }
 
+pub(crate) fn folder_checks(count: usize, results: Vec<WireCheckResult>) -> Vec<FolderCheck> {
+    let mut out: Vec<Option<FolderCheck>> = (0..count).map(|_| None).collect();
+    for r in results {
+        let Some(slot) = usize::try_from(r.index).ok().and_then(|i| out.get_mut(i)) else {
+            continue;
+        };
+        if let Some(e) = finished_error(&r.error, "", &HashMap::new()) {
+            *slot = Some(FolderCheck::Failed(e));
+            continue;
+        }
+        let children = r.children.iter().map(entry_from_wire);
+        match slot {
+            Some(FolderCheck::Listed(_, all)) if r.listed => all.extend(children),
+            _ if r.listed => *slot = Some(FolderCheck::Listed(entry_from_wire(&r.entry), children.collect())),
+            _ => *slot = Some(FolderCheck::Unchanged(entry_from_wire(&r.entry))),
+        }
+    }
+    out.into_iter()
+        .map(|slot| {
+            slot.unwrap_or_else(|| {
+                FolderCheck::Failed(Error::new(
+                    ErrorKind::ProtocolError,
+                    "the bridge left a folder out",
+                ))
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn found_below(root: &VPath, items: &[WireWalkItem]) -> Vec<(VPath, Entry)> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let mut path = root.clone();
+            for part in item.path.split(|b| *b == b'/') {
+                path = path.join(part).ok()?;
+            }
+            (path.name() == Some(item.entry.name.as_slice())).then(|| (path, entry_from_wire(&item.entry)))
+        })
+        .collect()
+}
+
+fn with_access(mut caps: Capabilities, level: Option<Level>) -> Capabilities {
+    let flags: &[&str] = match level {
+        None | Some(Level::Full) => &[],
+        Some(Level::ReadAdd) => &[cap::NO_CHANGE],
+        Some(Level::Read) => &[cap::READ_ONLY],
+        Some(Level::Add) => &[cap::NO_CHANGE, cap::NO_READ],
+    };
+    caps.raw.extend(flags.iter().map(|f| (*f).to_owned()));
+    caps
+}
+
 #[async_trait]
 impl Provider for NetvfsProvider {
     fn capabilities(&self) -> Capabilities {
-        self.caps
+        let caps = self
+            .caps
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
-            .unwrap_or_else(|| Capabilities::with(&[cap::WRITE]))
+            .unwrap_or_else(|| Capabilities::with(&[cap::WRITE]));
+        with_access(caps, self.client.access(&self.loc))
     }
 
-    /// Fetched once; a bridge that cannot answer yet leaves the assumed ones
-    /// and is asked again next time.
     async fn known_capabilities(&self) -> Capabilities {
         if !self.has_capabilities() {
             if let Err(e) = self.refresh_capabilities().await {
@@ -157,6 +195,43 @@ impl Provider for NetvfsProvider {
             }
         }
         self.capabilities()
+    }
+
+    async fn check_folders(
+        &self,
+        folders: &[KnownFolder],
+        now_ms: i64,
+        lane: Lane,
+    ) -> Result<Vec<FolderCheck>> {
+        if !self.client.offers(feature::CHECK) {
+            return Ok(check_one_by_one(self, folders, now_ms, lane).await);
+        }
+        let link = self.link()?;
+        let mut out = Vec::with_capacity(folders.len());
+        for chunk in folders.chunks(MAX_CHECK_ITEMS) {
+            let items: Vec<WireCheckItem> = chunk
+                .iter()
+                .map(|f| WireCheckItem {
+                    path: f.path.as_bytes().to_vec(),
+                    etag: f.etag.clone().unwrap_or_default(),
+                    mtime_ms: f.modified_ms.unwrap_or(-1),
+                })
+                .collect();
+            let results = link.check(&self.loc, &items, lane).await?;
+            out.extend(folder_checks(chunk.len(), results));
+        }
+        Ok(out)
+    }
+
+    async fn search_names(&self, root: &VPath, text: &str, limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        if !self.client.offers(feature::SEARCH) || !self.capabilities().raw.contains(cap::SEARCH) {
+            return Err(Error::new(ErrorKind::Unsupported, "this server cannot search"));
+        }
+        let found = self
+            .link()?
+            .search(&self.loc, root.as_bytes(), text, limit)
+            .await?;
+        Ok(found_below(root, &found))
     }
 
     async fn list(&self, dir: &VPath, lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {
@@ -184,8 +259,6 @@ impl Provider for NetvfsProvider {
             .await)
     }
 
-    /// An empty upload from a pipe whose writer is already closed: the
-    /// bridge creates the file exclusively (NVB-9, XB-11).
     async fn make_file(&self, path: &VPath) -> Result<()> {
         let (reader, writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
         drop(writer);
@@ -276,8 +349,6 @@ impl Provider for NetvfsProvider {
                 .proxy()
                 .upload(&self.loc, dst.as_bytes(), Fd::from(&src), &wire)
                 .await;
-            // The bridge holds its own copy now; keeping ours would hide a
-            // reader that stopped from a writer on the other end of a pipe.
             drop(src);
             started
         };
@@ -304,9 +375,13 @@ impl Provider for NetvfsProvider {
         link.run_job(start, &progress).await.map(|_| ())
     }
 
-    /// Single entries; folders are copied by the planner entry by entry (the
-    /// bridge's `recursive` option is not used).
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         let wire = OptsBuilder::new().bool("replace", opts.replace).build();
         rpc(self
             .link()?
@@ -334,7 +409,6 @@ impl Provider for NetvfsProvider {
     }
 }
 
-/// A bridge read handle; closed when dropped (NVB-7).
 struct NetvfsReadHandle {
     link: Arc<Link>,
     handle: u32,
@@ -347,7 +421,6 @@ impl ReadHandle for NetvfsReadHandle {
         self.size
     }
 
-    /// At most 1 MiB per call (XB-17); a larger `max` is answered shorter.
     async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         if max == 0 {
             return Ok(Vec::new());
@@ -355,7 +428,12 @@ impl ReadHandle for NetvfsReadHandle {
         let offset =
             i64::try_from(offset).map_err(|_| Error::new(ErrorKind::InvalidArgument, "offset too large"))?;
         let want = u32::try_from(max).unwrap_or(u32::MAX).min(MAX_READ_BYTES);
-        rpc(self.link.proxy().read(self.handle, offset, want).await)
+        rpc(self
+            .link
+            .proxy()
+            .read(self.handle, offset, want)
+            .await
+            .map(|b| b.0))
     }
 
     async fn read_ahead(&self, offset: u64, bytes: u64) -> Result<()> {
@@ -375,7 +453,6 @@ impl Drop for NetvfsReadHandle {
             let link = self.link.clone();
             let handle = self.handle;
             rt.spawn(async move {
-                // A closed connection has closed its handles already (XB-13).
                 let _ = link.proxy().close(handle).await;
             });
         }
@@ -390,6 +467,20 @@ mod tests {
 
     fn int(o: &Opts, k: &str) -> Option<i64> {
         o.get(k).and_then(value_i64)
+    }
+
+    #[test]
+    fn levels_narrow_the_capabilities() {
+        let server = Capabilities::with(&[cap::WRITE, cap::SERVER_COPY]);
+        let at = |level| with_access(server.clone(), level);
+        assert_eq!(at(None), server);
+        assert_eq!(at(Some(Level::Full)), server);
+        let read = at(Some(Level::Read));
+        assert!(!read.writable() && read.readable() && read.has(cap::SERVER_COPY));
+        let read_add = at(Some(Level::ReadAdd));
+        assert!(read_add.writable() && !read_add.changeable() && read_add.readable());
+        let add = at(Some(Level::Add));
+        assert!(add.writable() && !add.changeable() && !add.readable());
     }
 
     #[test]

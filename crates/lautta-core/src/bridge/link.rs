@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One live connection to the bridge: the proxy plus the routing of listing and
-//! job signals to the requests that wait for them (NVB-7, NVB-10).
 
 use super::convert::{entry_from_wire, finished_error, map_error};
 use super::registry::Registry;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
 use crate::provider::{Lane, ProgressSink};
-use lautta_bridge_proto::{value_i64, Bridge1Proxy, BridgeError, Connection, ProxyResult, Signal, WireEntry};
+use lautta_bridge_proto::{
+    value_i64, Bridge1Proxy, BridgeError, Connection, OptsBuilder, ProxyResult, Signal, WireCheckItem,
+    WireCheckResult, WireEntry, WireWalkItem,
+};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// Result of a finished job: the integers of `JobFinished.extra` (`bytes`,
-/// `files`, `dirs`, `entries`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobOutcome {
     pub extra: HashMap<String, i64>,
@@ -33,10 +32,11 @@ pub(crate) enum ListEvent {
 
 pub(crate) enum JobEvent {
     Progress { done: i64, total: i64 },
+    Checked(Vec<WireCheckResult>),
+    Found(Vec<WireWalkItem>),
     Finished(Result<JobOutcome>),
 }
 
-/// Maps the result of a proxy call into the app's error model.
 pub(crate) fn rpc<T>(r: ProxyResult<T>) -> Result<T> {
     r.map_err(|e| map_error(BridgeError::from(e)))
 }
@@ -66,11 +66,6 @@ impl Link {
         self.conn.proxy()
     }
 
-    pub(crate) fn connection(&self) -> &Connection {
-        &self.conn
-    }
-
-    /// Routes list and job signals; hands back the others.
     pub(crate) fn route(&self, signal: Signal) -> Option<Signal> {
         match signal {
             Signal::ListBatch { req, entries } => self.lists.push(req, ListEvent::Batch(entries)),
@@ -98,14 +93,13 @@ impl Link {
                 };
                 self.jobs.push(job, JobEvent::Finished(result));
             }
-            // Walk results are consumed by `Walk` users only, which this client has none of yet.
-            Signal::WalkBatch { .. } => {}
+            Signal::WalkBatch { job, entries } => self.jobs.push(job, JobEvent::Found(entries)),
+            Signal::CheckBatch { job, results } => self.jobs.push(job, JobEvent::Checked(results)),
             other => return Some(other),
         }
         None
     }
 
-    /// The socket closed: everything waiting ends with `ConnectionLost`.
     pub(crate) fn close(&self) {
         self.lists.close();
         self.jobs.close();
@@ -118,19 +112,15 @@ impl Link {
         }
     }
 
-    /// Asks the bridge to stop a request or job, without waiting for it.
     fn cancel_later(self: &Arc<Self>, id: u32) {
         if let Ok(rt) = tokio::runtime::Handle::try_current() {
             let link = self.clone();
             rt.spawn(async move {
-                // The connection may be gone already, which cancels everything (XB-13).
                 let _ = link.proxy().cancel(id).await;
             });
         }
     }
 
-    /// Streams a listing into `out` until `ListDone` (NVB-7). Dropping the
-    /// future cancels the request at the bridge.
     pub(crate) async fn list(
         self: &Arc<Self>,
         loc: &str,
@@ -146,7 +136,6 @@ impl Link {
                 ListEvent::Batch(batch) => {
                     let entries = batch.iter().map(entry_from_wire).collect();
                     if out.send(entries).await.is_err() {
-                        // The reader went away: stop the listing (the guard cancels).
                         return Err(Error::new(ErrorKind::Canceled, "listing no longer wanted"));
                     }
                 }
@@ -164,9 +153,6 @@ impl Link {
         Err(lost())
     }
 
-    /// Starts a job with `start` (which returns the job id) and waits for
-    /// `JobFinished`, reporting `JobProgress` to `progress`. Dropping the
-    /// future cancels the job at the bridge.
     pub(crate) async fn run_job<F>(self: &Arc<Self>, start: F, progress: &ProgressSink) -> Result<JobOutcome>
     where
         F: Future<Output = ProxyResult<u32>>,
@@ -179,10 +165,61 @@ impl Link {
                 JobEvent::Progress { done, total } => {
                     progress(u64::try_from(done).unwrap_or(0), u64::try_from(total).ok());
                 }
+                JobEvent::Checked(_) | JobEvent::Found(_) => {}
                 JobEvent::Finished(result) => {
                     guard.finish();
                     return result;
                 }
+            }
+        }
+        guard.finish();
+        Err(lost())
+    }
+
+    pub(crate) async fn check(
+        self: &Arc<Self>,
+        loc: &str,
+        items: &[WireCheckItem],
+        lane: Lane,
+    ) -> Result<Vec<WireCheckResult>> {
+        let job = rpc(self.proxy().check(loc, items, lane.wire()).await)?;
+        let mut rx = self.jobs.subscribe(job);
+        let mut guard = RequestGuard::new(self, Kind::Job, job);
+        let mut results = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                JobEvent::Checked(batch) => results.extend(batch),
+                JobEvent::Finished(result) => {
+                    guard.finish();
+                    return result.map(|_| results);
+                }
+                JobEvent::Progress { .. } | JobEvent::Found(_) => {}
+            }
+        }
+        guard.finish();
+        Err(lost())
+    }
+
+    pub(crate) async fn search(
+        self: &Arc<Self>,
+        loc: &str,
+        root: &[u8],
+        text: &str,
+        limit: u32,
+    ) -> Result<Vec<WireWalkItem>> {
+        let opts = OptsBuilder::new().int("limit", i64::from(limit)).build();
+        let job = rpc(self.proxy().search(loc, root, text, &opts).await)?;
+        let mut rx = self.jobs.subscribe(job);
+        let mut guard = RequestGuard::new(self, Kind::Job, job);
+        let mut found = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                JobEvent::Found(batch) => found.extend(batch),
+                JobEvent::Finished(result) => {
+                    guard.finish();
+                    return result.map(|_| found);
+                }
+                JobEvent::Progress { .. } | JobEvent::Checked(_) => {}
             }
         }
         guard.finish();
@@ -194,7 +231,6 @@ pub(crate) fn lost() -> Error {
     Error::new(ErrorKind::ConnectionLost, "the connection to the bridge was lost")
 }
 
-/// Cancels the request at the bridge when its future is dropped early.
 struct RequestGuard {
     link: Arc<Link>,
     kind: Kind,
@@ -252,7 +288,6 @@ mod tests {
     async fn listing_signals_go_to_their_request_even_when_early() {
         let link = link().await;
         let batch = vec![WireEntry::unknown(b"a", 1)];
-        // The batch arrives before anyone has subscribed to request 4.
         assert!(link
             .route(Signal::ListBatch {
                 req: 4,
@@ -329,18 +364,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn other_signals_are_handed_back_and_walks_are_dropped() {
+    async fn other_signals_are_handed_back_and_batches_go_to_their_job() {
         let link = link().await;
         assert!(matches!(
             link.route(Signal::LocationsChanged),
             Some(Signal::LocationsChanged)
         ));
+        assert!(matches!(
+            link.route(Signal::NetworkChanged("wifi".into())),
+            Some(Signal::NetworkChanged(_))
+        ));
+        let mut rx = link.jobs.subscribe(1);
         assert!(link
             .route(Signal::WalkBatch {
                 job: 1,
                 entries: Vec::new()
             })
             .is_none());
+        assert!(link
+            .route(Signal::CheckBatch {
+                job: 1,
+                results: Vec::new()
+            })
+            .is_none());
+        assert!(matches!(rx.recv().await, Some(JobEvent::Found(_))));
+        assert!(matches!(rx.recv().await, Some(JobEvent::Checked(_))));
     }
 
     #[tokio::test]

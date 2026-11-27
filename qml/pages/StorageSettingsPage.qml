@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Storage (SPEC §18, SEC-5, DAT-3): how long stored folder
-// listings are kept, the size of the caches, Clear cache and Clear app
-// data. The thumbnail cache's size is with the thumbnails, in View options.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -106,7 +103,6 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                // Trash too (DAT-3): say so before its items are gone for good.
                 //% "Removes queue, history, favourites and everything in Trash"
                 text: qsTrId("lautta-settings-clear-data-hint")
             }

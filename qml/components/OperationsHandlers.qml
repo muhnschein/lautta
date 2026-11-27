@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// App-wide reactions of the operations area: plan summaries, archives opened
-// as locations, failures, "Running in the background", the finished extract
-// that opens its folder, the share target (INT-1) and keep-alive while an
-// archive is being made.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
@@ -13,25 +9,34 @@ import "ErrorText.js" as ErrorText
 Item {
     id: handlers
 
-    // Off in the QML check (--qml-check): there is no session bus there for
-    // the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
-
-    // Resolved when used: the window publishes its instance once created.
-    function stack() {
-        return __silica_applicationwindow_instance.pageStack
-    }
 
     function show(text) {
         notice.text = text
         notice.show()
     }
 
-    // What a failure is about: the item's path, with its location.
     function context(subject) {
         if (!subject)
             return {}
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
+    }
+
+    function receiveShare(resources) {
+        __silica_applicationwindow_instance.activate()
+        pages.push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
+    }
+
+    function askPassword(uri, action, wrong) {
+        pages.push(Qt.resolvedUrl("../dialogs/LockedFileDialog.qml"), { "wrong": wrong }, function (dialog) {
+            dialog.accepted.connect(function () {
+                if (action === "extract")
+                    Operations.extract(uri, dialog.password)
+                else
+                    Operations.openArchive(uri, dialog.password)
+                dialog.forget()
+            })
+        })
     }
 
     function background() {
@@ -43,7 +48,10 @@ Item {
         id: notice
     }
 
-    // Compress runs as a job of its own; keep the device awake meanwhile.
+    PageQueue {
+        id: pages
+    }
+
     KeepAlive {
         enabled: Operations.jobsActive > 0
     }
@@ -51,32 +59,28 @@ Item {
     Connections {
         target: Operations
 
-        onNeedsSummary: handlers.stack().push(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
+        onNeedsSummary: pages.push(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
             "planId": planId,
             "summary": JSON.parse(summaryJson)
         })
-        onArchiveOpened: handlers.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
+        onArchiveOpened: pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
+        onLocked: handlers.askPassword(uri, action, wrong)
         onFailed: handlers.show(ErrorText.message(kind, handlers.context(subject)))
         onStarted: handlers.background()
         onJobStarted: handlers.background()
         onJobFinished: {
             if (ok)
-                //% "Archive created"
-                handlers.show(qsTrId("lautta-ops-archive-created"))
-        }
-        onExtractFinished: {
-            if (ok)
-                handlers.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
+                //% "Compressed file created"
+                handlers.show(qsTrId("lautta-ops-compressed-created"))
         }
     }
 
-    // "Save to Lautta" from other apps' share menus (INT-1).
     Loader {
         active: handlers.shareEnabled
         sourceComponent: ShareProvider {
             method: "files"
             registerName: true
-            onTriggered: handlers.stack().push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
+            onTriggered: handlers.receiveShare(resources)
         }
     }
 }

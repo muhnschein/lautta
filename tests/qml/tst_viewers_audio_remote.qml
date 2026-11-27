@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Instantiates MediaPlayer with realistic properties in a window (real Silica,
-// real Lautta types); the check fails on QML errors and warnings.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -8,14 +6,24 @@ import "../../qml/viewers"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
-    Component.onCompleted: {
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        if (!done())
+            console.error("FAILED: timed out waiting for " + what)
+        return done()
+    }
 
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        // Let the asynchronous loading finish and the delegates appear.
-        tools.pump(500)
+    Component.onCompleted: {
+        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return page.errorKind !== "" }, "an unknown server's error")
+        if (page.statusText.length === 0 || page.playing)
+            console.error("FAILED: the error is said, nothing plays: '" + page.statusText + "'")
+        reachedEnd = true
     }
 
     Component {

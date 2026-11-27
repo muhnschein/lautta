@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Compress in the image viewer's More
-// (OPS-12) opens the compress dialog for the image in the page's place,
-// ready to accept. Fails when the dialog gets anything but the list of the
-// image (its JSON text left it without a folder to pack into) or stacks on
-// the page.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,10 +6,9 @@ import Lautta 1.0
 ApplicationWindow {
     id: win
 
-    // A folder of its own: a photo among the documents would turn them
-    // into a suggested grid for the scenarios after this one.
     readonly property string file: "lautta://user-documents/ImageMore/photo.jpg"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool made
@@ -31,6 +25,18 @@ ApplicationWindow {
 
     initialPage: Component {
         Page { }
+    }
+
+    function rowIds(page) {
+        var lists = []
+        var walk = function (item) {
+            if (item.model !== undefined && item.count !== undefined && item.contentItem !== undefined)
+                lists.push(item)
+            for (var i = 0; i < item.children.length; ++i)
+                walk(item.children[i])
+        }
+        walk(page)
+        return lists.length === 1 ? lists[0].model.map(function (row) { return row.id }) : ["lists: " + lists.length]
     }
 
     function fail(what) {
@@ -72,9 +78,32 @@ ApplicationWindow {
                 if (JSON.stringify(page.uris) !== JSON.stringify([win.file]))
                     return win.fail("Compress gets the image: " + JSON.stringify(page.uris))
                 if (!page.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + page.destUri)
+                    return win.fail("the compress dialog can be accepted: into " + page.folderUri)
                 if (pageStack.depth !== 2)
                     return win.fail("the dialog takes More's place: depth " + pageStack.depth)
+                pageStack.replace(Qt.resolvedUrl("../../qml/components/viewers/ImageMorePage.qml"),
+                                  { "uri": win.file, "writable": false })
+                win.step++
+                break
+            case 4:
+                if (pageStack.busy || !page || page.choose === undefined || page.status !== PageStatus.Active)
+                    break
+                var ids = win.rowIds(page)
+                if (ids.indexOf("favourite") < 0 || ids.indexOf("compress") >= 0)
+                    return win.fail("no Compress where the folder takes no files: " + JSON.stringify(ids))
+                if (ids.indexOf("checksums") < 0 || ids.indexOf("verify") >= 0)
+                    return win.fail("Checksums, no Verify files: " + JSON.stringify(ids))
+                page.choose("checksums")
+                win.step++
+                break
+            case 5:
+                if (pageStack.busy || !page || page.rows === undefined)
+                    break
+                if (page.uri !== win.file || page.rows.length !== 13)
+                    return win.fail("Checksums gets the image: " + page.uri + " " + page.rows.length)
+                if (pageStack.depth !== 2)
+                    return win.fail("Checksums takes More's place: depth " + pageStack.depth)
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 break
             }

@@ -1,29 +1,27 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the viewers area on [`Core`](crate::app::Core):
-//! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
-//! thumbnails of remote images and PDFs, remote full images (PRV-2,
-//! PRV-3, PRV-14), media for playback (PRV-8, PRV-9) and recents (ORG-2).
-//! Everything is Qt-free; the Qt layer forwards to these functions.
 
 use crate::app::Core;
-use crate::entry::Entry;
+use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
-use crate::mime::{category_of, FileCategory};
+use crate::mime::{category_of, mime_of, shows_in_app, FileCategory};
 use crate::org::recents::RecentKind;
+use crate::preview::audio::{self, AudioRead, AudioTags, RangeReader};
 use crate::preview::exif::{self, ExifInfo};
 use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
-use crate::provider::{list_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
+use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
-    remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
+    remote_thumbnail, render_glow, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source, ThumbJobs,
+    ThumbSettings, ThumbSource, ThumbnailCache, THUMB_SIZES,
 };
 use crate::thumbs_pdf::PdfThumbs;
+use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
 use crate::uri::Uri;
 use crate::vpath::VPath;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,36 +29,33 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 
-/// Largest remote image decoded for the viewer (memory, PRF-4).
 pub const MAX_FULL_IMAGE_BYTES: u64 = 100 * 1000 * 1000;
-/// How much of an image is read to find its EXIF block.
+
+fn too_large_to_show(bytes: u64) -> bool {
+    bytes > MAX_FULL_IMAGE_BYTES
+}
 pub const EXIF_HEAD_BYTES: u64 = 512 * 1024;
-/// Thumbnail edge limits for `image://lautta-thumb`.
 pub const MIN_THUMB: u32 = 16;
 pub const MAX_THUMB: u32 = 1024;
 
-/// A text file as the viewer sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedText {
     pub doc: TextDoc,
     pub size: Option<u64>,
 }
 
-/// A text file for the text viewer, with its colours (PRV-13).
 #[derive(Debug)]
 pub struct ViewedText {
     pub size: Option<u64>,
     pub truncated: bool,
     pub valid_utf8: bool,
-    /// The lines: coloured when that was quick, else plain until
-    /// `colouring` finishes.
     pub lines: ColouredText,
     pub colouring: Option<ColourJob>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedMarkdown {
-    pub html: String,
+pub struct RenderedText {
+    pub blocks: Vec<markdown::Block>,
     pub truncated: bool,
 }
 
@@ -69,11 +64,22 @@ pub struct ExifReport {
     pub name: String,
     pub size: Option<u64>,
     pub modified_ms: Option<i64>,
-    /// `None` when the file carries no EXIF block.
     pub info: Option<ExifInfo>,
 }
 
-/// One image of the folder the viewer swipes through.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioInfo {
+    pub tags: AudioTags,
+    pub cover: CoverFrom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverFrom {
+    File,
+    Folder,
+    None,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageItem {
     pub uri: Uri,
@@ -83,20 +89,141 @@ pub struct ImageItem {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullImage {
-    pub bytes: Vec<u8>,
-    /// EXIF orientation 1-8 the decoder must apply (1 = none).
+    pub bytes: Arc<Vec<u8>>,
     pub orientation: u8,
 }
 
-/// Splits `<uri>?size=N` of the thumbnail provider; the size is clamped.
-/// The URI may arrive percent-encoded once more (QML helpers).
-pub fn parse_thumb_id(id: &str) -> Option<(Uri, u32)> {
-    let (uri_part, query) = id.rsplit_once('?')?;
-    let size: u32 = query.strip_prefix("size=")?.parse().ok()?;
-    Some((parse_image_uri(uri_part)?, size.clamp(MIN_THUMB, MAX_THUMB)))
+pub fn viewer_decode_size(bytes: &[u8], screen: (u32, u32)) -> Option<(u32, u32)> {
+    let reader = image::io::Reader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    let jpeg = reader.format() == Some(image::ImageFormat::Jpeg);
+    decode_size(reader.into_dimensions().ok()?, screen, jpeg)
 }
 
-/// The id of `image://lautta-file/<uri>`.
+fn decode_size((w, h): (u32, u32), (sw, sh): (u32, u32), jpeg: bool) -> Option<(u32, u32)> {
+    if h == 0 || sw == 0 || sh == 0 {
+        return None;
+    }
+    let (w64, h64) = (u64::from(w), u64::from(h));
+    let fit = |bw: u64, bh: u64| {
+        if bw * h64 <= bh * w64 {
+            (bw, (h64 * bw).div_ceil(w64))
+        } else {
+            ((w64 * bh).div_ceil(h64), bh)
+        }
+    };
+    let (a, b) = (fit(sw.into(), sh.into()), fit(sh.into(), sw.into()));
+    let need = if a.0 >= b.0 { a } else { b };
+    if need.0 >= w64 || need.1 >= h64 {
+        return None;
+    }
+    let need = (need.0 as u32, need.1 as u32);
+    if jpeg {
+        if let Some(d) = [8, 4, 2].into_iter().find(|d| w / d >= need.0 && h / d >= need.1) {
+            return Some((w / d, h / d));
+        }
+    }
+    Some(need)
+}
+
+const SHAPE_SIDE: u32 = 256;
+const MAX_JPEG_SEGMENTS: usize = 256;
+
+fn clear_shape((w, h): (u32, u32), side: u32) -> image::DynamicImage {
+    let long = u64::from(w.max(h).max(1));
+    let side = u64::from(side).min(long);
+    let scaled = |v: u32| ((u64::from(v) * side + long / 2) / long).max(1) as u32;
+    image::DynamicImage::ImageRgba8(image::RgbaImage::new(scaled(w), scaled(h)))
+}
+
+async fn image_dimensions(handle: &dyn ReadHandle, head: &[u8]) -> Option<(u32, u32)> {
+    if !head.starts_with(&[0xff, 0xd8]) {
+        let reader = image::io::Reader::new(std::io::Cursor::new(head))
+            .with_guessed_format()
+            .ok()?;
+        return reader.into_dimensions().ok();
+    }
+    let mut at = 2u64;
+    for _ in 0..MAX_JPEG_SEGMENTS {
+        let seg = handle.read_at(at, 9).await.ok()?;
+        match seg.as_slice() {
+            [0xff, 0xff, ..] => at += 1,
+            [0xff, 0xc0..=0xcf, _, _, _, h0, h1, w0, w1] if !matches!(seg[1], 0xc4 | 0xc8 | 0xcc) => {
+                return Some((
+                    u16::from_be_bytes([*w0, *w1]).into(),
+                    u16::from_be_bytes([*h0, *h1]).into(),
+                ));
+            }
+            [0xff, 0xda, ..] => return None,
+            [0xff, _, l0, l1, ..] => at += 2 + u64::from(u16::from_be_bytes([*l0, *l1])),
+            _ => return None,
+        }
+    }
+    None
+}
+
+pub const SHOWN_IMAGES: usize = 3;
+pub const SHOWN_IMAGES_BYTES: usize = 64 * 1000 * 1000;
+
+#[derive(Default)]
+pub struct ShownImages(Mutex<VecDeque<(Uri, Option<u64>, FullImage)>>);
+
+impl ShownImages {
+    fn get(&self, uri: &Uri, size: Option<u64>) -> Option<FullImage> {
+        let list = lock(&self.0);
+        list.iter()
+            .find(|(u, s, _)| u == uri && *s == size)
+            .map(|(_, _, img)| img.clone())
+    }
+
+    fn put(&self, uri: &Uri, size: Option<u64>, image: FullImage) {
+        if image.bytes.len() > SHOWN_IMAGES_BYTES {
+            return;
+        }
+        let mut list = lock(&self.0);
+        list.retain(|(u, _, _)| u != uri);
+        list.push_front((uri.clone(), size, image));
+        list.truncate(SHOWN_IMAGES);
+        while list.iter().map(|(_, _, i)| i.bytes.len()).sum::<usize>() > SHOWN_IMAGES_BYTES {
+            list.pop_back();
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        lock(&self.0).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThumbId {
+    pub uri: Uri,
+    pub size: u32,
+    pub cached: bool,
+    pub embedded: bool,
+}
+
+pub fn parse_thumb_id(id: &str) -> Option<ThumbId> {
+    let (uri_part, query) = id.rsplit_once('?')?;
+    let (size, cached, embedded) = match query.split_once('&') {
+        Some((size, "cached=1")) => (size, true, false),
+        Some((size, "embedded=1")) => (size, false, true),
+        Some(_) => return None,
+        None => (query, false, false),
+    };
+    let size: u32 = size.strip_prefix("size=")?.parse().ok()?;
+    Some(ThumbId {
+        uri: parse_image_uri(uri_part)?,
+        size: size.clamp(MIN_THUMB, MAX_THUMB),
+        cached,
+        embedded,
+    })
+}
+
 pub fn parse_image_uri(id: &str) -> Option<Uri> {
     if let Ok(u) = Uri::parse(id) {
         return Some(u);
@@ -116,20 +243,72 @@ fn display(uri: &Uri) -> String {
     uri.name().map(crate::vpath::display_name).unwrap_or_default()
 }
 
-/// Window the media reader keeps ahead of the player (PRV-8).
-pub const READ_AHEAD_BYTES: usize = 2 * 1024 * 1024;
+pub const READ_AHEAD_BYTES: usize = 4 * 1024 * 1024;
+const PIECE_BYTES: usize = 512 * 1024;
+const FIRST_BYTES: usize = 256 * 1024;
+const KEEP_BYTES: usize = READ_AHEAD_BYTES + 2 * 1024 * 1024;
 
-/// A read handle with a 2 MiB window for the media device (PRV-8): the
-/// player asks for small pieces, the provider is asked for large ones, and
-/// the next window is announced with `read_ahead` so a bridge can prefetch.
 pub struct ReadAhead {
     handle: Arc<dyn ReadHandle>,
     size: u64,
-    window: Mutex<(u64, Arc<Vec<u8>>)>,
+    shared: Arc<Shared>,
+}
+
+struct Shared {
+    state: Mutex<Cache>,
+    changed: tokio::sync::watch::Sender<()>,
+}
+
+#[derive(Default)]
+struct Cache {
+    pieces: VecDeque<(u64, Arc<Vec<u8>>)>,
+    bytes: usize,
+    pos: u64,
+    generation: u64,
+    fetch: Option<Fetch>,
+}
+
+struct Fetch {
+    next: u64,
+    failed: bool,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Cache {
+    fn find(&self, offset: u64, max: usize) -> Option<Vec<u8>> {
+        self.pieces.iter().find_map(|(start, data)| {
+            let at = usize::try_from(offset.checked_sub(*start)?).ok()?;
+            let rest = data.get(at..).filter(|r| !r.is_empty())?;
+            Some(rest[..rest.len().min(max)].to_vec())
+        })
+    }
+
+    fn insert(&mut self, offset: u64, data: Vec<u8>) {
+        self.bytes += data.len();
+        self.pieces.push_back((offset, Arc::new(data)));
+        while self.bytes > KEEP_BYTES {
+            match self.pieces.pop_front() {
+                Some((_, old)) => self.bytes -= old.len(),
+                None => break,
+            }
+        }
+    }
+
+    fn fetching(&self, offset: u64) -> bool {
+        self.fetch
+            .as_ref()
+            .is_some_and(|f| !f.failed && offset >= f.next && offset < f.next + PIECE_BYTES as u64)
+    }
+
+    fn stop_fetch(&mut self) {
+        self.generation += 1;
+        if let Some(f) = self.fetch.take() {
+            f.task.abort();
+        }
+    }
 }
 
 impl ReadAhead {
-    /// The size must be known (media streams have a length).
     pub fn new(handle: Arc<dyn ReadHandle>) -> Result<ReadAhead> {
         let size = handle
             .size()
@@ -137,7 +316,10 @@ impl ReadAhead {
         Ok(ReadAhead {
             handle,
             size,
-            window: Mutex::new((0, Arc::default())),
+            shared: Arc::new(Shared {
+                state: Mutex::new(Cache::default()),
+                changed: tokio::sync::watch::channel(()).0,
+            }),
         })
     }
 
@@ -145,55 +327,167 @@ impl ReadAhead {
         self.size
     }
 
-    /// Up to `max` bytes at `offset`; empty at the end of the file.
     pub async fn read(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
-        if offset >= self.size || max == 0 {
-            return Ok(Vec::new());
+        let want = usize::try_from(self.size.saturating_sub(offset))
+            .unwrap_or(usize::MAX)
+            .min(max);
+        let mut out = Vec::new();
+        while out.len() < want {
+            let part = self
+                .read_piece(offset + out.len() as u64, want - out.len())
+                .await?;
+            if part.is_empty() {
+                break;
+            }
+            out.extend_from_slice(&part);
         }
-        if let Some(hit) = self.cached(offset, max) {
-            return Ok(hit);
+        Ok(out)
+    }
+
+    async fn read_piece(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
+        loop {
+            let mut changed = self.shared.changed.subscribe();
+            {
+                let mut cache = lock(&self.shared.state);
+                if let Some(hit) = cache.find(offset, max) {
+                    cache.pos = offset + hit.len() as u64;
+                    drop(cache);
+                    self.shared.changed.send_replace(());
+                    return Ok(hit);
+                }
+                if !cache.fetching(offset) {
+                    cache.stop_fetch();
+                    break;
+                }
+            }
+            if changed.changed().await.is_err() {
+                break;
+            }
         }
         let want = usize::try_from(self.size - offset)
             .unwrap_or(usize::MAX)
-            .min(READ_AHEAD_BYTES);
+            .min(FIRST_BYTES.max(max));
         let data = self.handle.read_at(offset, want).await?;
         if data.is_empty() {
             return Ok(data);
         }
         let end = offset + data.len() as u64;
         let first = data[..data.len().min(max)].to_vec();
-        *lock(&self.window) = (offset, Arc::new(data));
+        let mut cache = lock(&self.shared.state);
+        cache.insert(offset, data);
+        cache.pos = offset + first.len() as u64;
         if end < self.size {
-            // A failed hint only costs the prefetch.
-            let _ = self.handle.read_ahead(end, READ_AHEAD_BYTES as u64).await;
+            cache.stop_fetch();
+            let generation = cache.generation;
+            let task = tokio::spawn(fetch(
+                self.handle.clone(),
+                self.shared.clone(),
+                generation,
+                end,
+                self.size,
+            ));
+            cache.fetch = Some(Fetch {
+                next: end,
+                failed: false,
+                task,
+            });
         }
         Ok(first)
     }
+}
 
-    fn cached(&self, offset: u64, max: usize) -> Option<Vec<u8>> {
-        let w = lock(&self.window);
-        let (start, data) = &*w;
-        let at = usize::try_from(offset.checked_sub(*start)?).ok()?;
-        let rest = data.get(at..).filter(|r| !r.is_empty())?;
-        Some(rest[..rest.len().min(max)].to_vec())
+impl Drop for ReadAhead {
+    fn drop(&mut self) {
+        lock(&self.shared.state).stop_fetch();
     }
 }
 
-/// Process-wide thumbnail state: the disk cache (PRV-2) and the job
-/// scheduler (PRV-3). Created once per cache folder.
+async fn fetch(handle: Arc<dyn ReadHandle>, shared: Arc<Shared>, generation: u64, mut next: u64, size: u64) {
+    let mut changed = shared.changed.subscribe();
+    let mut hinted = next;
+    while next < size {
+        changed.borrow_and_update();
+        let ahead = {
+            let cache = lock(&shared.state);
+            if cache.generation != generation {
+                return;
+            }
+            next >= cache.pos + READ_AHEAD_BYTES as u64
+        };
+        if ahead {
+            if changed.changed().await.is_err() {
+                return;
+            }
+            continue;
+        }
+        if next >= hinted {
+            hinted = next + READ_AHEAD_BYTES as u64;
+            let _ = handle.read_ahead(next, READ_AHEAD_BYTES as u64).await;
+        }
+        let want = usize::try_from(size - next)
+            .unwrap_or(usize::MAX)
+            .min(PIECE_BYTES);
+        let got = handle.read_at(next, want).await;
+        let mut cache = lock(&shared.state);
+        if cache.generation != generation {
+            return;
+        }
+        let failed = match got {
+            Ok(data) if !data.is_empty() => {
+                let at = next;
+                next += data.len() as u64;
+                cache.insert(at, data);
+                false
+            }
+            _ => true,
+        };
+        if let Some(f) = cache.fetch.as_mut() {
+            f.next = next;
+            f.failed = failed;
+        }
+        drop(cache);
+        shared.changed.send_replace(());
+        if failed {
+            return;
+        }
+    }
+}
+
 pub struct Previews {
     cache: ThumbnailCache,
     jobs: ThumbJobs,
     pdf: PdfThumbs,
-    waiters: Mutex<HashMap<String, Vec<(u64, ThumbSender)>>>,
+    waiters: Mutex<HashMap<String, Waiting>>,
     next_waiter: AtomicU64,
+    last_cover: Mutex<Option<(String, Arc<Vec<u8>>)>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewKind {
+    Thumb,
+    Cover,
+    Glow,
+}
+
+struct Waiting {
+    job: String,
+    waiters: Vec<(u64, ThumbSender)>,
 }
 
 type ThumbResult = Result<Arc<Vec<u8>>>;
 type ThumbSender = oneshot::Sender<ThumbResult>;
 
-/// A pending thumbnail: await `rx`; `cancel` (or the part kept after taking
-/// `rx`) drops the request when the delegate is gone.
+pub struct TextTicket {
+    pub rx: oneshot::Receiver<Option<String>>,
+    pub key: String,
+}
+
+const TEXT_KEY_SIZE: u32 = 1;
+const NO_COVER_KEY_SIZE: u32 = 2;
+const GLOW_KEY_SIZE: u32 = 3;
+const GLOW_FROM: u32 = 128;
+pub const MAX_FOLDER_COVER_BYTES: u64 = 16 * 1024 * 1024;
+
 pub struct ThumbTicket {
     pub rx: oneshot::Receiver<ThumbResult>,
     pub cancel: ThumbCancel,
@@ -205,8 +499,6 @@ impl ThumbTicket {
     }
 }
 
-/// Cancels one waiter of a thumbnail job; the job itself is cancelled when
-/// nobody else waits for the same thumbnail (PRV-3).
 #[derive(Clone)]
 pub struct ThumbCancel {
     previews: Arc<Previews>,
@@ -229,30 +521,64 @@ impl Previews {
         &self.jobs
     }
 
-    /// Queues the thumbnail of a remote image or of a PDF. Several requests
-    /// for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
-        let job_key = thumb_key(&uri.to_string(), size, None, None);
+        self.request_as(core, uri, size, false, PreviewKind::Thumb)
+    }
+
+    pub fn request_cached(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
+        self.request_as(core, uri, size, true, PreviewKind::Thumb)
+    }
+
+    pub fn request_cover(
+        self: &Arc<Self>,
+        core: Arc<Core>,
+        uri: Uri,
+        size: u32,
+        kind: PreviewKind,
+    ) -> ThumbTicket {
+        self.request_as(core, uri, size, false, kind)
+    }
+
+    fn request_as(
+        self: &Arc<Self>,
+        core: Arc<Core>,
+        uri: Uri,
+        size: u32,
+        cached: bool,
+        kind: PreviewKind,
+    ) -> ThumbTicket {
+        let size = thumb_bucket(size);
+        let mut job_key = thumb_key(&uri.to_string(), size, None, None);
+        if cached {
+            job_key.push_str(":cached");
+        }
+        match kind {
+            PreviewKind::Thumb => {}
+            PreviewKind::Cover => job_key.push_str(":cover"),
+            PreviewKind::Glow => job_key.push_str(":glow"),
+        }
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
-        lock(&self.waiters)
-            .entry(job_key.clone())
-            .or_default()
-            .push((waiter, tx));
-        let me = Arc::clone(self);
-        let key = job_key.clone();
-        let location = uri.location.clone();
-        let started = self.jobs.request(&job_key, &location, async move {
-            let result = me.make(&core, &uri, size).await;
-            me.finish(&key, result);
-        });
-        if !started && lock(&self.waiters).get(&job_key).map_or(0, Vec::len) == 1 {
-            // The earlier job ended between our check and now.
-            self.finish(
-                &job_key,
-                Err(Error::new(ErrorKind::Canceled, "thumbnail job vanished")),
+        let mut waiting = lock(&self.waiters);
+        if let Some(w) = waiting.get_mut(&job_key) {
+            w.waiters.push((waiter, tx));
+        } else {
+            let job = format!("{job_key}#{waiter}");
+            waiting.insert(
+                job_key.clone(),
+                Waiting {
+                    job: job.clone(),
+                    waiters: vec![(waiter, tx)],
+                },
             );
+            let me = Arc::clone(self);
+            let key = job_key.clone();
+            self.jobs.request(&job, &uri.location.clone(), async move {
+                let result = me.make(&core, &uri, size, cached, kind).await;
+                me.finish(&key, result);
+            });
         }
+        drop(waiting);
         ThumbTicket {
             rx,
             cancel: ThumbCancel {
@@ -263,90 +589,294 @@ impl Previews {
         }
     }
 
+    pub fn request_text(self: &Arc<Self>, core: Arc<Core>, uri: Uri) -> TextTicket {
+        let n = self.next_waiter.fetch_add(1, Ordering::Relaxed);
+        let key = format!("text:{n}:{uri}");
+        let (tx, rx) = oneshot::channel();
+        let me = Arc::clone(self);
+        let location = uri.location.clone();
+        self.jobs.request(&key, &location, async move {
+            let _ = tx.send(me.make_text(&core, &uri).await);
+        });
+        TextTicket { rx, key }
+    }
+
+    pub fn cancel_text(&self, key: &str) {
+        self.jobs.cancel(key);
+    }
+
+    async fn make_text(&self, core: &Core, uri: &Uri) -> Option<String> {
+        let file = ThumbFile::open(core, uri, false).await.ok()?;
+        let entry = &file.entry;
+        let settings = ThumbSettings::new(&core.settings());
+        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::Text {
+            return None;
+        }
+        let key = thumb_key(
+            &file.key_uri,
+            TEXT_KEY_SIZE,
+            entry.modified_ms(),
+            entry.etag.as_deref(),
+        );
+        if let Some(hit) = self.cache.get(&key).filter(|_| !file.local) {
+            return thumb_text(&hit);
+        }
+        let handle = file
+            .provider
+            .open_read(&file.path, Lane::Interactive)
+            .await
+            .ok()?;
+        let head = read_all(handle.as_ref(), TEXT_THUMB_BYTES).await.ok()?;
+        if !file.local {
+            if let Err(e) = self.cache.put(&key, &head) {
+                log::warn!("text thumbnail not cached: {e}");
+            }
+        }
+        thumb_text(&head)
+    }
+
     fn finish(&self, key: &str, result: ThumbResult) {
-        let senders = lock(&self.waiters).remove(key).unwrap_or_default();
+        let senders = lock(&self.waiters)
+            .remove(key)
+            .map(|w| w.waiters)
+            .unwrap_or_default();
         for (_, tx) in senders {
             let _ = tx.send(result.clone());
         }
     }
 
     fn cancel(&self, key: &str, waiter: u64) {
-        let empty = {
-            let mut w = lock(&self.waiters);
-            let Some(list) = w.get_mut(key) else {
+        let job = {
+            let mut waiting = lock(&self.waiters);
+            let Some(w) = waiting.get_mut(key) else {
                 return;
             };
-            list.retain(|(id, _)| *id != waiter);
-            let empty = list.is_empty();
-            if empty {
-                w.remove(key);
+            w.waiters.retain(|(id, _)| *id != waiter);
+            if !w.waiters.is_empty() {
+                return;
             }
-            empty
+            waiting.remove(key).map(|w| w.job)
         };
-        if empty {
-            self.jobs.cancel(key);
+        if let Some(job) = job {
+            self.jobs.cancel(&job);
         }
     }
 
-    /// The thumbnail itself, if `thumbnail_source` says the app makes it
-    /// (a server file; local ones are the system thumbnailer's): cache
-    /// first, then for an image the first 64 KiB or the whole file (PRV-2),
-    /// for a PDF its first page (PRV-14).
-    async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
-        let file = ThumbFile::open(core, uri).await?;
+    async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool, kind: PreviewKind) -> ThumbResult {
+        let file = ThumbFile::open(core, uri, cached).await?;
         let entry = &file.entry;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
-        // The folder's own *Show thumbnails* was asked where the row was made.
-        // Read when asked, so a change in View options holds from the next
-        // thumbnail on.
+        let audio = category_of(entry) == FileCategory::Audio;
         let settings = ThumbSettings::new(&core.settings());
-        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
+        if kind != PreviewKind::Thumb {
+            if !audio {
+                return Err(Error::new(ErrorKind::Unsupported, "not an audio file"));
+            }
+        } else if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
             return Err(Error::new(
                 ErrorKind::Unsupported,
                 "no app thumbnail for this file",
             ));
+        }
+        if kind == PreviewKind::Glow {
+            return self.glow(core, &file).await;
         }
         let pdf = category_of(entry) == FileCategory::Pdf;
         let version = thumb_key(&file.key_uri, 0, entry.modified_ms(), entry.etag.as_deref());
         if pdf && self.pdf.is_refused(&version) {
             return Err(Error::new(ErrorKind::Unsupported, "PDF cannot be drawn"));
         }
-        let key = thumb_key(&file.key_uri, size, entry.modified_ms(), entry.etag.as_deref());
+        let key_of = |s: u32| thumb_key(&file.key_uri, s, entry.modified_ms(), entry.etag.as_deref());
+        let key = key_of(size);
         if let Some(hit) = self.cache.get(&key) {
             return Ok(Arc::new(hit));
         }
-        let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
-        let bytes = if pdf {
-            let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
-            self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+        let larger = THUMB_SIZES.iter().filter(|s| **s > size);
+        let bytes = if let Some(hit) = larger.filter_map(|s| self.cache.get(&key_of(*s))).next() {
+            tokio::task::spawn_blocking(move || render_thumbnail(&hit, size, 1))
+                .await
+                .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))??
+        } else if cached {
+            let mut smaller = THUMB_SIZES.iter().rev().filter(|s| **s < size);
+            return smaller
+                .find_map(|s| self.cache.get(&key_of(*s)))
+                .map(Arc::new)
+                .ok_or_else(|| Error::new(ErrorKind::NotFound, "no thumbnail made yet"));
+        } else if pdf && core.power_save() {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "battery saving: server PDFs not read",
+            ));
+        } else if audio && kind == PreviewKind::Thumb && !file.local && core.power_save() {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "battery saving: server audio not read",
+            ));
+        } else if audio {
+            let (bytes, own) = self.audio_cover(core, &file, size).await?;
+            if own {
+                self.put(&key, &bytes);
+            }
+            return Ok(Arc::new(bytes));
         } else {
-            remote_thumbnail(handle.as_ref(), size, settings.max_remote_bytes).await?
+            let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+            if pdf {
+                let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
+                self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+            } else {
+                let max = if core.power_save() {
+                    0
+                } else {
+                    settings.max_remote_bytes
+                };
+                remote_thumbnail(handle.as_ref(), size, max).await?
+            }
         };
-        if let Err(e) = self.cache.put(&key, &bytes) {
+        self.put(&key, &bytes);
+        Ok(Arc::new(bytes))
+    }
+
+    fn put(&self, key: &str, bytes: &[u8]) {
+        if let Err(e) = self.cache.put(key, bytes) {
             log::warn!("thumbnail not cached: {e}");
         }
-        Ok(Arc::new(bytes))
+    }
+
+    fn key_of(file: &ThumbFile, size: u32) -> String {
+        thumb_key(
+            &file.key_uri,
+            size,
+            file.entry.modified_ms(),
+            file.entry.etag.as_deref(),
+        )
+    }
+
+    async fn audio_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Result<(Vec<u8>, bool)> {
+        let none_key = Self::key_of(file, NO_COVER_KEY_SIZE);
+        if !self.cache.contains(&none_key) {
+            let version = Self::key_of(file, 0);
+            let memo = lock(&self.last_cover)
+                .as_ref()
+                .filter(|(k, _)| *k == version)
+                .map(|(_, b)| Arc::clone(b));
+            let embedded = match memo {
+                Some(bytes) => Some(bytes),
+                None => read_cover(file).await?.map(Arc::new),
+            };
+            if let Some(bytes) = embedded {
+                let rendered = spawn_render(move || render_thumbnail(&bytes, size, 1)).await;
+                if let Ok(done) = rendered {
+                    return Ok((done, true));
+                }
+            }
+            self.put(&none_key, &[]);
+        }
+        match self.folder_cover(core, file, size).await {
+            Some(bytes) => Ok((bytes, false)),
+            None => Err(Error::new(ErrorKind::NotFound, "no cover")),
+        }
+    }
+
+    async fn folder_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Option<Vec<u8>> {
+        let folder = Uri::parse(&file.key_uri).ok()?.parent()?;
+        let entries = match core.dircache.get(&folder) {
+            Ok(Some(hit)) => hit.entries,
+            _ => list_all(file.provider.as_ref(), &folder.path, Lane::Interactive)
+                .await
+                .ok()?,
+        };
+        let picture = audio::folder_cover(&entries)?.clone();
+        let uri = folder.join(&picture.name).ok()?;
+        let key = thumb_key(
+            &uri.to_string(),
+            size,
+            picture.modified_ms(),
+            picture.etag.as_deref(),
+        );
+        if let Some(hit) = self.cache.get(&key) {
+            return Some(hit);
+        }
+        if picture.size.is_some_and(|s| s > MAX_FOLDER_COVER_BYTES) {
+            return None;
+        }
+        let handle = file.provider.open_read(&uri.path, Lane::Interactive).await.ok()?;
+        let bytes = read_all(handle.as_ref(), MAX_FOLDER_COVER_BYTES + 1).await.ok()?;
+        if bytes.len() as u64 > MAX_FOLDER_COVER_BYTES {
+            return None;
+        }
+        let rendered = spawn_render(move || render_thumbnail(&bytes, size, exif::orientation(&bytes)))
+            .await
+            .ok()?;
+        self.put(&key, &rendered);
+        Some(rendered)
+    }
+
+    async fn glow(&self, core: &Core, file: &ThumbFile) -> ThumbResult {
+        let key = Self::key_of(file, GLOW_KEY_SIZE);
+        if let Some(hit) = self.cache.get(&key) {
+            return Ok(Arc::new(hit));
+        }
+        let base_key = Self::key_of(file, GLOW_FROM);
+        let base = match self.cache.get(&base_key) {
+            Some(hit) => hit,
+            None => self.audio_cover(core, file, GLOW_FROM).await?.0,
+        };
+        let glow = spawn_render(move || render_glow(&base)).await?;
+        self.put(&key, &glow);
+        Ok(Arc::new(glow))
+    }
+
+    fn remember_cover(&self, version: String, cover: Option<Vec<u8>>) {
+        *lock(&self.last_cover) = cover.map(|c| (version, Arc::new(c)));
     }
 }
 
-/// The file a thumbnail is made from: where to read it and what it is.
+async fn spawn_render<T: Send + 'static>(work: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
+}
+
+async fn read_audio_of(handle: Arc<dyn ReadHandle>, want_cover: bool) -> Result<Option<AudioRead>> {
+    let Some(size) = handle.size() else {
+        return Ok(None);
+    };
+    let rt = Handle::current();
+    tokio::task::spawn_blocking(move || {
+        let fetch = |offset: u64, max: usize| {
+            rt.block_on(handle.read_at(offset, max))
+                .map_err(|e| std::io::Error::other(e.message))
+        };
+        audio::read_audio(RangeReader::new(size, audio::READ_BUDGET, fetch), want_cover)
+    })
+    .await
+    .map_err(|e| Error::new(ErrorKind::Internal, format!("audio reader failed: {e}")))
+}
+
+async fn read_cover(file: &ThumbFile) -> Result<Option<Vec<u8>>> {
+    let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+    Ok(read_audio_of(Arc::from(handle), true)
+        .await?
+        .and_then(|r| r.cover))
+}
+
 struct ThumbFile {
     provider: Arc<dyn Provider>,
     path: VPath,
     entry: Entry,
-    /// In a folder of this device.
     local: bool,
-    /// What the cache keys name the file by.
     key_uri: String,
 }
 
 impl ThumbFile {
-    /// The file `uri` names.
-    async fn open(core: &Core, uri: &Uri) -> Result<ThumbFile> {
+    async fn open(core: &Core, uri: &Uri, listed: bool) -> Result<ThumbFile> {
         let provider = core.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let entry = match listed.then(|| listed_file(core, uri)).flatten() {
+            Some(entry) => entry,
+            None => provider.stat(&uri.path, true, Lane::Interactive).await?,
+        };
         Ok(ThumbFile {
             provider,
             path: uri.path.clone(),
@@ -357,28 +887,32 @@ impl ThumbFile {
     }
 }
 
-/// One `Previews` per thumbnail folder.
+fn listed_file(core: &Core, uri: &Uri) -> Option<Entry> {
+    let listing = core.dircache.get(&uri.parent()?).ok()??;
+    let name = uri.name()?;
+    listing
+        .entries
+        .into_iter()
+        .find(|e| e.name == name && e.kind == Kind::File)
+}
+
 type PreviewsByDir = Mutex<Vec<(PathBuf, Arc<Previews>)>>;
 
 static PREVIEWS: OnceLock<PreviewsByDir> = OnceLock::new();
 
 impl Core {
-    /// A random-access reader of the file (viewers and media).
     pub async fn open_reader(&self, uri: &Uri) -> Result<Arc<dyn ReadHandle>> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
         Ok(Arc::from(handle))
     }
 
-    /// Notes a viewed or opened file in Recents (ORG-2). Failures do
-    /// not matter to the viewer.
     pub fn note_viewed(&self, uri: &Uri, kind: RecentKind) {
         if let Err(e) = self.recents.record(uri, &display(uri), kind) {
             log::debug!("recents not updated: {e}");
         }
     }
 
-    /// Reads a text file for the viewer (PRV-4).
     pub async fn load_text(&self, uri: &Uri) -> Result<LoadedText> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -393,10 +927,6 @@ impl Core {
         })
     }
 
-    /// Reads a text file for the text viewer and colours it (PRV-13). The
-    /// colours come with the text when they are ready within
-    /// [`highlight::FIRST_WAIT`]; otherwise the text comes plain and the
-    /// colouring goes on.
     pub async fn view_text(&self, uri: &Uri) -> Result<ViewedText> {
         let loaded = self.load_text(uri).await?;
         let TextDoc {
@@ -420,16 +950,25 @@ impl Core {
         })
     }
 
-    /// Markdown as Qt rich text; only the first MiB is rendered (PRV-4).
-    pub async fn render_markdown(&self, uri: &Uri) -> Result<RenderedMarkdown> {
+    pub async fn render_reading(&self, uri: &Uri, style: markdown::Style) -> Result<RenderedText> {
         let loaded = self.load_text(uri).await?;
-        Ok(RenderedMarkdown {
-            html: markdown::render(&loaded.doc.text),
+        let prose = ptext::reads_as_prose(uri.path.name().unwrap_or_default());
+        let text = loaded.doc.text;
+        let blocks = tokio::task::spawn_blocking(move || {
+            if prose {
+                markdown::render_prose(&text)
+            } else {
+                markdown::render(&text, &style)
+            }
+        })
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?;
+        Ok(RenderedText {
+            blocks,
             truncated: loaded.doc.truncated,
         })
     }
 
-    /// EXIF fields of an image for the details panel (PRV-4).
     pub async fn exif_report(&self, uri: &Uri) -> Result<ExifReport> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -446,8 +985,42 @@ impl Core {
         })
     }
 
-    /// The folder's images in the folders' sort order (PRV-4: swipe through
-    /// the folder).
+    pub async fn audio_info(&self, uri: &Uri) -> Result<AudioInfo> {
+        let provider = self.provider(&uri.location)?;
+        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
+        let read = read_audio_of(Arc::from(handle), true).await?.unwrap_or_default();
+        let has_cover = read.cover.is_some();
+        let previews = self.previews(&Handle::current())?;
+        let version = thumb_key(&uri.to_string(), 0, entry.modified_ms(), entry.etag.as_deref());
+        previews.remember_cover(version, read.cover);
+        let cover = if has_cover {
+            CoverFrom::File
+        } else if self.folder_has_cover(uri, provider.as_ref()).await {
+            CoverFrom::Folder
+        } else {
+            CoverFrom::None
+        };
+        Ok(AudioInfo {
+            tags: read.tags,
+            cover,
+        })
+    }
+
+    async fn folder_has_cover(&self, uri: &Uri, provider: &dyn Provider) -> bool {
+        let Some(folder) = uri.parent() else {
+            return false;
+        };
+        let entries = match self.dircache.get(&folder) {
+            Ok(Some(hit)) => hit.entries,
+            _ => match list_all(provider, &folder.path, Lane::Interactive).await {
+                Ok(all) => all,
+                Err(_) => return false,
+            },
+        };
+        audio::folder_cover(&entries).is_some()
+    }
+
     pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
@@ -455,7 +1028,11 @@ impl Core {
         let hidden = prefs.show_hidden;
         let images: Vec<Entry> = all
             .into_iter()
-            .filter(|e| category_of(e) == FileCategory::Image && (hidden || !e.is_hidden()))
+            .filter(|e| {
+                category_of(e) == FileCategory::Image
+                    && shows_in_app(&mime_of(e).unwrap_or_default())
+                    && (hidden || !e.is_hidden())
+            })
             .collect();
         let order = sort_permutation(&images, &prefs.sort_options());
         order
@@ -471,24 +1048,56 @@ impl Core {
             .collect()
     }
 
-    /// A file's bytes for the full image provider (remote files, PRV-4).
+    pub async fn viewer_preview(&self, uri: &Uri, size: u32) -> Result<Vec<u8>> {
+        let provider = self.provider(&uri.location)?;
+        let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
+        let head = read_all(handle.as_ref(), crate::thumbs::HEAD_BYTES).await?;
+        let orientation = exif::orientation(&head);
+        let Some(thumb) = exif::exif_thumbnail(&head) else {
+            let Some((w, h)) = image_dimensions(handle.as_ref(), &head).await else {
+                return Err(Error::new(ErrorKind::Unsupported, "image size unknown"));
+            };
+            let upright = if orientation >= 5 { (h, w) } else { (w, h) };
+            return crate::thumbs::encode(&clear_shape(upright, size.min(SHAPE_SIDE)));
+        };
+        tokio::task::spawn_blocking(move || render_thumbnail(&thumb, size, orientation))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
+    }
+
     pub async fn full_image(&self, uri: &Uri) -> Result<FullImage> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        if handle.size().is_some_and(|s| s > MAX_FULL_IMAGE_BYTES) {
+        let size = handle.size();
+        if size.is_some_and(too_large_to_show) {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
         }
+        if let Some(hit) = self.shown_images.get(uri, size) {
+            return Ok(hit);
+        }
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_FULL_IMAGE_BYTES + 1).await?;
-        if bytes.len() as u64 > MAX_FULL_IMAGE_BYTES {
+        if too_large_to_show(bytes.len() as u64) {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
         }
         let orientation = exif::orientation(&bytes);
-        Ok(FullImage { bytes, orientation })
+        let image = FullImage {
+            bytes: Arc::new(bytes),
+            orientation,
+        };
+        if size.is_some() {
+            self.shown_images.put(uri, size, image.clone());
+        }
+        Ok(image)
     }
 
-    /// A changed thumbnail cache setting holds at once (§18): an open cache
-    /// takes the new budget, trimmed off the caller's thread (ARC-6); one
-    /// opened later reads the setting itself.
+    pub fn shown_images(&self) -> &ShownImages {
+        &self.shown_images
+    }
+
+    pub fn forget_shown_images(&self) {
+        lock(&self.shown_images.0).clear();
+    }
+
     pub(crate) fn follow_thumbnail_budget(&self, settings: &Settings) {
         let dir = self.paths.thumbs_dir();
         let list = lock(PREVIEWS.get_or_init(Mutex::default));
@@ -502,7 +1111,6 @@ impl Core {
         }
     }
 
-    /// The thumbnail state for this core's cache folder.
     pub fn previews(&self, rt: &Handle) -> Result<Arc<Previews>> {
         let dir = self.paths.thumbs_dir();
         let mut list = lock(PREVIEWS.get_or_init(Mutex::default));
@@ -516,13 +1124,12 @@ impl Core {
             pdf: PdfThumbs::default(),
             waiters: Mutex::default(),
             next_waiter: AtomicU64::new(1),
+            last_cover: Mutex::default(),
         });
         list.push((dir, Arc::clone(&previews)));
         Ok(previews)
     }
 
-    /// PRV-9 fallback: copies a media file into the private cache so it can
-    /// be played from disk. Returns the local file.
     pub async fn download_for_playback(&self, uri: &Uri, progress: ProgressSink) -> Result<PathBuf> {
         let provider = self.provider(&uri.location)?;
         let dir = self.paths.cache_dir().join("media");
@@ -548,7 +1155,6 @@ impl Core {
         done.map(|()| target)
     }
 
-    /// Removes the playback copies (cache clean-up at start).
     pub fn clear_playback_cache(&self) {
         let _ = std::fs::remove_dir_all(self.paths.cache_dir().join("media"));
     }
@@ -558,66 +1164,270 @@ impl Core {
 mod tests {
     use super::*;
 
-    struct Counting {
+    struct Gated {
         data: Vec<u8>,
-        reads: std::sync::atomic::AtomicUsize,
-        hints: std::sync::atomic::AtomicUsize,
+        calls: std::sync::Mutex<Vec<(u64, usize)>>,
+        called: tokio::sync::watch::Sender<usize>,
+        gate: tokio::sync::Semaphore,
+        hints: std::sync::Mutex<Vec<(u64, u64)>>,
+        fail_at: std::sync::Mutex<Option<u64>>,
+        missing: std::sync::atomic::AtomicU64,
+    }
+
+    impl Gated {
+        fn new(total: usize, permits: usize) -> Arc<Gated> {
+            Arc::new(Gated {
+                data: (0..total).map(|i| (i % 251) as u8).collect(),
+                calls: Default::default(),
+                called: tokio::sync::watch::channel(0).0,
+                gate: tokio::sync::Semaphore::new(permits),
+                hints: Default::default(),
+                fail_at: Default::default(),
+                missing: Default::default(),
+            })
+        }
+
+        fn calls(&self) -> Vec<(u64, usize)> {
+            self.calls.lock().unwrap().clone()
+        }
+
+        async fn until(&self, what: impl Fn(&[(u64, usize)]) -> bool) {
+            let mut rx = self.called.subscribe();
+            let wait = async {
+                while !what(&self.calls()) {
+                    rx.changed().await.unwrap();
+                }
+            };
+            tokio::time::timeout(std::time::Duration::from_secs(10), wait)
+                .await
+                .expect("reads never got there");
+        }
     }
 
     #[async_trait::async_trait]
-    impl ReadHandle for Counting {
+    impl ReadHandle for Gated {
         fn size(&self) -> Option<u64> {
-            Some(self.data.len() as u64)
+            Some(self.data.len() as u64 + self.missing.load(Ordering::Relaxed))
         }
         async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
-            self.reads.fetch_add(1, Ordering::Relaxed);
+            self.calls.lock().unwrap().push((offset, max));
+            self.called.send_modify(|n| *n += 1);
+            self.gate.acquire().await.unwrap().forget();
+            if self.fail_at.lock().unwrap().take_if(|at| *at == offset).is_some() {
+                return Err(Error::new(ErrorKind::ConnectionLost, "gone"));
+            }
             let start = usize::try_from(offset).unwrap_or(usize::MAX).min(self.data.len());
             Ok(self.data[start..(start + max).min(self.data.len())].to_vec())
         }
-        async fn read_ahead(&self, _offset: u64, _bytes: u64) -> Result<()> {
-            self.hints.fetch_add(1, Ordering::Relaxed);
+        async fn read_ahead(&self, offset: u64, bytes: u64) -> Result<()> {
+            self.hints.lock().unwrap().push((offset, bytes));
             Ok(())
         }
     }
 
-    #[tokio::test]
-    async fn the_media_reader_serves_small_reads_from_one_big_one() {
-        let total = READ_AHEAD_BYTES * 2 + 1000;
-        let data: Vec<u8> = (0..total).map(|i| (i % 251) as u8).collect();
-        let h = Arc::new(Counting {
-            data: data.clone(),
-            reads: Default::default(),
-            hints: Default::default(),
+    const OPEN: usize = tokio::sync::Semaphore::MAX_PERMITS;
+
+    fn reach(calls: &[(u64, usize)]) -> u64 {
+        calls.iter().map(|(at, len)| at + *len as u64).max().unwrap_or(0)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn playing_on_reads_only_what_the_background_fetch_already_has() {
+        let h = Gated::new(12 << 20, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        assert_eq!(r.read(0, 4096).await.unwrap(), h.data[..4096]);
+        let mut pos = 4096u64;
+        while pos < 3 << 20 {
+            h.until(|c| reach(c) >= (pos + (4 << 20)).min(12 << 20)).await;
+            let got = r.read(pos, 23_000).await.unwrap();
+            assert_eq!(got, h.data[pos as usize..pos as usize + 23_000]);
+            pos += 23_000;
+        }
+        let calls = h.calls();
+        assert_eq!(
+            calls[0],
+            (0, 256 << 10),
+            "player waits only for a short first read"
+        );
+        let mut next = 256 << 10;
+        for &(at, len) in &calls[1..] {
+            assert_eq!(
+                (at, len),
+                (next, 512 << 10),
+                "rest in pieces, in order, in the background"
+            );
+            next += len as u64;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(
+            reach(&h.calls()) <= pos + (4 << 20) + (512 << 10),
+            "fetch stops 4 MiB ahead of the player"
+        );
+        let hints = h.hints.lock().unwrap().clone();
+        assert_eq!(
+            hints,
+            [(256 << 10, 4 << 20), ((256 << 10) + (4 << 20), 4 << 20)],
+            "one hint per 4 MiB"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_read_the_fetch_is_about_to_answer_waits_for_it() {
+        let h = Gated::new(4 << 20, 1);
+        let r = Arc::new(ReadAhead::new(h.clone()).unwrap());
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        let at = FIRST_BYTES as u64 + 10;
+        let reader = tokio::spawn({
+            let r = r.clone();
+            async move { r.read(at, 100).await.unwrap() }
         });
+        h.gate.add_permits(1);
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), reader)
+            .await
+            .expect("read waits for the fetch's piece")
+            .unwrap();
+        assert_eq!(got, h.data[at as usize..at as usize + 100]);
+        assert_eq!(
+            h.calls()[1],
+            (FIRST_BYTES as u64, PIECE_BYTES),
+            "no second read of it"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_seek_reads_there_first_and_fetches_on_from_there() {
+        let h = Gated::new(20 << 20, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() >= 2).await;
+        let at = 6u64 << 20;
+        assert_eq!(
+            r.read(at, 4096).await.unwrap(),
+            h.data[at as usize..at as usize + 4096]
+        );
+        assert!(h.calls().contains(&(at, FIRST_BYTES)));
+        let ahead = at + 4096 + READ_AHEAD_BYTES as u64;
+        h.until(|c| reach(c) >= ahead).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(reach(&h.calls()) <= ahead + PIECE_BYTES as u64);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_piece_a_stopped_fetch_gets_late_is_not_kept() {
+        let h = Gated::new(4 << 20, 1);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        let f = lock(&r.shared.state).fetch.take().unwrap();
+        lock(&r.shared.state).stop_fetch();
+        h.gate.add_permits(1);
+        f.task.await.unwrap();
+        assert!(lock(&r.shared.state).find(FIRST_BYTES as u64, 1).is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_fetch_stops_at_an_early_end_of_file() {
+        let h = Gated::new(1 << 20, OPEN);
+        h.missing.store(2 << 20, Ordering::Relaxed);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 10).await.unwrap();
+        h.until(|c| c.iter().any(|c| c.0 == 1 << 20)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(h.calls().iter().filter(|c| c.0 == 1 << 20).count(), 1);
+        assert!(r.read(1 << 20, 10).await.unwrap().is_empty(), "file ends early");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_skip_past_the_piece_on_its_way_reads_at_once() {
+        let h = Gated::new(4 << 20, 1);
+        let r = Arc::new(ReadAhead::new(h.clone()).unwrap());
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        let at = (FIRST_BYTES + PIECE_BYTES) as u64 + 10;
+        let reader = tokio::spawn({
+            let r = r.clone();
+            async move { r.read(at, 100).await.unwrap() }
+        });
+        h.until(|c| c.contains(&(at, FIRST_BYTES))).await;
+        h.gate.add_permits(OPEN - 1);
+        assert_eq!(reader.await.unwrap(), h.data[at as usize..at as usize + 100]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn played_bytes_are_dropped_once_6_mib_are_cached() {
+        let h = Gated::new(12 << 20, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 10).await.unwrap();
+        let fill = |upto: u64| {
+            let (h, r) = (h.clone(), &r);
+            async move {
+                h.until(|c| reach(c) >= 4 << 20).await;
+                r.read(upto - (4 << 20), 10).await.unwrap();
+                h.until(|c| reach(c) >= upto).await;
+            }
+        };
+        fill(5 << 20).await;
+        r.read(0, 10).await.unwrap();
+        assert_eq!(
+            h.calls().iter().filter(|c| c.0 == 0).count(),
+            1,
+            "5.25 MiB cached: kept"
+        );
+        fill(7 << 20).await;
+        let second = FIRST_BYTES as u64 + 10;
+        r.read(second, 10).await.unwrap();
+        assert!(
+            h.calls().contains(&(second, FIRST_BYTES)),
+            "7.25 MiB cached: oldest 1.25 MiB dropped"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_failed_fetch_leaves_the_read_to_the_player() {
+        let h = Gated::new(4 << 20, OPEN);
+        *h.fail_at.lock().unwrap() = Some(FIRST_BYTES as u64);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        let at = FIRST_BYTES as u64;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), r.read(at, 10))
+            .await
+            .expect("no wait on a fetch that failed")
+            .unwrap();
+        assert_eq!(got, h.data[at as usize..at as usize + 10]);
+        assert_eq!(
+            h.calls().iter().filter(|c| c.0 == at).count(),
+            2,
+            "fetch's read, then the player's"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn dropping_the_reader_stops_its_fetch() {
+        let h = Gated::new(12 << 20, 1);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        drop(r);
+        h.gate.add_permits(OPEN - 1);
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(h.calls().len(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_media_read_comes_back_whole_and_short_only_at_the_end() {
+        let total = 3 << 20;
+        let h = Gated::new(total, OPEN);
         let r = ReadAhead::new(h.clone()).unwrap();
         assert_eq!(r.size(), total as u64);
-        for i in 0..100u64 {
-            let got = r.read(i * 4096, 4096).await.unwrap();
-            assert_eq!(got, data[(i * 4096) as usize..(i * 4096 + 4096) as usize]);
-        }
-        assert_eq!(
-            h.reads.load(Ordering::Relaxed),
-            1,
-            "one 2 MiB window serves 400 KiB"
-        );
-        assert_eq!(h.hints.load(Ordering::Relaxed), 1, "the next window is announced");
-        // A seek far away fetches a new window.
-        let at = (READ_AHEAD_BYTES + 5) as u64;
-        assert_eq!(r.read(at, 10).await.unwrap(), data[at as usize..at as usize + 10]);
-        assert_eq!(h.reads.load(Ordering::Relaxed), 2);
-        // A read crossing the window end is cut at it; the next call refills.
-        let edge = (READ_AHEAD_BYTES * 2 + 5) as u64;
-        let tail = r.read(edge, 5000).await.unwrap();
-        assert_eq!(tail.len(), 995, "cut at the end of the file");
-        assert_eq!(
-            h.hints.load(Ordering::Relaxed),
-            2,
-            "no hint at the end of the file"
-        );
+        let big = r.read(5, (2 << 20) + 3).await.unwrap();
+        assert_eq!(big, h.data[5..(2 << 20) + 8], "longer than any piece");
+        h.until(|c| reach(c) == total as u64).await;
+        let tail = r.read(total as u64 - 7, 100).await.unwrap();
+        assert_eq!(tail, h.data[total - 7..], "short at the end only");
         assert!(r.read(total as u64, 10).await.unwrap().is_empty());
         assert!(r.read(0, 0).await.unwrap().is_empty());
-        // Going back into an earlier window refetches it.
-        assert_eq!(r.read(0, 3).await.unwrap(), data[..3]);
+        assert_eq!(r.read(0, 3).await.unwrap(), h.data[..3]);
     }
 
     #[tokio::test]
@@ -638,17 +1448,184 @@ mod tests {
 
     #[test]
     fn thumb_ids_parse_and_clamp() {
-        let (u, s) = parse_thumb_id("lautta://nv-a/p/a%20b.jpg?size=128").unwrap();
-        assert_eq!(u.to_string(), "lautta://nv-a/p/a%20b.jpg");
-        assert_eq!(s, 128);
-        assert_eq!(parse_thumb_id("lautta://nv-a/x.jpg?size=1").unwrap().1, MIN_THUMB);
+        let t = parse_thumb_id("lautta://nv-a/p/a%20b.jpg?size=128").unwrap();
+        assert_eq!(t.uri.to_string(), "lautta://nv-a/p/a%20b.jpg");
+        assert_eq!((t.size, t.cached), (128, false));
         assert_eq!(
-            parse_thumb_id("lautta://nv-a/x.jpg?size=99999").unwrap().1,
+            parse_thumb_id("lautta://nv-a/x.jpg?size=1").unwrap().size,
+            MIN_THUMB
+        );
+        assert_eq!(
+            parse_thumb_id("lautta://nv-a/x.jpg?size=99999").unwrap().size,
             MAX_THUMB
         );
         assert!(parse_thumb_id("lautta://nv-a/x.jpg").is_none());
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=big").is_none());
         assert!(parse_thumb_id("http://x/y?size=3").is_none());
+    }
+
+    #[test]
+    fn images_up_to_the_limit_are_shown() {
+        assert!(!too_large_to_show(MAX_FULL_IMAGE_BYTES));
+        assert!(too_large_to_show(MAX_FULL_IMAGE_BYTES + 1));
+    }
+
+    #[test]
+    fn shown_images_stay_within_their_byte_budget() {
+        let shown = ShownImages::default();
+        let third = SHOWN_IMAGES_BYTES / 3 + 1;
+        let img = |n: usize| FullImage {
+            bytes: Arc::new(vec![0; n]),
+            orientation: 1,
+        };
+        let u = |s: &str| Uri::parse(&format!("lautta://nv-a/{s}")).unwrap();
+        assert!(shown.is_empty());
+        shown.put(&u("photo"), Some(1), img(20_000_000));
+        assert!(!shown.is_empty());
+        assert_eq!(shown.len(), 1, "a 20 MB photo is kept");
+        shown.put(&u("big"), Some(1), img(SHOWN_IMAGES_BYTES + 1));
+        assert!(
+            shown.get(&u("big"), Some(1)).is_none(),
+            "larger than the budget: not kept"
+        );
+        shown.0.lock().unwrap().clear();
+        shown.put(&u("exact"), Some(1), img(SHOWN_IMAGES_BYTES));
+        assert_eq!(shown.len(), 1, "exactly the budget fits");
+        for name in ["a", "b", "c"] {
+            shown.put(&u(name), Some(1), img(third));
+        }
+        assert_eq!(shown.len(), 2, "third one would pass the budget");
+        assert!(shown.get(&u("a"), Some(1)).is_none(), "oldest went");
+        assert!(shown.get(&u("c"), Some(1)).is_some());
+        assert!(
+            shown.get(&u("c"), Some(2)).is_none(),
+            "other size is another file"
+        );
+        shown.put(&u("b"), Some(1), img(1));
+        assert_eq!(shown.len(), 2, "same image replaced, not doubled");
+    }
+
+    #[test]
+    fn thumb_ids_may_ask_for_the_cache_only() {
+        let t = parse_thumb_id("lautta://nv-a/x.jpg?size=1024&cached=1").unwrap();
+        assert_eq!((t.size, t.cached, t.embedded), (1024, true, false));
+        let plain = parse_thumb_id("lautta://nv-a/x.jpg?size=64").unwrap();
+        assert_eq!((plain.cached, plain.embedded), (false, false));
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&cached=0").is_none());
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&other=1").is_none());
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?cached=1&size=64").is_none());
+    }
+
+    #[test]
+    fn thumb_ids_may_ask_for_the_embedded_thumbnail_only() {
+        let t = parse_thumb_id("lautta://nv-a/x.jpg?size=1024&embedded=1").unwrap();
+        assert_eq!((t.size, t.cached, t.embedded), (1024, false, true));
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&embedded=0").is_none());
+    }
+
+    const SCREEN: (u32, u32) = (1080, 2280);
+
+    #[test]
+    fn viewer_decodes_jpegs_at_the_libjpeg_step_that_covers_the_screen() {
+        assert_eq!(
+            decode_size((4000, 3000), SCREEN, true),
+            Some((2000, 1500)),
+            "12 MP: half"
+        );
+        assert_eq!(
+            decode_size((3000, 4000), SCREEN, true),
+            Some((1500, 2000)),
+            "portrait file"
+        );
+        assert_eq!(
+            decode_size((8160, 6120), SCREEN, true),
+            Some((2040, 1530)),
+            "50 MP: quarter"
+        );
+        assert_eq!(
+            decode_size((12000, 9000), SCREEN, true),
+            Some((1500, 1125)),
+            "108 MP: eighth"
+        );
+        assert_eq!(
+            decode_size((11520, 8640), SCREEN, true),
+            Some((1440, 1080)),
+            "eighth just covers"
+        );
+        assert_eq!(
+            decode_size((11519, 8639), SCREEN, true),
+            Some((2879, 2159)),
+            "eighth too small"
+        );
+        assert_eq!(
+            decode_size((11523, 8640), SCREEN, true),
+            Some((2880, 2160)),
+            "eighth one column short"
+        );
+        assert_eq!(
+            decode_size((18240, 8001), SCREEN, true),
+            Some((4560, 2000)),
+            "eighth one row short"
+        );
+        assert_eq!(decode_size((4000, 2250), SCREEN, true), Some((2000, 1125)));
+        assert_eq!(decode_size((8000, 2000), SCREEN, true), Some((4000, 1000)));
+    }
+
+    #[test]
+    fn viewer_decodes_at_the_fit_when_no_step_covers_it_or_not_jpeg() {
+        assert_eq!(
+            decode_size((3000, 4000), SCREEN, false),
+            Some((1080, 1440)),
+            "portrait fits the width"
+        );
+        assert_eq!(
+            decode_size((1000, 8000), SCREEN, false),
+            Some((285, 2280)),
+            "tall panorama fits the height"
+        );
+        assert_eq!(
+            decode_size((2000, 1500), SCREEN, true),
+            Some((1440, 1080)),
+            "half too small"
+        );
+        assert_eq!(
+            decode_size((4000, 3000), SCREEN, false),
+            Some((1440, 1080)),
+            "PNG scales after"
+        );
+        assert_eq!(
+            decode_size((4001, 3000), SCREEN, false),
+            Some((1441, 1080)),
+            "rounded up"
+        );
+    }
+
+    #[test]
+    fn viewer_never_scales_images_up() {
+        assert_eq!(decode_size((1440, 1080), SCREEN, true), None, "exact fit");
+        assert_eq!(decode_size((800, 600), SCREEN, true), None);
+        assert_eq!(decode_size((0, 600), SCREEN, true), None);
+        assert_eq!(decode_size((800, 0), SCREEN, true), None);
+        assert_eq!(decode_size((4000, 2), SCREEN, false), None, "fit needs every row");
+        assert_eq!(decode_size((800, 600), (0, 2280), true), None);
+        assert_eq!(decode_size((800, 600), (1080, 0), true), None);
+    }
+
+    fn encoded(w: u32, h: u32, format: image::ImageOutputFormat) -> Vec<u8> {
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(w, h));
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, format).unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn viewer_decode_size_reads_dimensions_and_format_from_the_file() {
+        let screen = (108, 228);
+        let jpeg = encoded(800, 600, image::ImageOutputFormat::Jpeg(80));
+        assert_eq!(viewer_decode_size(&jpeg, screen), Some((200, 150)));
+        let png = encoded(800, 600, image::ImageOutputFormat::Png);
+        assert_eq!(viewer_decode_size(&png, screen), Some((144, 108)));
+        assert_eq!(viewer_decode_size(b"not an image", screen), None);
     }
 
     #[test]

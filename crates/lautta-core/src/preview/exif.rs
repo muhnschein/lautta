@@ -1,31 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! EXIF for the image viewer's info panel and for thumbnails (SPEC PRV-2,
-//! PRV-4), read with `kamadak-exif` from the bytes of an image file.
-//! Everything is best effort: missing or malformed fields are simply absent.
 
 use exif::{Exif, In, Reader, Tag, Value};
 use std::io::Cursor;
 
-/// The fields the panel shows. Text fields are trimmed; numbers are in
-/// display units.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExifInfo {
     pub make: Option<String>,
     pub model: Option<String>,
     pub lens: Option<String>,
-    /// `YYYY-MM-DD HH:MM:SS` as recorded (no time zone).
     pub date_taken: Option<String>,
-    /// `1/250 s` or `2 s`.
     pub exposure: Option<String>,
-    /// `f/2.8`
     pub aperture: Option<String>,
     pub iso: Option<u32>,
     pub focal_length_mm: Option<f64>,
     pub width: Option<u32>,
     pub height: Option<u32>,
-    /// EXIF orientation 1-8 (1 = upright).
     pub orientation: Option<u8>,
-    /// Decimal degrees, south and west negative.
     pub gps: Option<(f64, f64)>,
     pub has_thumbnail: bool,
 }
@@ -61,7 +51,6 @@ fn rational(exif: &Exif, tag: Tag) -> Option<f64> {
     }
 }
 
-/// `1/250 s` for fast shutters, `2 s` / `1.5 s` for long ones.
 pub fn format_exposure(seconds: f64) -> Option<String> {
     if !seconds.is_finite() || seconds <= 0.0 {
         return None;
@@ -73,7 +62,6 @@ pub fn format_exposure(seconds: f64) -> Option<String> {
     Some(format!("1/{} s", (1.0 / seconds).round() as u64))
 }
 
-/// `2024:03:05 12:34:56` to `2024-03-05 12:34:56`.
 fn format_date(raw: &str) -> String {
     let mut chars: Vec<char> = raw.chars().collect();
     if chars.len() >= 10 && chars[4] == ':' && chars[7] == ':' {
@@ -83,7 +71,6 @@ fn format_date(raw: &str) -> String {
     chars.into_iter().collect()
 }
 
-/// Degrees/minutes/seconds plus hemisphere reference to signed degrees.
 fn gps_coordinate(exif: &Exif, value_tag: Tag, ref_tag: Tag, negative_ref: &str, limit: f64) -> Option<f64> {
     let Value::Rational(dms) = &exif.get_field(value_tag, In::PRIMARY)?.value else {
         return None;
@@ -112,7 +99,6 @@ fn orientation_of(exif: &Exif) -> Option<u8> {
     u8::try_from(v).ok().filter(|o| (1..=8).contains(o))
 }
 
-/// Reads the panel fields; `None` when the file has no EXIF block at all.
 pub fn read_exif(bytes: &[u8]) -> Option<ExifInfo> {
     let exif = parse(bytes)?;
     let width =
@@ -136,7 +122,6 @@ pub fn read_exif(bytes: &[u8]) -> Option<ExifInfo> {
     })
 }
 
-/// Display rotation for the viewer: the EXIF orientation, 1 when absent.
 pub fn orientation(bytes: &[u8]) -> u8 {
     parse(bytes).and_then(|e| orientation_of(&e)).unwrap_or(1)
 }
@@ -149,14 +134,12 @@ fn thumbnail_range(exif: &Exif) -> Option<(usize, usize)> {
     (length > 0 && end <= exif.buf().len()).then_some((start, end))
 }
 
-/// The embedded JPEG thumbnail, if there is one.
 pub fn exif_thumbnail(bytes: &[u8]) -> Option<Vec<u8>> {
     let exif = parse(bytes)?;
     let (start, end) = thumbnail_range(&exif)?;
     Some(exif.buf().get(start..end)?.to_vec())
 }
 
-/// Hand-assembled EXIF for tests of this module and of `thumbs`.
 #[cfg(test)]
 pub(crate) mod testutil {
     pub struct Spec {
@@ -214,7 +197,6 @@ pub(crate) mod testutil {
         }
     }
 
-    /// Serialises an IFD that starts at TIFF offset `at`.
     fn ifd(mut entries: Vec<Entry>, at: u32, next: u32) -> Vec<u8> {
         entries.sort_by_key(|e| e.tag);
         let table_len = 2 + 12 * entries.len() as u32 + 4;
@@ -278,8 +260,6 @@ pub(crate) mod testutil {
         ]
     }
 
-    /// A little-endian TIFF structure with IFD0, Exif and GPS IFDs and an
-    /// optional IFD1 holding a JPEG thumbnail.
     pub fn tiff(spec: &Spec) -> Vec<u8> {
         let len0 = ifd(ifd0(spec, 0, 0), 8, 0).len() as u32;
         let exif_at = 8 + len0;
@@ -318,7 +298,6 @@ pub(crate) mod testutil {
         out
     }
 
-    /// The APP1 segment (marker, length, `Exif\0\0`, TIFF).
     pub fn app1(spec: &Spec) -> Vec<u8> {
         let tiff = tiff(spec);
         let mut seg = vec![0xFF, 0xE1];
@@ -328,7 +307,6 @@ pub(crate) mod testutil {
         seg
     }
 
-    /// Inserts `app1` right after the SOI of a real JPEG.
     pub fn with_exif(jpeg: &[u8], spec: &Spec) -> Vec<u8> {
         let mut out = jpeg[..2].to_vec();
         out.extend(app1(spec));
@@ -336,7 +314,6 @@ pub(crate) mod testutil {
         out
     }
 
-    /// A JPEG that is only SOI, the EXIF segment and EOI.
     pub fn bare_jpeg(spec: &Spec) -> Vec<u8> {
         let mut out = vec![0xFF, 0xD8];
         out.extend(app1(spec));

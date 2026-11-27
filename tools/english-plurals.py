@@ -1,30 +1,5 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""English plural forms of the engineering English catalogue (UI-7).
-
-lupdate lists a `%n` message with empty `<numerusform>`s. lrelease then makes
-the `//%` text the answer for every n, "1 items". `english-plurals.py fill
-< in.ts > out.ts` gives each such message its two English forms: the singular
-and the plural, which is the source text itself. It runs after lupdate, in
-`make translations` and in `make translations-check`. A filter, no file names:
-nothing it opens comes from its arguments.
-
-The catalogue gets `language="en"` when it has none: lrelease writes no plural
-rules without it.
-
-A message is filled when its forms are not two non-empty ones with the source
-text last: a new message, or one whose source changed. A singular someone
-corrected by hand stays until the source changes.
-
-The singular comes from the source by rule: the word after `%n` loses its
-plural ending ("%n items" -> "%n item"), and the verbs after it that agree
-with the plural follow ("are" -> "is"). A word after `%n` that is no noun in
-the plural stays when it is a participle or one of a few others ("%n paused",
-"%n more"). Any other word is refused, and so is "(s)": the message is left as
-it is, the rest is filled, the run fails, and both forms are written by hand
-into the `.ts`. A text that is no English catalogue gives no output. Read the
-pairs printed to stderr: the rule knows nothing of other verbs.
-"""
 import re
 import sys
 
@@ -33,15 +8,10 @@ SOURCE = re.compile(r"<source>(.*?)</source>", re.S)
 FORM = re.compile(r"<numerusform>(.*?)</numerusform>", re.S)
 AFTER_N = re.compile(r"%n (\w+)")
 HEADER = re.compile(r"<TS ([^>]*)>")
-# Plural endings and what the singular has instead.
 ENDINGS = (("ies", "y"), ("sses", "ss"), ("xes", "x"))
-# Plural endings with two singulars ("matches", "caches"): left to a hand.
 AMBIGUOUS = ("ches", "shes")
-# Words after `%n` that are no plural noun and need no change.
 STAYS = ("ed", "ing")
 STAYS_WORDS = ("more", "at")
-# Verbs that agree with the counted noun: plural form, singular form. The
-# apostrophe is XML-escaped as lupdate writes it.
 VERBS = (
     ("are", "is"),
     ("were", "was"),
@@ -54,7 +24,6 @@ VERBS = (
 
 
 def one(noun):
-    """The singular of a noun in the plural; ValueError when `noun` is no such noun."""
     for ending, instead in ENDINGS:
         if noun.endswith(ending):
             return noun[: -len(ending)] + instead
@@ -66,7 +35,6 @@ def one(noun):
 
 
 def singular(source):
-    """`source` for n = 1."""
     found = AFTER_N.search(source)
     if not found:
         return source
@@ -78,12 +46,10 @@ def singular(source):
 
 
 def valid(source, forms):
-    """Two non-empty forms, the plural one the source text."""
     return len(forms) == 2 and all(forms) and forms[1] == source
 
 
 def filled(block, forms):
-    """`block` (one message) with `forms` as its finished translation."""
     head = block[: block.index("        <translation")]
     head = re.sub(r" {8}<oldsource>.*?</oldsource>\n", "", head, flags=re.S)
     lines = "".join(f"            <numerusform>{form}</numerusform>\n" for form in forms)
@@ -91,9 +57,6 @@ def filled(block, forms):
 
 
 def fill_message(match, made):
-    """The text of one message with its forms made when they are not there;
-    the forms made go to `made` as (id, forms). Raises ValueError on a message
-    the rule must not guess."""
     block, name = match.group(0), match.group("id")
     source = SOURCE.search(block).group(1)
     if not match.group("numerus"):
@@ -113,7 +76,6 @@ def fill_message(match, made):
 
 
 def english(text):
-    """`text` with `language="en"` in its header; ValueError for another language."""
     header = HEADER.search(text)
     if header is None:
         raise ValueError("not a TS catalogue")
@@ -125,9 +87,6 @@ def english(text):
 
 
 def fill(text):
-    """The catalogue text with every English plural form in place that could be
-    made, the messages whose forms were made, as (id, forms), and the messages
-    left alone because the rule must not guess, as texts."""
     text = english(text)
     made, refused = [], []
 
@@ -145,7 +104,6 @@ def main(argv):
     if argv[1:] != ["fill"]:
         print("usage: english-plurals.py fill < in.ts > out.ts", file=sys.stderr)
         return 2
-    # The catalogue is UTF-8 whatever the locale says ("›" in strings).
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")
     try:

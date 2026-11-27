@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `ViewerTools`: small helpers the viewer pages need (Recents notes, ORG-2)
-//! and some for the QML tests.
 
 use super::parse_uri;
 use crate::runtime::core;
@@ -27,24 +25,13 @@ pub fn register() {
 #[derive(QObject, Default)]
 pub struct ViewerTools {
     base: qt_base_class!(trait QObject),
-    /// Notes a file the user looked at in Recents (previewed).
     noteViewed: qt_method!(fn(&self, uri: QString)),
-    /// Notes a file handed to another app in Recents (opened).
     noteOpened: qt_method!(fn(&self, uri: QString)),
-    /// Test support: runs the event loop for `ms` milliseconds so async
-    /// results of the viewer types arrive while a test is running.
+    keepWhileLoading: qt_method!(fn(&self, source: QVariant, obj: QVariant) -> bool),
     pump: qt_method!(fn(&self, ms: i32)),
-    /// Test support: copies the local file `sourceUrl` (a `file://` URL) to
-    /// the local location path of `destUri`; true when it worked.
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
-    /// Test support: sets the modified time of the local item `uri` to `ms`
-    /// milliseconds after the epoch; true when it worked.
+    installRepeated: qt_method!(fn(&self, source_url: QString, dest_uri: QString, times: i32) -> bool),
     setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
-    /// Test support: a finger's `kind` ("press", "move" or "release") at
-    /// (`x`, `y`) of `item`, sent to its window as the mouse event Qt makes of
-    /// a touch, so gestures run through the real mouse areas and flickables.
-    /// An item's tree without a window gets one first. False when `item` is
-    /// not an item or `kind` is unknown.
     mouse: qt_method!(fn(&self, item: QVariant, kind: QString, x: f64, y: f64) -> bool),
 }
 
@@ -61,6 +48,10 @@ impl ViewerTools {
 
     fn noteOpened(&self, uri: QString) {
         self.note(uri, RecentKind::Opened);
+    }
+
+    fn keepWhileLoading(&self, source: QVariant, obj: QVariant) -> bool {
+        super::media::keep_while_loading(&source, &obj)
     }
 
     fn pump(&self, ms: i32) {
@@ -85,8 +76,6 @@ impl ViewerTools {
                 return false;
             QQuickWindow *window = target->window();
             if (!window) {
-                // The QML checks create their scenes without a window (the app's
-                // comes from SailfishApp): the item's whole tree gets one.
                 QQuickItem *root = target;
                 while (root->parentItem())
                     root = root->parentItem();
@@ -95,12 +84,6 @@ impl ViewerTools {
                 root->setParentItem(window->contentItem());
                 QObject::connect(root, &QObject::destroyed, window, &QObject::deleteLater);
             }
-            // Event times: wall clock, but at least one touch panel frame
-            // (16 ms) after the last event. On the target's Qt 5.6 a move in
-            // the same millisecond as the one before scrolls no flickable
-            // until a move with a later time comes: drag length would follow
-            // runner speed (tst_tools_finger). Flickables measure speed by
-            // these times; pauses (pumps) between gestures keep real length.
             static QElapsedTimer clock;
             static qint64 last = 0;
             if (!clock.isValid())
@@ -133,16 +116,21 @@ impl ViewerTools {
     }
 
     fn installFixture(&self, source_url: QString, dest_uri: QString) -> bool {
-        let (Some(core), Some(dest)) = (core(), parse_uri(&dest_uri)) else {
-            return false;
-        };
-        let source = source_url.to_string();
-        let Some(source) = source.strip_prefix("file://").map(PathBuf::from) else {
-            return false;
-        };
-        match core.locations.to_local_path(&dest) {
-            Some(target) => std::fs::copy(source, target).is_ok(),
-            None => false,
-        }
+        fixture_paths(&source_url, &dest_uri)
+            .is_some_and(|(source, target)| std::fs::copy(source, target).is_ok())
     }
+
+    fn installRepeated(&self, source_url: QString, dest_uri: QString, times: i32) -> bool {
+        let Some((source, target)) = fixture_paths(&source_url, &dest_uri) else {
+            return false;
+        };
+        let times = usize::try_from(times).unwrap_or_default();
+        std::fs::read(source).is_ok_and(|bytes| std::fs::write(target, bytes.repeat(times)).is_ok())
+    }
+}
+
+fn fixture_paths(source_url: &QString, dest_uri: &QString) -> Option<(PathBuf, PathBuf)> {
+    let (core, dest) = (core()?, parse_uri(dest_uri)?);
+    let source = PathBuf::from(source_url.to_string().strip_prefix("file://")?);
+    Some((source, core.locations.to_local_path(&dest)?))
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Shared state of the fake bridge and of one client session.
 
 use super::tree::Tree;
+use crate::access::{self, After, Level, Own};
 use crate::wire::{
     drive_info, feature, location_state, WireCapabilities, WireDrive, WireLocation, WireNearby,
 };
@@ -11,39 +11,49 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
-use tokio::sync::oneshot;
 use tokio::time::Instant;
 use zbus::zvariant::{OwnedValue, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Consent {
     Unknown,
-    Granted,
     Denied,
+    Allowed(Level),
 }
 
 impl Consent {
     pub fn as_str(self) -> &'static str {
         match self {
             Consent::Unknown => "unknown",
-            Consent::Granted => "granted",
             Consent::Denied => "denied",
+            Consent::Allowed(level) => level.as_str(),
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Consent> {
+        match word {
+            "unknown" => Some(Consent::Unknown),
+            "denied" => Some(Consent::Denied),
+            _ => Level::parse(word).map(Consent::Allowed),
+        }
+    }
+
+    pub fn wire(self) -> &'static str {
+        match self {
+            Consent::Unknown => "unknown",
+            Consent::Denied | Consent::Allowed(_) => "decided",
         }
     }
 }
 
-/// A scripted call failure (`org.netvfs.Error.<name>`).
 #[derive(Debug, Clone)]
 pub struct Failure {
-    /// Method name or `*`.
     pub method: String,
     pub name: String,
     pub message: String,
     pub detail: Option<String>,
     pub retry_after_ms: Option<u64>,
-    /// Calls that succeed before the failure starts.
     pub skip: u32,
-    /// How many times it fails; `None` forever.
     pub remaining: Option<u32>,
 }
 
@@ -81,10 +91,8 @@ impl Failure {
     }
 }
 
-/// A job that ends with an error in `JobFinished` once `after_bytes` moved.
 #[derive(Debug, Clone)]
 pub struct JobFailure {
-    /// `Upload`, `Download`, `RemoveTree`, `Walk` or `CopyAcross`.
     pub method: String,
     pub after_bytes: u64,
     pub name: String,
@@ -114,7 +122,6 @@ impl JobFailure {
     }
 }
 
-/// A value of the `info` dictionary or of question details.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InfoValue {
     Str(String),
@@ -133,28 +140,22 @@ impl InfoValue {
             InfoValue::Bytes(b) => Value::from(b.clone()),
             InfoValue::Strings(s) => Value::from(s.clone()),
         };
-        // Plain values never contain file descriptors, the only failing case.
         OwnedValue::try_from(v).unwrap_or_else(|_| OwnedValue::from(0u8))
     }
 }
 
-/// A memory card or USB drive of the fake (netvfs XB-20).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeDrive {
     pub id: String,
     pub label: String,
-    /// Where it is mounted, empty when it is not.
     pub mount_point: Vec<u8>,
-    /// `sd` or `usb`.
     pub kind: String,
     pub size: i64,
     pub uuid: String,
-    /// A LUKS device not unlocked: listed as `locked`, never mounted.
     pub locked: bool,
 }
 
 impl FakeDrive {
-    /// An unmounted `vfat` drive.
     pub fn new(id: &str, label: &str, kind: &str, size: i64) -> FakeDrive {
         FakeDrive {
             id: id.to_owned(),
@@ -167,25 +168,21 @@ impl FakeDrive {
         }
     }
 
-    /// The same drive as a LUKS device not unlocked (netvfs XB-20).
     pub fn locked(mut self) -> FakeDrive {
         self.locked = true;
         self
     }
 
-    /// The same drive with `uuid`.
     pub fn with_uuid(mut self, uuid: &str) -> FakeDrive {
         uuid.clone_into(&mut self.uuid);
         self
     }
 
-    /// The same drive, mounted at `mount_point`.
     pub fn mounted(mut self, mount_point: &[u8]) -> FakeDrive {
         self.mount_point = mount_point.to_vec();
         self
     }
 
-    /// The drive as `ListDrives` lists it.
     pub fn wire(&self) -> WireDrive {
         let fs_type = if self.locked { "crypto_LUKS" } else { "vfat" };
         let mut info = vec![
@@ -213,25 +210,10 @@ impl FakeDrive {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ScriptedQuestion {
-    pub kind: String,
-    pub details: Vec<(String, InfoValue)>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordedAnswer {
-    pub id: String,
-    pub accept: bool,
-    pub answers: Vec<Vec<u8>>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallRecord {
     pub method: String,
-    /// The lane the call ran in (hint or the method's default).
     pub lane: String,
-    /// Location (and path) the call was about, for debugging.
     pub target: String,
 }
 
@@ -244,33 +226,29 @@ pub struct LocationRec {
 
 pub struct State {
     pub consent: Consent,
+    pub access: HashMap<String, Option<Level>>,
+    pub own: HashMap<(String, Vec<u8>), Own>,
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
-    /// What `GetFeatures` answers (XB-19); `None`: a bridge without the
-    /// method, which answers `UnknownMethod`.
     pub features: Option<Vec<String>>,
-    /// What `ListDrives` lists (XB-20).
     pub drives: Vec<FakeDrive>,
-    /// Where `Mount` makes the drive's folder; `None`: below
-    /// `/run/media/user`, without making it.
+    pub network: String,
     pub mount_root: Option<PathBuf>,
     pub locations: BTreeMap<String, LocationRec>,
     pub trees: HashMap<String, Tree>,
     pub caps: HashMap<String, WireCapabilities>,
     pub space_total: HashMap<String, i64>,
     pub latency: Duration,
+    pub narrowing_stall: Duration,
     pub chunk: usize,
     pub failures: Vec<Failure>,
     pub job_failures: Vec<JobFailure>,
-    pub adhoc_questions: Vec<ScriptedQuestion>,
-    pub received_secrets: Vec<Vec<u8>>,
-    pub answers: Vec<RecordedAnswer>,
     pub calls: Vec<CallRecord>,
+    pub location_replies: usize,
+    pub jobs_canceled: usize,
     pub handoffs: Vec<String>,
     pub nearby: Vec<WireNearby>,
-    pub next_adhoc: u32,
-    pub next_question: u32,
     pub sessions: Vec<Arc<Session>>,
     pub accepting: bool,
     pub accepts: Vec<Instant>,
@@ -279,29 +257,35 @@ pub struct State {
 impl Default for State {
     fn default() -> State {
         State {
-            consent: Consent::Granted,
+            consent: Consent::Allowed(Level::Full),
+            access: HashMap::new(),
+            own: HashMap::new(),
             consent_requests: 0,
             auto_consent: None,
             bridge_version: "0.2.0-fake".to_owned(),
-            features: Some(vec![feature::STORAGE_SETTINGS.to_owned()]),
+            features: Some(vec![
+                feature::STORAGE_SETTINGS.to_owned(),
+                feature::NETWORK.to_owned(),
+                feature::CHECK.to_owned(),
+                feature::SEARCH.to_owned(),
+            ]),
             drives: Vec::new(),
+            network: "wifi".to_owned(),
             mount_root: None,
             locations: BTreeMap::new(),
             trees: HashMap::new(),
             caps: HashMap::new(),
             space_total: HashMap::new(),
             latency: Duration::ZERO,
+            narrowing_stall: Duration::ZERO,
             chunk: 64 * 1024,
             failures: Vec::new(),
             job_failures: Vec::new(),
-            adhoc_questions: Vec::new(),
-            received_secrets: Vec::new(),
-            answers: Vec::new(),
             calls: Vec::new(),
+            location_replies: 0,
+            jobs_canceled: 0,
             handoffs: Vec::new(),
             nearby: Vec::new(),
-            next_adhoc: 1,
-            next_question: 1,
             sessions: Vec::new(),
             accepting: true,
             accepts: Vec::new(),
@@ -310,17 +294,12 @@ impl Default for State {
 }
 
 impl State {
-    /// Whether the fake has the drive methods: a bridge that does not name
-    /// them answers `UnknownMethod` (a netvfs without XB-20).
     pub fn offers_drives(&self) -> bool {
         self.features
             .as_ref()
             .is_some_and(|f| f.iter().any(|n| n == feature::DRIVES))
     }
 
-    /// Mounts (`mount`) or unmounts `drive`: where it was mounted before
-    /// and where it is mounted then; `None` for an unknown drive. A drive is
-    /// mounted below the mount root, by label, else by UUID, else by id.
     pub fn mount(&mut self, drive: &str, mount: bool) -> Option<(Vec<u8>, Vec<u8>)> {
         let root = self
             .mount_root
@@ -341,8 +320,6 @@ impl State {
         Some((std::mem::replace(&mut d.mount_point, wanted.clone()), wanted))
     }
 
-    /// Adds a location; without a `state` in `info` it is disconnected, as
-    /// the bridge lists a location it has not connected to (netvfs XB-12).
     pub fn add_location(&mut self, id: &str, provider: &str, name: &str, mut info: Vec<(String, InfoValue)>) {
         if !info.iter().any(|(k, _)| k == location_state::KEY) {
             info.push((
@@ -361,8 +338,6 @@ impl State {
         self.trees.entry(id.to_owned()).or_default();
     }
 
-    /// Sets the connection state of location `id` (`state`, and
-    /// `stateError` for `failed`); whether that changed anything.
     pub fn set_state(&mut self, id: &str, state: &str, error: Option<&str>) -> bool {
         let Some(rec) = self.locations.get_mut(id) else {
             return false;
@@ -396,20 +371,56 @@ impl State {
     pub fn wire_locations(&self) -> Vec<WireLocation> {
         self.locations
             .iter()
-            .map(|(id, rec)| WireLocation {
-                id: id.clone(),
-                provider: rec.provider.clone(),
-                name: rec.name.clone(),
-                info: rec
+            .filter_map(|(id, rec)| {
+                let level = self.level(id)?;
+                let mut info: HashMap<String, OwnedValue> = rec
                     .info
                     .iter()
                     .map(|(k, v)| (k.clone(), v.to_owned_value()))
-                    .collect(),
+                    .collect();
+                info.insert(
+                    access::KEY.to_owned(),
+                    InfoValue::Str(level.as_str().to_owned()).to_owned_value(),
+                );
+                Some(WireLocation {
+                    id: id.clone(),
+                    provider: rec.provider.clone(),
+                    name: rec.name.clone(),
+                    info,
+                })
             })
             .collect()
     }
 
-    /// Takes the first scripted failure matching `method`, if it is due.
+    pub fn level(&self, id: &str) -> Option<Level> {
+        let default = match self.consent {
+            Consent::Unknown => return None,
+            Consent::Denied => None,
+            Consent::Allowed(level) => Some(level),
+        };
+        self.access.get(id).copied().unwrap_or(default)
+    }
+
+    pub fn own(&self, loc: &str, path: &[u8]) -> Own {
+        self.own
+            .get(&(loc.to_owned(), path.to_vec()))
+            .copied()
+            .unwrap_or(Own::No)
+    }
+
+    pub fn after_call(&mut self, loc: &str, path: &[u8], call: After, error: Option<&str>) {
+        if self.level(loc).is_none_or(Level::changes) {
+            return;
+        }
+        let own = access::after(self.own(loc, path), call, error);
+        let key = (loc.to_owned(), path.to_vec());
+        if own == Own::No {
+            self.own.remove(&key);
+        } else {
+            self.own.insert(key, own);
+        }
+    }
+
     pub fn due_failure(&mut self, method: &str) -> Option<Failure> {
         let idx = self
             .failures
@@ -426,7 +437,6 @@ impl State {
         Some(f.clone())
     }
 
-    /// Takes a job failure for `method`.
     pub fn due_job_failure(&mut self, method: &str) -> Option<JobFailure> {
         let f = self
             .job_failures
@@ -439,11 +449,9 @@ impl State {
     }
 }
 
-/// What `Cancel` found.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CancelOutcome {
     Canceled,
-    /// The id was valid once and has finished.
     Finished,
     Unknown,
 }
@@ -454,7 +462,6 @@ pub struct SessionState {
     next_handle: u32,
     pub handles: HashMap<u32, (String, Vec<u8>)>,
     jobs: HashMap<u32, Arc<AtomicBool>>,
-    questions: HashMap<String, oneshot::Sender<RecordedAnswer>>,
     pub discovering: bool,
 }
 
@@ -464,7 +471,6 @@ pub struct Session {
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    // A panic while holding the lock cannot leave the data inconsistent here.
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -478,7 +484,6 @@ impl Session {
                 next_handle: 1,
                 handles: HashMap::new(),
                 jobs: HashMap::new(),
-                questions: HashMap::new(),
                 discovering: false,
             }),
         }
@@ -490,6 +495,10 @@ impl Session {
 
     pub fn set_conn(&self, conn: zbus::Connection) {
         *lock(&self.conn) = Some(conn);
+    }
+
+    pub fn attach(&self, conn: &zbus::Connection) {
+        lock(&self.conn).get_or_insert_with(|| conn.clone());
     }
 
     pub fn conn(&self) -> Option<zbus::Connection> {
@@ -504,7 +513,6 @@ impl Session {
         self.with(|s| s.handles.len())
     }
 
-    /// Next id of the shared request and job numbering.
     pub fn next_id(&self) -> u32 {
         self.with(|s| {
             let id = s.next_id;
@@ -543,26 +551,13 @@ impl Session {
         })
     }
 
-    /// The client is gone: its jobs are canceled, its questions unanswerable
-    /// and its handles closed, as the real bridge does (netvfs XB-13).
     pub fn shut(&self) {
         self.with(|s| {
             for flag in s.jobs.values() {
                 flag.store(true, Ordering::SeqCst);
             }
-            s.questions.clear();
             s.handles.clear();
         });
-    }
-
-    pub fn add_question(&self, id: &str) -> oneshot::Receiver<RecordedAnswer> {
-        let (tx, rx) = oneshot::channel();
-        self.with(|s| s.questions.insert(id.to_owned(), tx));
-        rx
-    }
-
-    pub fn take_question(&self, id: &str) -> Option<oneshot::Sender<RecordedAnswer>> {
-        self.with(|s| s.questions.remove(id))
     }
 }
 
@@ -595,7 +590,6 @@ impl Shared {
         self.with(|s| s.sessions.clone())
     }
 
-    /// True while any client looks for servers nearby.
     pub fn any_discovering(&self) -> bool {
         self.sessions_snapshot().iter().any(|s| s.with(|s| s.discovering))
     }
@@ -678,7 +672,6 @@ mod tests {
         let w = st.wire_locations();
         assert_eq!(w.len(), 1);
         assert_eq!(crate::wire::value_str(&w[0].info["host"]).as_deref(), Some("h"));
-        // Disconnected until it is used.
         let state = |st: &State, key: &str| {
             st.wire_locations()[0]
                 .info
@@ -698,23 +691,10 @@ mod tests {
         assert!(!st.set_state("account:1", "connected", None));
         assert_eq!(state(&st, "host").as_deref(), Some("h"));
         assert!(!st.set_state("account:9", "connected", None));
-        // A state given at the start is kept.
-        st.add_location(
-            "adhoc:1",
-            "sftp",
-            "h",
-            vec![("state".into(), InfoValue::Str("connected".into()))],
-        );
-        let adhoc = &st.wire_locations()[1];
-        assert_eq!(adhoc.info.len(), 1);
-        assert_eq!(
-            crate::wire::value_str(&adhoc.info["state"]).as_deref(),
-            Some("connected")
-        );
-        st.remove_location("adhoc:1");
         st.remove_location("account:1");
         assert!(st.wire_locations().is_empty());
         assert_eq!(Consent::Denied.as_str(), "denied");
+        assert_eq!(Consent::Denied.wire(), "decided");
     }
 
     #[test]
@@ -722,26 +702,8 @@ mod tests {
         let s = Session::new();
         let flag = s.register_job(1);
         s.add_handle("a", b"f");
-        let mut rx = s.add_question("q1");
         s.shut();
         assert!(flag.load(Ordering::SeqCst));
         assert_eq!(s.open_handles(), 0);
-        assert!(matches!(rx.try_recv(), Err(oneshot::error::TryRecvError::Closed)));
-    }
-
-    #[test]
-    fn question_round_trip() {
-        let s = Session::new();
-        let mut rx = s.add_question("q1");
-        assert!(rx.try_recv().is_err());
-        let tx = s.take_question("q1").unwrap();
-        tx.send(RecordedAnswer {
-            id: "q1".into(),
-            accept: true,
-            answers: vec![],
-        })
-        .unwrap();
-        assert!(rx.try_recv().unwrap().accept);
-        assert!(s.take_question("q1").is_none());
     }
 }

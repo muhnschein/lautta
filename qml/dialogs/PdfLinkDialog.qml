@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A PDF's link to a website (PRV-12, board External link): swipe forward or
-// Open hands it to the browser (the app itself has no network access), back
-// or Cancel stays in the PDF; Copy link puts it on the clipboard.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../components/FileIcons.js" as FileIcons
 import "../components/viewers/PdfText.js" as PdfText
 
 Dialog {
@@ -38,7 +36,7 @@ Dialog {
 
                 HighlightImage {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    source: Qt.resolvedUrl("../icons/link.svg")
+                    source: FileIcons.source("link", Theme.pixelRatio)
                     sourceSize.width: Theme.iconSizeLarge
                     sourceSize.height: Theme.iconSizeLarge
                     color: Theme.highlightColor

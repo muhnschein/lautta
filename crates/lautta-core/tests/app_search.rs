@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The search area's core actions on a temporary home folder: streaming
-//! search with recents and depth, cache and app-data clearing, per-location
-//! preferences.
 
 use lautta_core::app::Core;
 use lautta_core::app_search::SearchRequest;
@@ -9,7 +6,7 @@ use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::search::MatchMode;
-use lautta_core::settings::{LocationPrefs, Settings};
+use lautta_core::settings::LocationPrefs;
 use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -123,14 +120,13 @@ async fn search_streams_hits_and_remembers_the_query() {
 }
 
 #[tokio::test]
-async fn search_depth_is_unlimited_locally_and_a_setting_remotely() {
+async fn search_depth_is_unlimited_locally_and_fixed_on_servers() {
     let h = home().await;
-    h.core.apply_settings(Settings {
-        search_remote_depth: 3,
-        ..Settings::default()
-    });
     assert_eq!(h.core.search_depth(&uri("lautta://user-documents/")), None);
-    assert_eq!(h.core.search_depth(&uri("lautta://nv-nas/srv")), Some(3));
+    assert_eq!(
+        h.core.search_depth(&uri("lautta://nv-nas/srv")),
+        Some(lautta_core::search::SERVER_SEARCH_DEPTH)
+    );
 }
 
 #[tokio::test]
@@ -175,7 +171,10 @@ async fn clear_app_data_removes_everything_the_app_keeps() {
     h.core.clear_app_data().unwrap();
     assert!(h.core.favourites.list().unwrap().is_empty());
     assert!(h.core.recent_searches.list("user-documents").unwrap().is_empty());
-    assert!(!paths.data_dir().join("netvfs").exists(), "DAT-3");
+    assert!(
+        !paths.data_dir().join("netvfs").exists(),
+        "netvfs data dir is cleared"
+    );
     assert!(!paths.thumbs_dir().join("k.thumb").exists());
     assert!(h.root.join("Documents/mine.txt").is_file(), "user files stay");
     h.core
@@ -240,4 +239,440 @@ async fn location_prefs_apply_the_listing_opt_out() {
         h.core.location_prefs.list().unwrap().is_empty(),
         "all-default preferences leave no row"
     );
+}
+
+mod scope {
+    use super::*;
+    use lautta_core::app_search::{GroupKind, ScopeEvent, SearchScope, PROGRESS_EVERY_FOLDERS};
+    use lautta_core::entry::Capabilities;
+    use lautta_core::locations::{Location, LocationKind};
+    use lautta_core::provider::memory::MemoryProvider;
+    use lautta_core::search::SearchSummary;
+    use lautta_core::Error;
+    use std::collections::BTreeMap;
+
+    fn card(h: &Home) -> MemoryProvider {
+        let m = MemoryProvider::new(Capabilities::with(&[]));
+        let loc = Location::remote("vol-sd", LocationKind::Volume, "SD card", None);
+        h.core.locations.register(loc, Arc::new(m.clone()));
+        m
+    }
+
+    fn nas(h: &Home, id: &str, name: &str) -> MemoryProvider {
+        let m = MemoryProvider::new(Capabilities::with(&[]));
+        let loc = Location::remote(
+            id,
+            LocationKind::Server {
+                provider: "sftp".into(),
+            },
+            name,
+            Some(format!("sftp://{id}")),
+        );
+        h.core.locations.register(loc, Arc::new(m.clone()));
+        m
+    }
+
+    #[derive(Default, Debug)]
+    struct Seen {
+        hits: BTreeMap<usize, Vec<(usize, String)>>,
+        progress: BTreeMap<usize, Vec<u64>>,
+        done: BTreeMap<usize, Result<SearchSummary, ErrorKind>>,
+        after_done: bool,
+        gone: BTreeMap<usize, Vec<String>>,
+    }
+
+    async fn run(
+        h: &Home,
+        scope: SearchScope,
+        folder: Option<&Uri>,
+        text: &str,
+    ) -> (Vec<lautta_core::app_search::SearchGroup>, Seen) {
+        let groups = h.core.search_groups(&scope, folder);
+        let req = SearchRequest {
+            text: text.into(),
+            mode: MatchMode::for_text(text),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let g2 = groups.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&g2, &req, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        let mut seen = Seen::default();
+        while let Some(event) = rx.recv().await {
+            match event {
+                ScopeEvent::Hits { group, root, hits } => {
+                    seen.after_done |= seen.done.contains_key(&group);
+                    seen.hits
+                        .entry(group)
+                        .or_default()
+                        .extend(hits.iter().map(|x| (root, x.uri.to_string())));
+                }
+                ScopeEvent::Progress { group, folders } => {
+                    seen.after_done |= seen.done.contains_key(&group);
+                    seen.progress.entry(group).or_default().push(folders);
+                }
+                ScopeEvent::Gone { group, uris } => {
+                    seen.gone
+                        .entry(group)
+                        .or_default()
+                        .extend(uris.iter().map(ToString::to_string));
+                }
+                ScopeEvent::Done { group, result } => {
+                    assert!(
+                        seen.done.insert(group, result.map_err(|e| e.kind)).is_none(),
+                        "one Done per group"
+                    );
+                }
+            }
+        }
+        task.await.unwrap();
+        for v in seen.hits.values_mut() {
+            v.sort();
+        }
+        (groups, seen)
+    }
+
+    #[tokio::test]
+    async fn device_scope_searches_every_user_folder_as_one_group() {
+        let h = home().await;
+        write(&h.root.join("Documents/Finance/budget_2026.ods"), b"x");
+        write(&h.root.join("Downloads/Household budget.pdf"), b"x");
+        write(&h.root.join("Pictures/holiday.jpg"), b"x");
+        nas(&h, "nv-nas", "NAS").add_file("budget.txt", b"x", 0);
+        card(&h).add_file("budget card.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Device, None, "budget").await;
+        let kinds: Vec<GroupKind> = groups.iter().map(|g| g.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![GroupKind::Device],
+            "servers and memory cards stay out of This device"
+        );
+        let roots: Vec<String> = groups[0].roots.iter().map(|r| r.uri.to_string()).collect();
+        assert!(
+            roots.contains(&"lautta://user-documents/".to_owned()),
+            "{roots:?}"
+        );
+        assert!(
+            roots.contains(&"lautta://user-downloads/".to_owned()),
+            "{roots:?}"
+        );
+        let found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(
+            found,
+            vec![
+                "lautta://user-documents/Finance/budget_2026.ods",
+                "lautta://user-downloads/Household%20budget.pdf"
+            ]
+        );
+        for (root, uri) in &seen.hits[&0] {
+            assert!(
+                uri.starts_with(&groups[0].roots[*root].uri.to_string()),
+                "hit {uri} names its root"
+            );
+        }
+        let done = seen.done[&0].as_ref().unwrap();
+        assert_eq!(done.hits, 2);
+        assert!(done.folders >= 4, "every folder of every root walked: {done:?}");
+        assert!(!seen.after_done, "nothing comes after a group's Done");
+        assert!(
+            h.core.recent_searches.list("@device").unwrap().is_empty(),
+            "a search alone is not remembered"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_memory_card_is_searched_everywhere_and_on_its_own() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        card(&h).add_file("Work/budget card.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
+        let names: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(
+            names,
+            vec![(GroupKind::Device, ""), (GroupKind::Volume, "SD card")]
+        );
+        assert_eq!(
+            seen.hits[&1],
+            vec![(0, "lautta://vol-sd/Work/budget%20card.txt".to_owned())]
+        );
+        let (groups, _) = run(&h, SearchScope::Location("vol-sd".into()), None, "budget").await;
+        let names: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(names, vec![(GroupKind::Volume, "SD card")]);
+    }
+
+    fn cloud(h: &Home, id: &str, name: &str) -> MemoryProvider {
+        let m = MemoryProvider::new(Capabilities::with(&[lautta_core::entry::cap::SEARCH]));
+        let loc = Location::remote(
+            id,
+            LocationKind::Server {
+                provider: "webdav".into(),
+            },
+            name,
+            Some(format!("webdav://{id}")),
+        );
+        h.core.locations.register(loc, Arc::new(m.clone()));
+        m
+    }
+
+    #[tokio::test]
+    async fn a_server_that_can_search_is_asked_and_not_walked() {
+        let h = home().await;
+        let nc = cloud(&h, "nv-cloud", "Cloud");
+        nc.add_file("Docs/Budget 2027.odt", b"x", 0);
+        nc.add_file("Docs/deep/a/b/c/d/budget-old.txt", b"x", 0);
+        nc.add_file("Docs/.hidden/budget-secret.txt", b"x", 0);
+        nc.add_file("Docs/.budget-dotfile", b"x", 0);
+        nc.add_file("Pics/budget.jpg", b"x", 0);
+        nc.add_file("other.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "BUDGET").await;
+        assert_eq!(groups.len(), 1);
+        let mut found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            vec![
+                "lautta://nv-cloud/Docs/Budget%202027.odt",
+                "lautta://nv-cloud/Docs/deep/a/b/c/d/budget-old.txt",
+                "lautta://nv-cloud/Pics/budget.jpg"
+            ],
+            "hidden files and folders stay out"
+        );
+        assert_eq!(seen.done[&0].as_ref().unwrap().hits, 3);
+        let calls = nc.calls();
+        assert!(calls.iter().any(|c| c == "search "), "{calls:?}");
+        assert!(
+            !calls.iter().any(|c| c.starts_with("list")),
+            "no folder is listed: {calls:?}"
+        );
+
+        let folder = uri("lautta://nv-cloud/Docs");
+        let (_, seen) = run(&h, SearchScope::Folder, Some(&folder), "budget").await;
+        assert_eq!(seen.hits[&0].len(), 2, "only below the folder searched");
+        assert!(nc.calls().iter().any(|c| c == "search Docs"));
+
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "*budget*.txt").await;
+        let found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(
+            found,
+            vec!["lautta://nv-cloud/Docs/deep/a/b/c/d/budget-old.txt"],
+            "the pattern still decides"
+        );
+    }
+
+    #[tokio::test]
+    async fn filters_apply_to_what_the_server_found_and_trouble_is_reported() {
+        let h = home().await;
+        let nc = cloud(&h, "nv-cloud", "Cloud");
+        nc.add_file("Docs/budget.odt", b"x", 0);
+        nc.add_file("Docs/budget.jpg", b"x", 0);
+        let groups = h
+            .core
+            .search_groups(&SearchScope::Location("nv-cloud".into()), None);
+        let req = SearchRequest {
+            text: "budget".into(),
+            types: ["image".to_owned()].into_iter().collect(),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let g2 = groups.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&g2, &req, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        let mut found = Vec::new();
+        while let Some(event) = rx.recv().await {
+            if let ScopeEvent::Hits { hits, .. } = event {
+                found.extend(hits.iter().map(|x| x.uri.to_string()));
+            }
+        }
+        task.await.unwrap();
+        assert_eq!(found, vec!["lautta://nv-cloud/Docs/budget.jpg"]);
+
+        nc.fail_next("search", "", Error::kind(ErrorKind::ConnectionLost));
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "budget").await;
+        assert_eq!(seen.done[&0].as_ref().unwrap_err(), &ErrorKind::ConnectionLost);
+
+        nc.fail_next("search", "", Error::kind(ErrorKind::Unsupported));
+        nc.clear_calls();
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "budget").await;
+        assert_eq!(
+            seen.hits[&0].len(),
+            2,
+            "a server that refuses to search is walked"
+        );
+        assert!(nc.calls().iter().any(|c| c.starts_with("list")));
+
+        nc.clear_calls();
+        let groups = h
+            .core
+            .search_groups(&SearchScope::Location("nv-cloud".into()), None);
+        let only_type = SearchRequest {
+            types: ["image".to_owned()].into_iter().collect(),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&groups, &only_type, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        while rx.recv().await.is_some() {}
+        task.await.unwrap();
+        assert!(
+            !nc.calls().iter().any(|c| c.starts_with("search")),
+            "without a text there is nothing to ask for"
+        );
+    }
+
+    #[tokio::test]
+    async fn everywhere_adds_servers_and_one_failing_server_spoils_nothing_else() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        let good = nas(&h, "nv-nas", "NAS");
+        good.add_file("shared/Plans/Budget 2027 draft.odt", b"x", 0);
+        good.add_file("shared/other.txt", b"x", 0);
+        let bad = nas(&h, "nv-office", "Office");
+        bad.fail_next("list", "", Error::kind(ErrorKind::ConnectionLost));
+        let (groups, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
+        let names: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(
+            names,
+            vec![
+                (GroupKind::Device, ""),
+                (GroupKind::Server, "NAS"),
+                (GroupKind::Server, "Office")
+            ]
+        );
+        assert_eq!(
+            seen.hits[&1],
+            vec![(
+                0,
+                "lautta://nv-nas/shared/Plans/Budget%202027%20draft.odt".to_owned()
+            )]
+        );
+        assert_eq!(seen.done[&1].as_ref().unwrap().hits, 1);
+        assert_eq!(seen.done[&2].as_ref().unwrap_err(), &ErrorKind::ConnectionLost);
+        assert_eq!(seen.done[&0].as_ref().unwrap().hits, 1);
+        assert!(!seen.hits.contains_key(&2));
+    }
+
+    #[tokio::test]
+    async fn a_failing_device_folder_leaves_the_rest_of_the_device_searched() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        let broken = MemoryProvider::new(Capabilities::with(&[]));
+        broken.fail_next("list", "", Error::kind(ErrorKind::PermissionDenied));
+        h.core.locations.register(
+            Location::remote("user-broken", LocationKind::UserFolder, "Broken", None),
+            Arc::new(broken),
+        );
+        let (groups, seen) = run(&h, SearchScope::Device, None, "budget").await;
+        assert!(groups[0].roots.iter().any(|r| r.name == "Broken"), "{groups:?}");
+        let done = seen.done[&0].as_ref().expect("one readable root is enough");
+        assert_eq!((done.hits, done.errors), (1, 1));
+    }
+
+    #[tokio::test]
+    async fn a_location_scope_searches_that_server_alone() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        nas(&h, "nv-nas", "NAS").add_file("shared/budget.txt", b"x", 0);
+        nas(&h, "nv-office", "Office").add_file("budget.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Location("nv-nas".into()), None, "budget").await;
+        let kinds: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(kinds, vec![(GroupKind::Server, "NAS")]);
+        assert_eq!(
+            seen.hits[&0],
+            vec![(0, "lautta://nv-nas/shared/budget.txt".to_owned())]
+        );
+        let ids: Vec<(String, GroupKind, &str)> = h
+            .core
+            .scope_locations()
+            .into_iter()
+            .map(|l| (l.id, l.kind, l.icon))
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                ("nv-nas".to_owned(), GroupKind::Server, "server"),
+                ("nv-office".to_owned(), GroupKind::Server, "server")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn server_search_stops_sixteen_folders_down() {
+        let h = home().await;
+        let m = nas(&h, "nv-nas", "NAS");
+        let deep: String = (1..=16).map(|i| format!("d{i}/")).collect();
+        m.add_file(&format!("{deep}budget-16.txt"), b"x", 0);
+        m.add_file(&format!("{deep}d17/budget-17.txt"), b"x", 0);
+        let (_, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
+        let found: Vec<&str> = seen.hits[&1].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].ends_with("/d16/budget-16.txt"), "{found:?}");
+    }
+
+    #[tokio::test]
+    async fn folder_scope_is_one_group_named_after_the_folder() {
+        let h = home().await;
+        write(&h.root.join("Documents/Uni/Thesis/thesis.pdf"), b"x");
+        write(&h.root.join("Downloads/thesis.pdf"), b"x");
+        let folder = uri("lautta://user-documents/Uni");
+        let (groups, seen) = run(&h, SearchScope::Folder, Some(&folder), "thesis").await;
+        assert_eq!(groups.len(), 1);
+        assert_eq!(
+            (groups[0].kind, groups[0].name.as_str()),
+            (GroupKind::Folder, "Uni")
+        );
+        assert_eq!(
+            seen.hits[&0],
+            vec![
+                (0, "lautta://user-documents/Uni/Thesis".to_owned()),
+                (0, "lautta://user-documents/Uni/Thesis/thesis.pdf".to_owned())
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn progress_counts_folders_in_steps_across_roots() {
+        let h = home().await;
+        let per_root = PROGRESS_EVERY_FOLDERS as usize + 5;
+        for top in ["Documents", "Downloads"] {
+            for i in 0..per_root {
+                std::fs::create_dir_all(h.root.join(top).join(format!("d{i}"))).unwrap();
+            }
+        }
+        let (_, seen) = run(&h, SearchScope::Device, None, "nothing-matches").await;
+        let steps = &seen.progress[&0];
+        let total = seen.done[&0].as_ref().unwrap().folders;
+        assert!(total >= 2 * (per_root as u64 + 1), "folders walked: {total}");
+        assert!(
+            steps.len() >= 2,
+            "a step per {PROGRESS_EVERY_FOLDERS} folders in each root: {steps:?}"
+        );
+        assert!(
+            steps.windows(2).all(|w| w[0] < w[1]),
+            "counts only grow: {steps:?}"
+        );
+        assert!(*steps.last().unwrap() <= total);
+        assert!(
+            steps.iter().any(|s| *s > per_root as u64),
+            "the second root counts on from the first: {steps:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pattern_in_the_text_matches_as_a_pattern() {
+        let h = home().await;
+        write(&h.root.join("Documents/a.pdf"), b"x");
+        write(&h.root.join("Documents/a.pdf.txt"), b"x");
+        let (_, seen) = run(&h, SearchScope::Device, None, "*.pdf").await;
+        let found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(found, vec!["lautta://user-documents/a.pdf"]);
+    }
 }

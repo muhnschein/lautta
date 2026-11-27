@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Listing order (BRW-2): natural, case-insensitive name order over lowercased
-//! NFC text with a byte-order tiebreak; size, modified and type orders;
-//! folders-first toggle; stable. Runs in core, off the GUI thread (ARC-8).
 
 use crate::entry::Entry;
 use crate::mime::{self, FileCategory};
@@ -18,7 +15,6 @@ pub enum SortKey {
 }
 
 impl SortKey {
-    /// Stable identifier used in the database and settings.
     pub fn as_str(self) -> &'static str {
         match self {
             SortKey::Name => "name",
@@ -56,8 +52,6 @@ impl Default for SortOptions {
     }
 }
 
-/// Lowercased NFC form of a name; invalid UTF-8 is decoded lossily (the raw
-/// bytes still break ties).
 pub fn fold_name(name: &[u8]) -> String {
     String::from_utf8_lossy(name)
         .nfc()
@@ -65,8 +59,6 @@ pub fn fold_name(name: &[u8]) -> String {
         .to_lowercase()
 }
 
-/// Natural order: runs of ASCII digits compare by numeric value, everything
-/// else bytewise (UTF-8 byte order equals code point order).
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let (a, b) = (a.as_bytes(), b.as_bytes());
     let (mut i, mut j) = (0, 0);
@@ -96,16 +88,14 @@ fn digit_run(s: &[u8], start: usize) -> (&[u8], usize) {
 }
 
 fn cmp_digit_runs(a: &[u8], b: &[u8]) -> Ordering {
-    let strip = |s: &[u8]| {
+    fn strip(s: &[u8]) -> &[u8] {
         let zeros = s.iter().take_while(|b| **b == b'0').count();
-        s[zeros..].to_vec()
-    };
+        &s[zeros..]
+    }
     let (a, b) = (strip(a), strip(b));
-    a.len().cmp(&b.len()).then_with(|| a.cmp(&b))
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
-/// Per-entry data derived once and reused across re-sorts (keeps 20 000-entry
-/// sorts allocation-free in the comparator).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SortRecord {
     pub name_key: String,
@@ -114,6 +104,14 @@ pub struct SortRecord {
 }
 
 impl SortRecord {
+    pub fn empty() -> SortRecord {
+        SortRecord {
+            name_key: String::new(),
+            category: FileCategory::Other,
+            extension: String::new(),
+        }
+    }
+
     pub fn for_entry(e: &Entry) -> SortRecord {
         SortRecord {
             name_key: fold_name(&e.name),
@@ -127,8 +125,6 @@ fn name_order(ea: &Entry, ra: &SortRecord, eb: &Entry, rb: &SortRecord) -> Order
     natural_cmp(&ra.name_key, &rb.name_key).then_with(|| ea.name.cmp(&eb.name))
 }
 
-/// Total order of two entries under `opts`. Descending reverses the key order
-/// only; folders stay first and ties fall back to ascending name order.
 pub fn compare_entries(
     ea: &Entry,
     ra: &SortRecord,
@@ -159,7 +155,6 @@ pub fn compare_entries(
     primary.then_with(|| name_order(ea, ra, eb, rb))
 }
 
-/// Sorts `indices` (positions into `entries`/`records`) in place, stably.
 pub fn sort_indices(indices: &mut [u32], entries: &[Entry], records: &[SortRecord], opts: &SortOptions) {
     indices.sort_by(|&a, &b| {
         let (a, b) = (a as usize, b as usize);
@@ -167,7 +162,6 @@ pub fn sort_indices(indices: &mut [u32], entries: &[Entry], records: &[SortRecor
     });
 }
 
-/// Index permutation that lists `entries` in the requested order.
 pub fn sort_permutation(entries: &[Entry], opts: &SortOptions) -> Vec<u32> {
     let records: Vec<SortRecord> = entries.iter().map(SortRecord::for_entry).collect();
     let mut idx: Vec<u32> = (0..entries.len() as u32).collect();
@@ -194,7 +188,6 @@ mod tests {
     fn natural_numbers() {
         let e = files(&["file10", "file2", "File1", "file02", "file1"]);
         let p = sort_permutation(&e, &SortOptions::default());
-        // Equal folded keys (File1/file1, file02/file2) fall back to byte order.
         assert_eq!(names(&e, &p), ["File1", "file1", "file02", "file2", "file10"]);
     }
 
@@ -219,7 +212,6 @@ mod tests {
         let e = files(&["banana", "Apple", "cherry", "apple2"]);
         let p = sort_permutation(&e, &SortOptions::default());
         assert_eq!(names(&e, &p), ["Apple", "apple2", "banana", "cherry"]);
-        // Decomposed and precomposed e-acute fold to the same key.
         assert_eq!(fold_name("e\u{301}".as_bytes()), fold_name("\u{e9}".as_bytes()));
         assert_eq!(fold_name(b"ABC"), "abc");
         let e = files(&["e\u{301}b", "\u{e9}a"]);
@@ -233,7 +225,6 @@ mod tests {
         e.push(Entry::new(b"a\xff", Kind::File));
         e.push(Entry::new(b"a\xfe", Kind::File));
         let p = sort_permutation(&e, &SortOptions::default());
-        // Both invalid names fold to "a\u{fffd}"; raw bytes decide.
         assert_eq!(p, [0, 2, 1]);
     }
 
@@ -245,7 +236,6 @@ mod tests {
         let mut o = SortOptions::default();
         assert_eq!(names(&e, &sort_permutation(&e, &o)), ["y", "z", "a.txt", "b.txt"]);
         o.descending = true;
-        // Folders stay first when descending.
         assert_eq!(names(&e, &sort_permutation(&e, &o)), ["z", "y", "b.txt", "a.txt"]);
         o.folders_first = false;
         assert_eq!(names(&e, &sort_permutation(&e, &o)), ["z", "y", "b.txt", "a.txt"]);
@@ -281,7 +271,6 @@ mod tests {
         };
         assert_eq!(names(&e, &sort_permutation(&e, &o)), ["d", "b", "c", "a"]);
         o.descending = true;
-        // Ties (b, c) keep ascending name order even when descending.
         assert_eq!(names(&e, &sort_permutation(&e, &o)), ["a", "b", "c", "d"]);
         o.key = SortKey::Modified;
         o.descending = false;
@@ -297,7 +286,6 @@ mod tests {
             key: SortKey::Type,
             ..SortOptions::default()
         };
-        // Image (jpg < png), Audio, Text, Archive, Other.
         assert_eq!(
             names(&e, &sort_permutation(&e, &o)),
             ["c.jpg", "b.png", "a.mp3", "a.txt", "z.txt", "d.zip", "noext"]
@@ -310,7 +298,6 @@ mod tests {
         e[0].size = Some(1);
         e[1].size = Some(2);
         e[2].size = Some(3);
-        // Identical names: input order is preserved.
         let o = SortOptions::default();
         assert_eq!(sort_permutation(&e, &o), [0, 1, 2]);
     }

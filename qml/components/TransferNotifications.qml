@@ -1,14 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Transfer notifications (SPEC INT-2, XFR-6, XFR-8), shown while the app is
-// in the background: one updating progress notification, finished transfers
-// grouped in one, one per failed transfer, one per transfer that needs an
-// answer, and "will resume" when the app closes with work pending.
-//
-// Default actions: the running app reacts to `clicked` (openRequested). For a
-// closed app the notification carries a D-Bus action on the app's own name
-// (org.netvfs.lautta, SPEC §3.3): it starts the app through ExecDBus. Showing
-// a specific page after such a start needs a D-Bus object in the app, which
-// this release does not export, so the app comes up on its main page.
 import QtQuick 2.6
 import Nemo.Notifications 1.0
 import Lautta 1.0
@@ -17,14 +7,10 @@ import "transfers/TransferText.js" as TransferText
 Item {
     id: root
 
-    // The user tapped a notification while the app runs: page is
-    // "transfers" or "conflict" (then transferId says which transfer).
     signal openRequested(string page, int transferId)
-    // For page "edit" the second argument is the working copy's id.
 
     readonly property bool inBackground: Qt.application.state !== Qt.ApplicationActive
     property int finishedCount
-    // Notifications per transfer id (needs-answer), reused when it asks again.
     property var questionNotes: ({})
 
     function remoteAction(page) {
@@ -61,13 +47,12 @@ Item {
         progressNote.publish()
     }
 
-    // Called when the app is closing (XFR-6): what is still unfinished
-    // resumes the next time the app opens.
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {
-            //% "%n tasks will resume"
+            //% "%n tasks stopped"
             pendingNote.summary = qsTrId("lautta-xfr-note-pending", Transfers.pendingCount)
+            pendingNote.body = TransferText.pendingBody(App.setting("auto_resume") !== false)
             pendingNote.publish()
         }
     }
@@ -90,7 +75,7 @@ Item {
             "transferId": id,
             //% "%1 failed"
             "summary": qsTrId("lautta-xfr-note-failed").arg(titleOf(id)),
-            //% "%n files couldn't be transferred. Tap to retry."
+            //% "%n items failed. Tap to retry."
             "body": qsTrId("lautta-xfr-note-failed-body", Math.max(1, failures))
         })
         failedNote.publish()
@@ -110,12 +95,29 @@ Item {
         note.publish()
     }
 
+    function waitsForAnswer(id) {
+        var s = summaryOf(id)
+        return s !== null && s.finishedMs === null && JSON.parse(Transfers.questionsJson(id)).length > 0
+    }
+
+    function closeAnswered() {
+        for (var key in questionNotes) {
+            var note = questionNotes[key]
+            if (!waitsForAnswer(note.transferId)) {
+                delete questionNotes[key]
+                note.close()
+                note.destroy()
+            }
+        }
+    }
+
     Component.onCompleted: closeStale()
 
     Connections {
         target: Transfers
         onFinished: root.noteFinished(id, ok, failures)
         onNeedsAnswer: root.noteQuestion(id)
+        onChanged: root.closeAnswered()
     }
 
     Timer {
@@ -161,8 +163,6 @@ Item {
 
         appName: "Lautta"
         category: "x-lautta.transfer.pending"
-        //% "when you open Lautta again"
-        body: qsTrId("lautta-xfr-note-pending-body")
         remoteActions: root.remoteAction("transfers")
     }
 
@@ -192,6 +192,10 @@ Item {
             summary: qsTrId("lautta-xfr-note-question")
             remoteActions: root.remoteAction("conflict")
             onClicked: root.openRequested("conflict", transferId)
+            onClosed: {
+                delete root.questionNotes[transferId]
+                destroy()
+            }
         }
     }
 }

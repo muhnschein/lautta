@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Deleting (SPEC §18, OPS-8): whether deletes go to Trash, how
-// long Trash keeps them and the undo time of every remorse timer.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -44,7 +42,7 @@ Page {
                 labels: SettingsText.days(values)
             }
             SettingSlider {
-                //% "Undo time (remorse)"
+                //% "Time to undo"
                 label: qsTrId("lautta-settings-remorse")
                 settingKey: "remorse_seconds"
                 minimumValue: 3

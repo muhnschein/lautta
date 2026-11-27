@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One forwarding task carries the engine's `TransferEvent`s to the GUI
-//! thread (queued callback); there they reach the `Transfers` singleton and
-//! every live model through a small listener registry.
 
 use crate::runtime::{core, handle};
+use lautta_core::transfer::throttle::{forward_throttled, Forwarded};
 use lautta_core::transfer::TransferEvent;
 use std::cell::RefCell;
 use std::sync::Once;
-use tokio::sync::broadcast::error::RecvError;
+use std::time::Duration;
 
-/// A listener returns `false` when its object is gone.
 type Listener = Box<dyn FnMut(&TransferEvent) -> bool>;
 
 thread_local! {
@@ -18,21 +15,18 @@ thread_local! {
 
 static FORWARDER: Once = Once::new();
 
-/// The id of a synthetic "something else changed, reload" event (history
-/// cleared, start-up restore, or events were missed).
+const CHANGED_EVERY: Duration = Duration::from_millis(250);
+
 pub const RELOAD: i64 = 0;
 
 pub fn is_reload(ev: &TransferEvent) -> bool {
     matches!(ev, TransferEvent::Changed(RELOAD))
 }
 
-/// Registers a listener on the GUI thread.
 pub fn listen(f: impl FnMut(&TransferEvent) -> bool + 'static) {
     LISTENERS.with(|l| l.borrow_mut().push(Box::new(f)));
 }
 
-/// Calls every listener; those that report their object gone are dropped.
-/// Listeners added meanwhile are kept.
 pub fn dispatch(ev: &TransferEvent) {
     let mut current = LISTENERS.with(|l| std::mem::take(&mut *l.borrow_mut()));
     current.retain_mut(|f| f(ev));
@@ -43,29 +37,21 @@ pub fn dispatch(ev: &TransferEvent) {
     });
 }
 
-/// Asks every listener to reload, on the next event-loop turn: callers are
-/// often inside a borrow of one of the listeners.
 pub fn reload() {
     qmetaobject::single_shot(std::time::Duration::from_millis(0), || {
         dispatch(&TransferEvent::Changed(RELOAD));
     });
 }
 
-/// Starts the single forwarding task (once). Call on the GUI thread.
 pub fn ensure_forwarder() {
     FORWARDER.call_once(|| {
         let Some(core) = core() else { return };
-        let mut rx = core.engine.subscribe();
+        let rx = core.engine.subscribe();
         let to_gui = qmetaobject::queued_callback(|ev: TransferEvent| dispatch(&ev));
-        handle().spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Ok(ev) => to_gui(ev),
-                    Err(RecvError::Lagged(_)) => to_gui(TransferEvent::Changed(RELOAD)),
-                    Err(RecvError::Closed) => break,
-                }
-            }
-        });
+        handle().spawn(forward_throttled(rx, CHANGED_EVERY, move |f| match f {
+            Forwarded::Event(ev) => to_gui(ev),
+            Forwarded::Lagged => to_gui(TransferEvent::Changed(RELOAD)),
+        }));
     });
 }
 

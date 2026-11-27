@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! A zip writer that needs only `Write` (no `Seek`), so the archive can go
-//! straight into a pipe. Files use data descriptors (sizes and CRC follow the
-//! data), deflate, UTF-8 names, unix modes and extended timestamps; entries
-//! switch to zip64 when their size is unknown or ≥ 4 GiB.
 
 use super::{EntryMeta, MemberWriter};
 use crate::entry::Kind;
+use crate::password::Password;
+use crate::zipaes::{self, AesField, Encryptor};
 use std::io::{self, Read, Write};
 use std::time::{Duration, SystemTime};
 
@@ -15,6 +13,7 @@ const CENTRAL_SIG: u32 = 0x0201_4b50;
 const EOCD_SIG: u32 = 0x0605_4b50;
 const EOCD64_SIG: u32 = 0x0606_4b50;
 const LOCATOR64_SIG: u32 = 0x0706_4b50;
+const FLAG_ENCRYPTED: u16 = 0x0001;
 const FLAG_DESCRIPTOR: u16 = 0x0008;
 const FLAG_UTF8: u16 = 0x0800;
 const METHOD_STORED: u16 = 0;
@@ -39,11 +38,11 @@ impl<W: Write> Write for Counting<W> {
     }
 }
 
-/// What the central directory needs about a finished member.
 struct Member {
     name: Vec<u8>,
     flags: u16,
     method: u16,
+    aes: Option<AesField>,
     dos: (u16, u16),
     unix_mtime: Option<u32>,
     crc: u32,
@@ -57,19 +56,20 @@ struct Member {
 pub(crate) struct ZipStream<W: Write> {
     out: Counting<W>,
     level: u32,
+    password: Option<Password>,
     members: Vec<Member>,
-    /// Test knob: write every file entry as zip64.
     force_zip64: bool,
 }
 
 impl<W: Write> ZipStream<W> {
-    pub fn new(sink: W, level: u32) -> ZipStream<W> {
+    pub fn new(sink: W, level: u32, password: Option<Password>) -> ZipStream<W> {
         ZipStream {
             out: Counting {
                 inner: sink,
                 count: 0,
             },
             level,
+            password,
             members: Vec::new(),
             force_zip64: false,
         }
@@ -94,7 +94,6 @@ impl<W: Write> ZipStream<W> {
     }
 }
 
-/// Seconds since the epoch to a DOS date/time (UTC, clamped to 1980..2107).
 pub(crate) fn dos_datetime(t: SystemTime) -> (u16, u16) {
     let secs = t
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -111,7 +110,6 @@ pub(crate) fn dos_datetime(t: SystemTime) -> (u16, u16) {
     (date, time)
 }
 
-/// Days since 1970-01-01 to (year, month, day).
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
@@ -139,7 +137,6 @@ fn external_attrs(kind: Kind, mode: Option<u32>) -> u32 {
     ((type_bits | (mode.unwrap_or(default_mode) & 0o7777)) << 16) | dos
 }
 
-/// Extended timestamp extra field (modification time only).
 fn timestamp_extra(mtime: Option<u32>) -> Vec<u8> {
     let Some(secs) = mtime else {
         return Vec::new();
@@ -153,21 +150,59 @@ fn io_invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
 }
 
+fn version_needed(m: &Member, zip64: bool) -> u16 {
+    if m.aes.is_some() {
+        51
+    } else if zip64 {
+        45
+    } else {
+        20
+    }
+}
+
+fn extras(m: &Member) -> Vec<u8> {
+    let mut extra = timestamp_extra(m.unix_mtime);
+    if let Some(aes) = m.aes {
+        extra.extend_from_slice(&aes.record());
+    }
+    extra
+}
+
+fn deflate_into<O: Write>(
+    out: O,
+    level: u32,
+    data: &mut dyn Read,
+    crc: &mut flate2::Crc,
+) -> io::Result<(O, u64)> {
+    let mut enc = flate2::write::DeflateEncoder::new(out, flate2::Compression::new(level));
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut len = 0u64;
+    loop {
+        let n = data.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        crc.update(&buf[..n]);
+        len += n as u64;
+        enc.write_all(&buf[..n])?;
+    }
+    Ok((enc.finish()?, len))
+}
+
 impl<W: Write> ZipStream<W> {
     fn local_header(&mut self, m: &Member, descriptor: bool) -> io::Result<()> {
-        let mut extra = timestamp_extra(m.unix_mtime);
+        let mut extra = extras(m);
         if m.local_zip64 {
             extra.extend_from_slice(&[1, 0, 16, 0]);
             extra.extend_from_slice(&[0u8; 16]);
         }
-        // With a zip64 extra the fixed size fields must read 0xFFFFFFFF.
         let (crc, csize, usize_) = match (descriptor, m.local_zip64) {
             (false, _) => (m.crc, m.compressed as u32, m.size as u32),
             (true, false) => (0, 0, 0),
             (true, true) => (0, U32_MAX as u32, U32_MAX as u32),
         };
         self.put32(LOCAL_SIG)?;
-        self.put16(if m.local_zip64 { 45 } else { 20 })?;
+        self.put16(version_needed(m, m.local_zip64))?;
         self.put16(m.flags)?;
         self.put16(m.method)?;
         self.put16(m.dos.1)?;
@@ -190,6 +225,10 @@ impl<W: Write> ZipStream<W> {
         if descriptor {
             flags |= FLAG_DESCRIPTOR;
         }
+        let aes = (self.password.is_some() && meta.kind != Kind::Dir).then(|| AesField::written(method));
+        if aes.is_some() {
+            flags |= FLAG_ENCRYPTED;
+        }
         let large = meta.size.is_none_or(|s| s >= U32_MAX);
         let mtime = meta
             .mtime
@@ -197,7 +236,8 @@ impl<W: Write> ZipStream<W> {
         Member {
             name,
             flags,
-            method,
+            method: if aes.is_some() { zipaes::METHOD } else { method },
+            aes,
             dos: dos_datetime(mtime),
             unix_mtime: unix_secs(meta.mtime),
             crc: 0,
@@ -209,16 +249,28 @@ impl<W: Write> ZipStream<W> {
         }
     }
 
-    /// Folders and links: no deflate, sizes known up front.
     fn small_member(&mut self, meta: &EntryMeta, name: Vec<u8>, body: &[u8]) -> io::Result<()> {
         let mut m = self.new_member(meta, name, METHOD_STORED, false);
         let mut crc = flate2::Crc::new();
         crc.update(body);
-        m.crc = crc.sum();
         m.size = body.len() as u64;
-        m.compressed = body.len() as u64;
+        let password = self.password.clone().filter(|_| m.aes.is_some());
+        match &password {
+            Some(_) => m.compressed = m.size + zipaes::Strength::Aes256.overhead(),
+            None => {
+                m.crc = crc.sum();
+                m.compressed = m.size;
+            }
+        }
         self.local_header(&m, false)?;
-        self.out.write_all(body)?;
+        match password {
+            Some(pw) => {
+                let mut enc = Encryptor::new(&mut self.out, &pw)?;
+                enc.write_all(body)?;
+                enc.finish()?;
+            }
+            None => self.out.write_all(body)?,
+        }
         self.members.push(m);
         Ok(())
     }
@@ -227,20 +279,21 @@ impl<W: Write> ZipStream<W> {
         let mut m = self.new_member(meta, meta.path.clone(), METHOD_DEFLATE, true);
         self.local_header(&m, true)?;
         let start = self.out.count;
-        let mut enc = flate2::write::DeflateEncoder::new(&mut self.out, flate2::Compression::new(self.level));
         let mut crc = flate2::Crc::new();
-        let mut buf = vec![0u8; 64 * 1024];
-        loop {
-            let n = data.read(&mut buf)?;
-            if n == 0 {
-                break;
+        let level = self.level;
+        m.size = match self.password.clone() {
+            Some(pw) => {
+                let enc = Encryptor::new(&mut self.out, &pw)?;
+                let (enc, len) = deflate_into(enc, level, data, &mut crc)?;
+                enc.finish()?;
+                len
             }
-            crc.update(&buf[..n]);
-            enc.write_all(&buf[..n])?;
-        }
-        enc.finish()?;
-        m.crc = crc.sum();
-        m.size = u64::from(crc.amount());
+            None => {
+                let (_, len) = deflate_into(&mut self.out, level, data, &mut crc)?;
+                m.crc = crc.sum();
+                len
+            }
+        };
         m.compressed = self.out.count - start;
         if !m.local_zip64 && (m.size >= U32_MAX || m.compressed >= U32_MAX) {
             return Err(io_invalid("file grew past 4 GiB while being compressed"));
@@ -270,7 +323,7 @@ impl<W: Write> ZipStream<W> {
                 zip64.extend_from_slice(&v.to_le_bytes());
             }
         }
-        let mut extra = timestamp_extra(m.unix_mtime);
+        let mut extra = extras(m);
         if !zip64.is_empty() {
             extra.extend_from_slice(&[1, 0]);
             extra.extend_from_slice(&(zip64.len() as u16).to_le_bytes());
@@ -279,11 +332,7 @@ impl<W: Write> ZipStream<W> {
         let clamp = |v: u64| if big(v) { U32_MAX as u32 } else { v as u32 };
         self.put32(CENTRAL_SIG)?;
         self.put16(VERSION_MADE_BY)?;
-        self.put16(if m.local_zip64 || !zip64.is_empty() {
-            45
-        } else {
-            20
-        })?;
+        self.put16(version_needed(m, m.local_zip64 || !zip64.is_empty()))?;
         self.put16(m.flags)?;
         self.put16(m.method)?;
         self.put16(m.dos.1)?;
@@ -369,7 +418,7 @@ mod tests {
 
     #[test]
     fn dos_dates_match_known_instants() {
-        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1_709_642_096); // 2024-03-05 12:34:56 UTC
+        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1_709_642_096);
         let (date, time) = dos_datetime(t);
         assert_eq!((date >> 9) + 1980, 2024);
         assert_eq!((date >> 5) & 0xF, 3);

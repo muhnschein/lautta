@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One row of the Transfers page: direction icon, title, progress and status
-// (SPEC §15.4), with a context menu for the actions that fit its state.
-// Used inside a ListView over TransfersModel (roles are in scope).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,9 +8,7 @@ import "TransferText.js" as TransferText
 ListItem {
     id: item
 
-    // Rows of the restored-at-start prompt say where they resume from.
     property bool restored
-    // One TransfersModel row (the delegate's `model`).
     property var row: ({
         transferId: 0, group: "active", kind: "copy", title: "", state: "running", waitReason: "",
         bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, itemsDone: 0, itemsTotal: 0, itemsFailed: 0,
@@ -28,6 +23,13 @@ ListItem {
     })
     readonly property var titleParts: TransferText.titleParts(r)
     readonly property bool toServer: TransferText.toServer(row.direction)
+
+    function cancelLater() {
+        var id = row.transferId
+        //% "Cancelling"
+        remorseAction(qsTrId("lautta-xfr-remorse-cancel"), function() { Transfers.cancel(id) },
+                      App.setting("remorse_seconds") * 1000)
+    }
 
     contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
     menu: Component {
@@ -45,7 +47,7 @@ ListItem {
                 onClicked: Transfers.resume(row.transferId)
             }
             MenuItem {
-                //% "Move to top of the queue"
+                //% "Move to the top of the queue"
                 text: qsTrId("lautta-xfr-menu-top")
                 visible: row.group !== "history"
                 onClicked: Transfers.moveToTop(row.transferId)
@@ -60,11 +62,7 @@ ListItem {
                 //% "Cancel"
                 text: qsTrId("lautta-xfr-menu-cancel")
                 visible: row.group !== "history"
-                onClicked: item.remorseAction(
-                    //% "Canceling"
-                    qsTrId("lautta-xfr-remorse-cancel"),
-                    function() { Transfers.cancel(row.transferId) },
-                    App.setting("remorse_seconds") * 1000)
+                onClicked: item.cancelLater()
             }
         }
     }
@@ -89,7 +87,6 @@ ListItem {
         Column {
             width: parent.width - directionIcon.width - parent.spacing
 
-            // A server the task goes to has its icon (§15.5).
             PlaceLabel {
                 width: parent.width
                 before: item.titleParts.before

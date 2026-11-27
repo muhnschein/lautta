@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The transfers area on a temporary home folder: the grouped list with
-//! questions and history, and restore at start (XFR-11).
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_transfers::{ProgressBook, TransferGroup};
@@ -49,8 +47,6 @@ fn write(path: &Path, data: &[u8]) {
     std::fs::write(path, data).unwrap();
 }
 
-/// Queues a copy of Documents/a.txt into Downloads, which already holds a
-/// different a.txt: the transfer stops with a question.
 async fn conflicting_copy(h: &Home) -> i64 {
     write(&h.root.join("Documents/a.txt"), b"new content");
     write(&h.root.join("Downloads/a.txt"), b"old");
@@ -87,15 +83,13 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(rows[0].direction.name(), "local");
     assert_eq!(rows[0].kind_name(), "copy");
     assert_eq!(rows[0].summary.title, "a.txt");
-    assert!(
-        rows[0].dest_address.starts_with("file://"),
-        "{}",
-        rows[0].dest_address
-    );
+    assert_eq!(rows[0].dest_address, "Downloads");
 
     let questions = h.core.question_list(id).unwrap();
     assert_eq!(questions.len(), 1);
     assert_eq!(questions[0]["name"], "a.txt");
+    assert_eq!(questions[0]["kind"], "copy");
+    assert_eq!(questions[0]["open"], 1);
     assert_eq!(questions[0]["src_size"], 11);
     assert_eq!(questions[0]["dst_size"], 3);
 
@@ -123,11 +117,96 @@ async fn the_list_groups_questions_and_history() {
 }
 
 #[tokio::test]
+async fn a_task_names_the_folder_it_copies_to() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"a");
+    std::fs::create_dir_all(h.root.join("Downloads/Inbox")).unwrap();
+    for dest in ["lautta://user-downloads/Inbox", "lautta://user-downloads/"] {
+        let started = h
+            .core
+            .copy_or_move(
+                OperationKind::Copy,
+                vec![uri("lautta://user-documents/a.txt")],
+                uri(dest),
+            )
+            .await
+            .unwrap();
+        let Started::Transfer(id) = started else {
+            panic!("small copies start at once")
+        };
+        h.core
+            .engine
+            .wait_for(id, |s| s.state.is_finished())
+            .await
+            .unwrap();
+    }
+    let mut names: Vec<String> = h
+        .core
+        .transfer_rows(&ProgressBook::default())
+        .into_iter()
+        .map(|r| r.dest_name)
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Downloads", "Inbox"]);
+}
+
+#[tokio::test]
+async fn questions_carry_what_the_conflict_screen_shows() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"new");
+    write(&h.root.join("Documents/b.jpg"), b"new");
+    write(&h.root.join("Downloads/a.txt"), b"old");
+    write(&h.root.join("Downloads/b.jpg"), b"old");
+    let Started::Transfer(id) = h
+        .core
+        .copy_or_move(
+            OperationKind::Move,
+            vec![
+                uri("lautta://user-documents/a.txt"),
+                uri("lautta://user-documents/b.jpg"),
+            ],
+            uri("lautta://user-downloads/"),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("small moves start at once")
+    };
+    let core = h.core.clone();
+    h.core
+        .engine
+        .wait_for(id, move |_| core.engine.questions(id).is_ok_and(|q| q.len() == 2))
+        .await
+        .unwrap();
+
+    let questions = h.core.question_list(id).unwrap();
+    let image = questions
+        .iter()
+        .find(|q| q["name"] == "b.jpg")
+        .expect("b.jpg is asked about");
+    assert_eq!(image["kind"], "move");
+    assert_eq!(image["open"], 2);
+    assert_eq!(image["source"], "lautta://user-documents/b.jpg");
+    assert_eq!(image["destination"], "lautta://user-downloads/b.jpg");
+    assert_eq!(image["source_look"]["category"], "image");
+    let src = image["source_look"]["thumbnailSource"].as_str().unwrap();
+    let dst = image["destination_look"]["thumbnailSource"].as_str().unwrap();
+    assert!(
+        src.starts_with("file://") && src.ends_with("/Documents/b.jpg"),
+        "{src}"
+    );
+    assert!(
+        dst.starts_with("file://") && dst.ends_with("/Downloads/b.jpg"),
+        "{dst}"
+    );
+}
+
+#[tokio::test]
 async fn unfinished_transfers_come_back_paused_or_resumed() {
     let h = home().await;
     let id = conflicting_copy(&h).await;
     h.core.engine.flush().await;
-    assert_eq!(h.core.pending_at_close(), 1, "XFR-6 counts unfinished work");
+    assert_eq!(h.core.pending_at_close(), 1, "counts unfinished work");
 
     let second = open(&h.paths, &h.root).await;
     let report = second.start_transfers(false).await.unwrap();
@@ -144,11 +223,4 @@ async fn unfinished_transfers_come_back_paused_or_resumed() {
         .wait_for(id, |s| s.state == TransferState::Waiting(WaitReason::Question))
         .await
         .unwrap();
-}
-
-#[tokio::test]
-async fn standalone_mode_counts_as_bridge_reachable() {
-    let h = home().await;
-    assert!(h.core.bridge.is_none());
-    assert!(h.core.bridge_reachable(), "no bridge: nothing to wait for");
 }

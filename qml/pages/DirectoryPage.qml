@@ -1,22 +1,48 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A folder (SPEC §9, §15.3; boards Directory, DirectoryPulley,
-// DirectoryContext, DirectorySelect, DirectoryGrid, DirectoryLandscape and
-// the State* boards). All of it lives in components/directory/DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Lautta 1.0
 import "../components/directory"
+import "../components/directory/PathNav.js" as PathNav
 
 Page {
     id: page
 
     property string uri
-    // Shown once: later activations are a return to the folder.
     property bool shown
+    readonly property string coverKind: view.gridMode ? "grid" : "list"
+    readonly property string coverTitle: App.nameOf(uri)
+    readonly property var coverModel: view.model
+    readonly property var trail: view.trail
+
+    function pagesBelow() {
+        var pages = []
+        pageStack.find(function (candidate) {
+            pages.push(candidate)
+            return false
+        })
+        return pages
+    }
+
+    function goTo(target) {
+        var pages = pagesBelow()
+        var step = PathNav.plan(pages.map(function (candidate) { return candidate.trail || [] }), target)
+        if (step.pop !== undefined)
+            pageStack.pop(pages[step.pop])
+        else
+            pageStack.replaceAbove(pages[step.replace + 1] || null, Qt.resolvedUrl("DirectoryPage.qml"), { "uri": target })
+    }
+
+    function goHome() {
+        var pages = pagesBelow()
+        pageStack.pop(pages[pages.length - 1])
+    }
 
     allowedOrientations: Orientation.All
 
-    // Coming back to a folder (from a subfolder, a viewer or another app)
-    // lists it again when nothing watches it (BRW-11); there is no Refresh.
+    Component.onCompleted: Operations.holdArchive(uri)
+    Component.onDestruction: Operations.releaseArchive(uri)
+
     onStatusChanged: {
         if (status !== PageStatus.Active)
             return
@@ -39,5 +65,7 @@ Page {
         anchors.fill: parent
         uri: page.uri
         onOpenFolder: pageStack.push(Qt.resolvedUrl("DirectoryPage.qml"), { "uri": uri })
+        onAncestorPicked: page.goTo(uri)
+        onHomePicked: page.goHome()
     }
 }

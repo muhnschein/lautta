@@ -6,7 +6,6 @@ use std::time::Duration;
 
 struct Env {
     root: tempfile::TempDir,
-    /// The root of a location ("Documents").
     loc: PathBuf,
     trash: Trash,
 }
@@ -19,7 +18,6 @@ fn env() -> Env {
     Env { root, loc, trash }
 }
 
-/// The same setup twice: renames work, and as in the sandbox.
 fn both() -> [Env; 2] {
     let plain = env();
     let mut sandboxed = env();
@@ -28,8 +26,6 @@ fn both() -> [Env; 2] {
 }
 
 impl Trash {
-    /// As in the sandbox (§3.3): every rename between two folders fails
-    /// with `EXDEV`, as between two mounts.
     fn across_mounts(self) -> Trash {
         Trash {
             rename: |_, _| Err(Error::kind(ErrorKind::CrossesDevice)),
@@ -50,7 +46,6 @@ impl Env {
         self.trash.trash(path, &uri(name))
     }
 
-    /// The same trash as it works in the sandbox.
     fn sandboxed(&self) -> Trash {
         self.trash.clone().across_mounts()
     }
@@ -59,8 +54,6 @@ impl Env {
         |u: &Uri| Some(self.loc.join(OsStr::from_bytes(u.path.as_bytes())))
     }
 
-    /// A row as the bin-keeping builds (schemas 4 to 6) wrote it: it names
-    /// a bin in a location, though the code does not use that column now.
     fn row_with_a_bin(&self, stored: &str, name: &str) -> i64 {
         let conn = self.trash.db.lock();
         conn.execute(
@@ -106,7 +99,6 @@ fn is_root() -> bool {
     sys::effective_ids().0 == 0
 }
 
-/// A folder tree with what a move must keep: content, modes, times, links.
 fn project(dir: &Path) -> SystemTime {
     std::fs::create_dir_all(dir.join("sub")).unwrap();
     std::fs::write(dir.join("sub/f"), "content").unwrap();
@@ -121,7 +113,6 @@ fn project(dir: &Path) -> SystemTime {
     when
 }
 
-/// What [`project`] made, checked at `dir`.
 fn assert_project(dir: &Path, when: SystemTime) {
     assert_eq!(std::fs::read(dir.join("sub/f")).unwrap(), b"content");
     assert_eq!(std::fs::read(dir.join("one")).unwrap(), b"123");
@@ -137,7 +128,6 @@ fn assert_project(dir: &Path, when: SystemTime) {
     assert_eq!(std::fs::read_link(dir.join("link")).unwrap(), Path::new("sub/f"));
 }
 
-/// A named pipe: a kind of file that is not copied.
 fn fifo(path: &Path) {
     rustix::fs::mknodat(
         rustix::fs::CWD,
@@ -149,13 +139,10 @@ fn fifo(path: &Path) {
     .unwrap();
 }
 
-/// A temp folder on another file system than `near`, if the host has one.
 fn other_device(near: &Path) -> Option<tempfile::TempDir> {
     let dir = tempfile::tempdir_in("/dev/shm").ok()?;
     (!sys::same_device(dir.path(), near).unwrap_or(true)).then_some(dir)
 }
-
-// ------------------------------------------------------------ trashing
 
 #[test]
 fn trashing_moves_the_item_into_the_trash_folder() {
@@ -172,7 +159,7 @@ fn trashing_moves_the_item_into_the_trash_folder() {
     assert!((now_secs() - item.trashed_at).abs() < 60);
     assert_eq!(e.trash.list().unwrap(), vec![item.clone()]);
     assert_eq!(e.trash.get(item.id).unwrap(), item);
-    assert_eq!(mode(e.trash.dir()), 0o700, "the trash folder is private (SEC-5)");
+    assert_eq!(mode(e.trash.dir()), 0o700, "the trash folder is private");
     assert_eq!(
         names(&e.loc),
         Vec::<String>::new(),
@@ -240,12 +227,10 @@ fn a_failed_copy_leaves_the_original_and_no_partial_copy() {
 #[test]
 fn an_item_that_could_not_be_removed_after_the_copy_is_not_copied() {
     if is_root() {
-        // Root may remove anything: nothing to refuse.
         return;
     }
     let e = env();
     let trash = e.sandboxed();
-    // A read-only folder with something in it: its content can't be removed.
     let d = e.loc.join("d");
     std::fs::create_dir_all(d.join("ro")).unwrap();
     std::fs::write(d.join("ro/f"), "x").unwrap();
@@ -254,14 +239,12 @@ fn an_item_that_could_not_be_removed_after_the_copy_is_not_copied() {
     assert_eq!(err.kind, ErrorKind::PermissionDenied);
     assert_eq!(std::fs::read(d.join("ro/f")).unwrap(), b"x");
     assert_eq!(count(trash.dir()), 0);
-    // A file in a read-only folder: the file can't be removed.
     let f = d.join("ro/f");
     assert_eq!(
         trash.trash(&f, &uri("d/ro/f")).unwrap_err().kind,
         ErrorKind::PermissionDenied
     );
     assert!(f.exists());
-    // An empty read-only folder can go.
     std::fs::create_dir(d.join("empty")).unwrap();
     std::fs::set_permissions(d.join("empty"), std::fs::Permissions::from_mode(0o555)).unwrap();
     trash.trash(&d.join("empty"), &uri("d/empty")).unwrap();
@@ -373,8 +356,6 @@ fn unreadable_rows_are_skipped_in_the_listing() {
     assert_eq!(e.trash.list().unwrap().len(), 1);
 }
 
-// ------------------------------------------------------------ restore
-
 #[test]
 fn restore_puts_the_item_back() {
     let e = env();
@@ -463,12 +444,8 @@ fn restore_of_a_vanished_item_drops_the_stale_row() {
 
 #[test]
 fn restore_across_real_mounts() {
-    // Sailjail: the app data folder and ~/Documents are different mounts,
-    // so a rename between them fails with EXDEV (tests/sandbox.rs too).
     let e = env();
-    let Some(shm) = other_device(&e.loc) else {
-        return;
-    };
+    let shm = other_device(&e.loc).expect("host tests need /dev/shm on its own device");
     let trash = Trash::new(shm.path().join("trash"), e.trash.db.clone());
     let d = e.loc.join("Project");
     let when = project(&d);
@@ -479,8 +456,6 @@ fn restore_across_real_mounts() {
     assert_project(&d, when);
     assert_eq!(count(trash.dir()), 0);
 }
-
-// ------------------------------------------------------------ delete, empty, purge
 
 #[test]
 fn delete_removes_content_and_row() {
@@ -571,7 +546,7 @@ fn purge_removes_only_expired_items() {
     let old = e.trash(&e.put("old", "x"), "old").unwrap();
     let old2 = e.sandboxed().trash(&e.put("old2", "x"), &uri("old2")).unwrap();
     let borderline = e.trash(&e.put("borderline", "x"), "borderline").unwrap();
-    e.trash(&e.put("fresh", "x"), "fresh").unwrap();
+    let fresh = e.trash(&e.put("fresh", "x"), "fresh").unwrap();
     for id in [old.id, old2.id] {
         age(&e, id, 31);
     }
@@ -591,11 +566,11 @@ fn purge_removes_only_expired_items() {
     assert!(borderline.stored_path().exists());
     assert_eq!(e.trash.purge_older_than(7).unwrap(), 1);
     assert_eq!(
-        e.trash.purge_older_than(0).unwrap(),
+        e.trash.purge_before(fresh.trashed_at).unwrap(),
         0,
-        "items from this second are not older"
+        "an item from the cutoff second is not older"
     );
-    assert_eq!(e.trash.purge_before(now_secs() + 10).unwrap(), 1);
+    assert_eq!(e.trash.purge_before(fresh.trashed_at + 1).unwrap(), 1);
 }
 
 #[test]
@@ -609,8 +584,6 @@ fn total_size_adds_up() {
     e.sandboxed().trash(&d, &uri("d")).unwrap();
     assert_eq!(e.trash.total_size().unwrap(), 10);
 }
-
-// ------------------------------------------------------------ strays and old rows
 
 #[test]
 fn tidy_removes_half_made_copies_only() {
@@ -635,8 +608,6 @@ fn tidy_of_a_trash_folder_that_does_not_exist_is_fine() {
 
 #[test]
 fn a_row_that_names_a_bin_is_an_item_of_the_trash_folder() {
-    // Nothing moves such an item into the trash folder any more: its row
-    // lists as one of the trash folder and finds nothing there.
     let e = env();
     let id = e.row_with_a_bin("s-old", "old");
     let item = e.trash.get(id).unwrap();

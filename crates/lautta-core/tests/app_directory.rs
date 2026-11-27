@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The directory area's core actions on a temporary home folder: streaming
-//! listings with the cache, path steps, address editing and completion.
 
 use lautta_core::app::Core;
 use lautta_core::app_directory::{ListEvent, PathStep};
@@ -74,7 +72,6 @@ async fn streams_batches_then_done_and_fills_the_cache() {
         .collect();
     assert_eq!(names(&fresh), ["Uni", "a.txt"]);
 
-    // The second listing shows the cache first, then the fresh batches.
     std::fs::write(h.root.join("Documents/b.txt"), b"b").unwrap();
     let ev = events(&h.core, &dir, true).await;
     match &ev[0] {
@@ -125,116 +122,6 @@ async fn path_steps_start_at_the_location() {
     );
     let root: Vec<PathStep> = h.core.path_steps(&uri("lautta://user-documents/"));
     assert_eq!(root.len(), 1);
-}
-
-#[tokio::test]
-async fn edit_address_is_home_relative_for_local_folders() {
-    let h = home().await;
-    assert_eq!(
-        h.core.edit_address(&uri("lautta://user-documents/Uni")),
-        "~/Documents/Uni"
-    );
-    assert_eq!(
-        h.core.edit_address(&uri("lautta://user-documents/")),
-        "~/Documents"
-    );
-}
-
-#[tokio::test]
-async fn typed_addresses_resolve() {
-    let h = home().await;
-    let base = uri("lautta://user-documents/");
-    let uni = uri("lautta://user-documents/Uni");
-    assert_eq!(
-        h.core.resolve_address("~/Documents/Uni", &base),
-        Some(uni.clone())
-    );
-    assert_eq!(
-        h.core.resolve_address("  ~/Documents/Uni/ ", &base),
-        Some(uni.clone())
-    );
-    let abs = format!("{}/Documents/Uni", h.root.display());
-    assert_eq!(h.core.resolve_address(&abs, &base), Some(uni.clone()));
-    assert_eq!(
-        h.core.resolve_address(&format!("file://{abs}"), &base),
-        Some(uni.clone())
-    );
-    assert_eq!(
-        h.core.resolve_address("lautta://user-documents/Uni", &base),
-        Some(uni)
-    );
-    assert_eq!(
-        h.core.resolve_address("~", &base),
-        None,
-        "the home folder itself is no location"
-    );
-    assert_eq!(h.core.resolve_address("/nowhere/at/all", &base), None);
-    assert_eq!(
-        h.core.resolve_address("Uni", &base),
-        None,
-        "relative text is not an address"
-    );
-    assert_eq!(
-        h.core.resolve_address("~/Documents/../Downloads", &base),
-        Some(uri("lautta://user-downloads/"))
-    );
-}
-
-#[tokio::test]
-async fn remote_addresses_are_paths_inside_the_location() {
-    use lautta_core::provider::memory::MemoryProvider;
-    use std::sync::Arc;
-    let h = home().await;
-    let loc = lautta_core::locations::Location::remote(
-        "nv-nas",
-        lautta_core::locations::LocationKind::AdHoc,
-        "NAS",
-        Some("sftp://nas.home".to_owned()),
-    );
-    h.core.locations.register(
-        loc,
-        Arc::new(MemoryProvider::new(lautta_core::entry::Capabilities::with(&[
-            cap::WRITE,
-        ]))),
-    );
-    let base = uri("lautta://nv-nas/srv");
-    assert_eq!(
-        h.core.resolve_address("/srv/photos", &base),
-        Some(uri("lautta://nv-nas/srv/photos"))
-    );
-    assert_eq!(
-        h.core.edit_address(&uri("lautta://nv-nas/srv/photos")),
-        "/srv/photos"
-    );
-    assert_eq!(h.core.edit_address(&uri("lautta://nv-nas/")), "/");
-}
-
-#[tokio::test]
-async fn completion_comes_from_cached_listings() {
-    let h = home().await;
-    let base = uri("lautta://user-documents/");
-    for d in ["Thesis", "Theory notes", "Other"] {
-        std::fs::create_dir_all(h.root.join("Documents/Uni").join(d)).unwrap();
-    }
-    std::fs::write(h.root.join("Documents/Uni/Thesis.txt"), b"x").unwrap();
-    let uni = uri("lautta://user-documents/Uni");
-    assert!(
-        h.core.complete_address("~/Documents/Uni/The", &base).is_empty(),
-        "nothing cached yet"
-    );
-    events(&h.core, &uni, true).await;
-    let found = h.core.complete_address("~/Documents/Uni/the", &base);
-    let found: Vec<String> = found.iter().map(|u| u.to_string()).collect();
-    assert_eq!(
-        found,
-        [
-            "lautta://user-documents/Uni/Theory%20notes",
-            "lautta://user-documents/Uni/Thesis"
-        ],
-        "folders only, case-insensitive, sorted"
-    );
-    assert_eq!(h.core.complete_address("~/Documents/Uni/", &base).len(), 3);
-    assert!(h.core.complete_address("no slash", &base).is_empty());
 }
 
 #[tokio::test]
@@ -296,7 +183,9 @@ async fn a_server_folder_is_not_counted() {
     let h = home().await;
     let loc = lautta_core::locations::Location::remote(
         "nv-nas",
-        lautta_core::locations::LocationKind::AdHoc,
+        lautta_core::locations::LocationKind::Server {
+            provider: "sftp".into(),
+        },
         "NAS",
         Some("sftp://nas.home".to_owned()),
     );
@@ -349,4 +238,67 @@ async fn capabilities_and_picker_locations() {
 fn file_urls_escape_what_breaks_urls() {
     let u = lautta_core::app_directory::file_url(std::path::Path::new("/home/a b/c#d%e?.png"));
     assert_eq!(u, "file:///home/a%20b/c%23d%25e%3F.png");
+}
+
+fn batch(names: &[&str]) -> ListEvent {
+    ListEvent::Batch(
+        names
+            .iter()
+            .map(|n| lautta_core::entry::Entry::new(n.as_bytes(), lautta_core::entry::Kind::File))
+            .collect(),
+    )
+}
+
+fn shape(ev: &ListEvent) -> String {
+    match ev {
+        ListEvent::Cached { entries, .. } => format!("cached {}", entries.len()),
+        ListEvent::Batch(b) => format!("batch {}", names(b).join(",")),
+        ListEvent::Done(r) => format!("done {}", r.is_ok()),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn coalesced_batches_reach_the_view_at_most_once_per_window() {
+    use lautta_core::app_directory::forward_coalesced;
+    use std::time::Duration;
+    let (tx, rx) = unbounded_channel();
+    let (out_tx, mut out) = unbounded_channel();
+    let every = Duration::from_millis(100);
+    let forward = tokio::spawn(forward_coalesced(rx, every, move |ev| {
+        let _ = out_tx.send((tokio::time::Instant::now(), shape(&ev)));
+    }));
+    let start = tokio::time::Instant::now();
+    tx.send(ListEvent::Cached {
+        entries: Vec::new(),
+        fetched_ms: 0,
+    })
+    .unwrap();
+    tx.send(batch(&["a"])).unwrap();
+    tx.send(batch(&["b"])).unwrap();
+    tx.send(batch(&["c"])).unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    tx.send(batch(&["x"])).unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    tx.send(batch(&["d"])).unwrap();
+    tx.send(batch(&["e"])).unwrap();
+    tx.send(ListEvent::Done(Ok(()))).unwrap();
+    drop(tx);
+    forward.await.unwrap();
+    let mut got = Vec::new();
+    while let Some((at, s)) = out.recv().await {
+        got.push(((at - start).as_millis(), s));
+    }
+    assert_eq!(
+        got,
+        [
+            (0, "cached 0".to_owned()),
+            (0, "batch a".to_owned()),
+            (100, "batch b,c".to_owned()),
+            (200, "batch x".to_owned()),
+            (300, "batch d".to_owned()),
+            (300, "batch e".to_owned()),
+            (300, "done true".to_owned()),
+        ],
+        "first batch at once, then one per window; Done flushes what is held"
+    );
 }

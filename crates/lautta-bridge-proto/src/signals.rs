@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Typed signals of the bridge. Consumers read them from one ordered stream
-//! (`Connection::signals`), because per-signal proxy streams may be observed
-//! out of order relative to each other (`ListBatch` before `ListDone`).
 
 use crate::errors::BridgeError;
-use crate::wire::{WireEntry, WireNearby, WireWalkItem, INTERFACE};
+use crate::wire::{WireCheckResult, WireEntry, WireNearby, WireWalkItem, INTERFACE};
 use std::collections::HashMap;
 use zbus::message::Type as MessageType;
 use zbus::zvariant::OwnedValue;
@@ -39,13 +36,12 @@ pub enum Signal {
         message: String,
         extra: HashMap<String, OwnedValue>,
     },
-    Question {
-        id: String,
-        kind: String,
-        details: HashMap<String, OwnedValue>,
-    },
-    /// `ListDrives` lists something else now (XB-20).
     DrivesChanged,
+    CheckBatch {
+        job: u32,
+        results: Vec<WireCheckResult>,
+    },
+    NetworkChanged(String),
 }
 
 fn body<T>(msg: &Message) -> Result<T, BridgeError>
@@ -57,9 +53,6 @@ where
         .map_err(|e| BridgeError::Protocol(e.to_string()))
 }
 
-/// Decodes a message into a [`Signal`]. `Ok(None)` for messages that are not
-/// signals of `org.netvfs.Bridge1` (and for signals this client does not
-/// know, which are ignored).
 pub fn decode_signal(msg: &Message) -> Result<Option<Signal>, BridgeError> {
     let header = msg.header();
     if header.primary().msg_type() != MessageType::Signal {
@@ -105,11 +98,12 @@ fn decode_member(member: &str, msg: &Message) -> Result<Option<Signal>, BridgeEr
                 extra,
             }
         }
-        "Question" => {
-            let (id, kind, details) = body::<(String, String, HashMap<String, OwnedValue>)>(msg)?;
-            Signal::Question { id, kind, details }
-        }
         "DrivesChanged" => Signal::DrivesChanged,
+        "CheckBatch" => {
+            let (job, results) = body::<(u32, Vec<WireCheckResult>)>(msg)?;
+            Signal::CheckBatch { job, results }
+        }
+        "NetworkChanged" => Signal::NetworkChanged(body::<(String,)>(msg)?.0),
         _ => return Ok(None),
     }))
 }

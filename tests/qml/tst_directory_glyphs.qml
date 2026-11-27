@@ -1,16 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The app's own file-type glyphs on the target (real Silica, UI-2): list rows
-// and grid tiles draw qml/icons/file-<kind>-<set>.svg, the set picked for the
-// glyph's pixel size, a grid glyph at a multiple of 28 px; a glyph takes the
-// highlight colour with its name, pressed or selected. A video's thumbnail,
-// once shown, keeps the video glyph at the size and place of the plain one in
-// the same view, light on a dark disc; a plain glyph, a thumbnail that failed
-// and an image's thumbnail have no disc. Fails when a glyph is a theme icon
-// or does not load, a size gets another set, a glyph keeps its colour in a
-// highlighted row, or the video glyph moves, resizes or loses its disc over a
-// thumbnail. How sharp the glyphs look, how the disc reads on real videos and
-// that the glyph is light in a light ambience (the test ambience's primary
-// colour is light already), only a phone shows.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,14 +8,13 @@ import "../../qml/components/FileIcons.js" as FileIcons
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/GlyphsCheck/"
     property string archiveRoot
-    // The thumbnail the app draws for a stand-in video (checkBadge).
     property string thumb
-    // The glyph each item's category shows, as drawn on the board.
     readonly property var kindOf: ({
-        "folder": "folder", "markdown": "document", "archive": "archive", "video": "video",
+        "folder": "folder", "markdown": "markdown", "archive": "archive", "video": "video",
         "package": "package", "database": "database"
     })
 
@@ -40,7 +27,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -54,14 +41,12 @@ ApplicationWindow {
         return expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
         return expect(done(), "timed out waiting for " + what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         out = out || []
         seen = seen || []
@@ -82,7 +67,6 @@ ApplicationWindow {
         return findAll(item, function (x) { return x.objectName === name })[0]
     }
 
-    // The set whose strokes land on whole pixels at `side` px, as drawn.
     function setAt(side) {
         if (side % 28 === 0)
             return 28
@@ -92,11 +76,9 @@ ApplicationWindow {
     }
 
     function svg(kind, set) {
-        return String(Qt.resolvedUrl("../../qml/icons/file-" + kind + "-" + set + ".svg"))
+        return FileIcons.source("file-" + kind + "-" + set, Theme.pixelRatio)
     }
 
-    // The FileIcon of each item on screen, by name. Laid out by hand:
-    // headless, no render loop polishes the view.
     function icons(view) {
         view.flickable.forceLayout()
         var out = {}
@@ -112,7 +94,6 @@ ApplicationWindow {
         return out
     }
 
-    // Every item's glyph is its kind's SVG of `set`, loaded and shown, no badge.
     function checkGlyphs(view, set, what) {
         var shown = icons(view)
         var names = Object.keys(shown)
@@ -127,21 +108,17 @@ ApplicationWindow {
         return shown
     }
 
-    // The glyph of item `name` takes the highlight colour while the item is
-    // selected or pressed (`press` sets its row's or cell's highlighted).
     function checkHighlight(view, name, press, what) {
         var glyph = named(icons(view)[name], "fileGlyph")
         expect(!glyph.highlighted, what + ": not highlighted at rest")
         view.startSelection()
         view.model.toggle(base + name)
-        tools.pump(200)
-        glyph = named(icons(view)[name], "fileGlyph")
-        expect(glyph.highlighted && String(glyph.highlightColor) === String(Theme.highlightColor),
-               what + ": a selected item's glyph is highlighted, as its name")
+        waitFor(function () { glyph = named(icons(view)[name], "fileGlyph"); return glyph.highlighted },
+                what + ": a selected item's glyph highlighted")
+        expect(String(glyph.highlightColor) === String(Theme.highlightColor), what + ": in the highlight colour, as its name")
         view.endSelection()
-        tools.pump(200)
-        glyph = named(icons(view)[name], "fileGlyph")
-        expect(!glyph.highlighted, what + ": not highlighted once deselected")
+        waitFor(function () { glyph = named(icons(view)[name], "fileGlyph"); return !glyph.highlighted },
+                what + ": no highlight once deselected")
         press(glyph)
         expect(glyph.highlighted, what + ": a pressed item's glyph is highlighted")
     }
@@ -178,15 +155,12 @@ ApplicationWindow {
         }, "grid")
     }
 
-    // The video glyph's side and centre in its FileIcon.
     function glyphBox(icon) {
         var glyph = named(icon, "fileGlyph")
         var centre = glyph.mapToItem(icon, glyph.width / 2, glyph.height / 2)
         return [glyph.width, glyph.height, centre.x, centre.y]
     }
 
-    // A video FileIcon given a thumbnail, of the side and glyph side of
-    // `plain`, the item the view shows without one.
     function overThumbnail(plain) {
         var props = { "category": "video", "thumbnailSource": window.thumb, "size": plain.width,
                       "glyphSize": plain.glyphSize }
@@ -195,9 +169,6 @@ ApplicationWindow {
         return icon
     }
 
-    // A shown video thumbnail keeps the plain glyph's size and centre, on a
-    // dark disc round the glyph's ring; it takes the light colour, both a
-    // little translucent.
     function checkOver(plain, what) {
         var icon = overThumbnail(plain)
         var glyph = named(icon, "fileGlyph")
@@ -221,11 +192,8 @@ ApplicationWindow {
         icon.destroy()
     }
 
-    // FileIcons on their own, given a thumbnail the app draws: the page of a
-    // PDF in an archive, which stands in for a server. The system thumbnailer
-    // draws nothing on the target.
     function checkBadge() {
-        Operations.compress(JSON.stringify([base + "Sub/page.pdf"]), "lautta://user-documents/", "glyphs-check", "zip")
+        Operations.compress(JSON.stringify([base + "Sub/page.pdf"]), "lautta://user-documents/", "glyphs-check", "zip", "")
         if (!waitFor(function () { return window.archiveRoot.length > 0 }, "the archive"))
             return
         var root = window.archiveRoot.charAt(window.archiveRoot.length - 1) === "/" ? window.archiveRoot : window.archiveRoot + "/"
@@ -289,6 +257,7 @@ ApplicationWindow {
         }
         App.setSetting("view_mode", JSON.stringify("list"))
         App.setSetting("thumbnails_local", JSON.stringify(true))
+        reachedEnd = true
     }
 
     Component {

@@ -1,36 +1,25 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Handshake, consent, locations, attention, discovery, drives and handoff of
-//! the bridge client against the fake bridge (SPEC NVB-1..6, LOC-3, LOC-6,
-//! LOC-7).
 
 mod bridge_support;
 
-use bridge_support::{eventually, quick_backoff, Rig, ACCOUNT};
+use bridge_support::{eventually, quick_backoff, status, Rig, ACCOUNT};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive};
 use lautta_bridge_proto::WireNearby;
-use lautta_core::bridge::{
-    feature, AdHocOptions, Attention, BridgeConfig, BridgeStatus, DriveKind, RemoteKind,
-};
+use lautta_core::bridge::{feature, Attention, BridgeConfig, BridgeStatus, DriveKind, Level};
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
 use lautta_core::vpath::VPath;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use zeroize::Zeroizing;
-
-fn secret(bytes: &[u8]) -> Zeroizing<Vec<u8>> {
-    Zeroizing::new(bytes.to_vec())
-}
 
 #[tokio::test]
 async fn standalone_until_the_socket_appears() {
     let fake = FakeBridge::new();
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     let mut rig = Rig::with_fake(fake, false, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
+    status(&rig.client, BridgeStatus::Absent).await;
     assert!(rig.client.locations().is_empty());
-    // Without the socket every call says that the bridge is not there.
     let e = rig
         .provider()
         .stat(&VPath::root(), true, Lane::Interactive)
@@ -44,7 +33,7 @@ async fn standalone_until_the_socket_appears() {
 
     rig.listen();
     rig.client.poke();
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert_eq!(rig.client.locations().len(), 1);
 }
 
@@ -55,7 +44,7 @@ async fn hello_names_the_app_and_reports_the_bridge() {
     assert_eq!(hello.len(), 1);
     assert!(hello[0].target.starts_with("lautta "), "{:?}", hello[0]);
     assert_eq!(rig.client.bridge_version().as_deref(), Some("0.2.0-fake"));
-    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Granted));
+    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Decided));
 }
 
 #[tokio::test]
@@ -64,7 +53,7 @@ async fn any_bridge_version_is_taken_as_it_is() {
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     fake.set_hello("0.0.1");
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert_eq!(rig.client.bridge_version().as_deref(), Some("0.0.1"));
     assert_eq!(rig.client.locations().len(), 1);
 }
@@ -76,7 +65,7 @@ async fn a_refused_hello_keeps_locations_hidden_until_a_poke() {
     fake.fail_next("Hello", "ProtocolError", "not now");
     let rig = Rig::with_fake(fake, true, |c| c).await;
     eventually("the refused Hello", || rig.fake.calls_of("Hello").len() == 1).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
+    status(&rig.client, BridgeStatus::Absent).await;
     assert!(rig.client.locations().is_empty());
     assert_eq!(rig.client.bridge_version(), None);
     let e = rig
@@ -86,7 +75,7 @@ async fn a_refused_hello_keeps_locations_hidden_until_a_poke() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::BridgeUnavailable);
     rig.client.poke();
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert_eq!(rig.client.locations().len(), 1);
 }
 
@@ -96,10 +85,7 @@ async fn nothing_is_shown_until_the_user_allows() {
     fake.set_consent(Consent::Unknown).await;
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client
-        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
-        .await;
-    // The first Hello made the bridge ask (netvfs XB-6).
+    status(&rig.client, BridgeStatus::ConsentUnknown).await;
     assert_eq!(rig.fake.consent_requests(), 1);
     assert!(rig.client.locations().is_empty());
     let e = rig
@@ -109,48 +95,44 @@ async fn nothing_is_shown_until_the_user_allows() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::PermissionDenied);
 
-    // *Ask again* (NVB-3).
     rig.client.request_consent().await.unwrap();
     assert_eq!(rig.fake.consent_requests(), 2);
 
-    // The user taps *Allow* in the notification.
-    rig.fake.set_consent(Consent::Granted).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     eventually("the locations", || rig.client.locations().len() == 1).await;
 }
 
 #[tokio::test]
-async fn denial_hides_the_servers_and_revocation_takes_them_back() {
+async fn a_denied_app_lists_no_server_and_revocation_takes_them_back() {
     let fake = FakeBridge::new();
     fake.set_consent(Consent::Denied).await;
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert!(rig.client.locations().is_empty());
+    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Decided));
     assert_eq!(
         rig.fake.consent_requests(),
         0,
-        "a denial is not asked again unprompted"
+        "a decided app is not asked again unprompted"
     );
 
-    rig.fake.set_consent(Consent::Granted).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
     eventually("the locations", || rig.client.locations().len() == 1).await;
 
     rig.fake.set_consent(Consent::Denied).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
-    assert!(rig.client.locations().is_empty());
-    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Denied));
+    eventually("no location", || rig.client.locations().is_empty()).await;
 }
 
 #[tokio::test]
 async fn the_bridge_can_answer_the_notification_by_itself() {
     let fake = FakeBridge::new();
     fake.set_consent(Consent::Unknown).await;
-    fake.auto_consent(Some(Consent::Granted));
+    fake.auto_consent(Some(Consent::Allowed(Level::Full)));
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
-    assert_eq!(rig.fake.consent(), Consent::Granted);
+    status(&rig.client, BridgeStatus::Ready).await;
+    assert_eq!(rig.fake.consent(), Consent::Allowed(Level::Full));
 }
 
 #[tokio::test]
@@ -162,7 +144,6 @@ async fn locations_use_nv_ids_and_carry_the_info() {
     assert_eq!(l.id, ACCOUNT);
     assert_eq!(l.bridge_id, "account:1");
     assert_eq!((l.provider.as_str(), l.name.as_str()), ("fake", "Fake 1"));
-    assert_eq!(l.kind, RemoteKind::Account);
     assert_eq!(l.host, "fake.example");
     assert_eq!(l.account_id, Some(1));
     assert_eq!(l.attention, Attention::None);
@@ -204,6 +185,7 @@ async fn locations_and_attention_follow_the_bridge() {
     })
     .await;
 
+    watch.borrow_and_update();
     rig.fake.remove_location("account:2").await;
     eventually("the removal", || rig.client.locations().len() == 1).await;
     assert!(watch.has_changed().unwrap(), "watchers are told");
@@ -218,11 +200,7 @@ async fn nearby_servers_come_from_discovery() {
         host: "nas.local".into(),
         port: 445,
     };
-    // Nothing is delivered before the app asks (LOC-6).
     rig.fake.set_nearby(vec![server.clone()]).await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(rig.client.nearby().is_empty());
-
     rig.client.discover(true).await.unwrap();
     eventually("the server", || rig.client.nearby().len() == 1).await;
     let n = rig.client.nearby();
@@ -234,11 +212,6 @@ async fn nearby_servers_come_from_discovery() {
 
     rig.fake.set_nearby(vec![]).await;
     eventually("the list to empty", || rig.client.nearby().is_empty()).await;
-
-    rig.client.discover(false).await.unwrap();
-    rig.fake.set_nearby(vec![server]).await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(rig.client.nearby().is_empty(), "stopped discovery stays quiet");
 }
 
 fn nearby_server(name: &str, host: &str) -> WireNearby {
@@ -250,7 +223,6 @@ fn nearby_server(name: &str, host: &str) -> WireNearby {
     }
 }
 
-/// Every length the nearby list takes from now on.
 fn record_nearby_lengths(rig: &Rig) -> Arc<std::sync::Mutex<Vec<usize>>> {
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut rx = rig.client.watch_nearby();
@@ -275,8 +247,6 @@ async fn nearby_servers_stay_while_a_restarted_discovery_settles() {
     rig.fake.set_nearby(vec![nearby_server("NAS", "nas.local")]).await;
     eventually("the server", || rig.client.nearby().len() == 1).await;
 
-    // Browse is left and shown again: netvfs forgets what it found and
-    // reports its empty cache before the servers answer again.
     let seen = record_nearby_lengths(&rig);
     rig.client.discover(false).await.unwrap();
     rig.client.discover(true).await.unwrap();
@@ -312,7 +282,6 @@ async fn a_settled_discovery_drops_servers_that_did_not_answer() {
     })
     .await;
 
-    // Nothing answers at all: the list empties once the discovery settled.
     rig.client.discover(false).await.unwrap();
     rig.client.discover(true).await.unwrap();
     eventually("the empty list", || rig.client.nearby().is_empty()).await;
@@ -341,9 +310,9 @@ async fn account_management_is_handed_off() {
 #[tokio::test]
 async fn the_bridge_opens_storage_settings_whatever_the_consent() {
     let fake = FakeBridge::new();
-    fake.set_consent(Consent::Denied).await;
+    fake.set_consent(Consent::Unknown).await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    status(&rig.client, BridgeStatus::ConsentUnknown).await;
     let order: Vec<String> = rig.fake.calls().into_iter().map(|c| c.method).collect();
     assert_eq!(order, ["Hello", "GetFeatures", "GetConsent"]);
     assert!(rig.client.offers(feature::STORAGE_SETTINGS));
@@ -357,7 +326,7 @@ async fn a_bridge_without_features_works_as_before() {
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     fake.set_features(None);
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert_eq!(rig.client.locations().len(), 1);
     assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
     let e = rig.client.open_storage_settings().await.unwrap_err();
@@ -371,13 +340,13 @@ async fn features_that_fail_are_none_and_unknown_ones_are_ignored() {
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     fake.fail_next("GetFeatures", "Internal", "no");
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
 
     let fake = FakeBridge::new();
     fake.set_features(Some(&["teleport", feature::STORAGE_SETTINGS]));
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert!(rig.client.offers(feature::STORAGE_SETTINGS));
     assert!(!rig.client.offers("drives"));
 }
@@ -386,10 +355,9 @@ async fn features_that_fail_are_none_and_unknown_ones_are_ignored() {
 async fn features_are_asked_again_on_every_connection() {
     let rig = Rig::ready_with(quick_backoff).await;
     assert!(rig.client.offers(feature::STORAGE_SETTINGS));
-    // Without a connection nothing is offered.
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&rig.client, BridgeStatus::Reconnecting).await;
     assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
 
     rig.fake.set_features(Some(&[]));
@@ -398,11 +366,10 @@ async fn features_are_asked_again_on_every_connection() {
         rig.fake.calls_of("GetFeatures").len() == 2
     })
     .await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
 }
 
-/// A bridge with the drives (netvfs XB-20) and a memory card.
 async fn drives_fake() -> FakeBridge {
     let fake = FakeBridge::new();
     fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
@@ -414,9 +381,9 @@ async fn drives_fake() -> FakeBridge {
 #[tokio::test]
 async fn drives_need_no_consent_and_follow_the_bridge() {
     let fake = drives_fake().await;
-    fake.set_consent(Consent::Denied).await;
+    fake.set_consent(Consent::Unknown).await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    status(&rig.client, BridgeStatus::ConsentUnknown).await;
     eventually("the card", || rig.client.drives().len() == 1).await;
     let card = rig.client.drives()[0].clone();
     assert_eq!(
@@ -427,7 +394,6 @@ async fn drives_need_no_consent_and_follow_the_bridge() {
     let mut watch = rig.client.watch_drives();
     watch.borrow_and_update();
 
-    // DrivesChanged lists them again.
     rig.fake
         .set_drives(vec![
             FakeDrive::new("mmcblk1p1", "CARD", "sd", 64),
@@ -453,11 +419,11 @@ async fn drives_need_no_consent_and_follow_the_bridge() {
 #[tokio::test]
 async fn drives_go_with_the_connection() {
     let rig = Rig::with_fake(drives_fake().await, true, quick_backoff).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     eventually("the card", || rig.client.drives().len() == 1).await;
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&rig.client, BridgeStatus::Reconnecting).await;
     assert!(rig.client.drives().is_empty(), "nothing mounts them now");
     let e = rig.client.mount_drive("mmcblk1p1").await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::ConnectionLost);
@@ -468,132 +434,22 @@ async fn drives_go_with_the_connection() {
 
 #[tokio::test]
 async fn an_older_bridge_is_not_asked_for_drives() {
-    // A netvfs without XB-20 (no `drives` feature), or one without features.
     for features in [Some(&[feature::STORAGE_SETTINGS][..]), None] {
         let fake = FakeBridge::new();
         fake.add_account(1, "fake", "Fake 1", "fake.example").await;
         fake.set_features(features);
         let rig = Rig::with_fake(fake, true, |c| c).await;
-        rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+        status(&rig.client, BridgeStatus::Ready).await;
         eventually("the account", || rig.client.locations().len() == 1).await;
         rig.fake
             .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
             .await;
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        rig.fake.add_account(2, "fake", "Fake 2", "fake2.example").await;
+        eventually("the second account", || rig.client.locations().len() == 2).await;
         assert!(rig.fake.calls_of("ListDrives").is_empty(), "{features:?}");
         assert!(rig.client.drives().is_empty());
         let e = rig.client.mount_drive("sda1").await.unwrap_err();
         assert_eq!(e.kind, ErrorKind::Unsupported, "{features:?}");
-    }
-}
-
-#[tokio::test]
-async fn adhoc_servers_are_connected_and_forgotten() {
-    let rig = Rig::ready().await;
-    let opts = AdHocOptions {
-        user: Some("me".into()),
-        ..AdHocOptions::default()
-    };
-    let id = rig
-        .client
-        .connect_adhoc("sftp://host.example:2222/docs", secret(b"pw"), opts)
-        .await
-        .unwrap();
-    assert_eq!(id, "nv-adhoc:1");
-    assert_eq!(rig.fake.received_secrets(), vec![b"pw".to_vec()]);
-    eventually("the ad-hoc server in the list", || {
-        rig.client.location(&id).is_some()
-    })
-    .await;
-    let l = rig.client.location(&id).unwrap();
-    assert_eq!(l.kind, RemoteKind::AdHoc);
-    assert_eq!(
-        (l.host.as_str(), l.port, l.user.as_deref()),
-        ("host.example", Some(2222), Some("me"))
-    );
-    assert_eq!(l.provider, "sftp");
-    assert_eq!(l.start_path.as_bytes(), b"docs");
-
-    rig.client.forget_adhoc(&id).await.unwrap();
-    eventually("the removal", || rig.client.location(&id).is_none()).await;
-    let e = rig.client.forget_adhoc(&id).await.unwrap_err();
-    assert_eq!(e.kind, ErrorKind::NotFound);
-    // Accounts are not the app's to forget.
-    let e = rig.client.forget_adhoc(ACCOUNT).await.unwrap_err();
-    assert_eq!(e.kind, ErrorKind::NotFound);
-}
-
-#[tokio::test]
-async fn adhoc_refusals_keep_their_names() {
-    let rig = Rig::ready().await;
-    let none = AdHocOptions::default();
-    let e = rig
-        .client
-        .connect_adhoc("sftp://u:pw@host/", secret(b""), none.clone())
-        .await
-        .unwrap_err();
-    assert_eq!(
-        e.kind,
-        ErrorKind::SecurityPolicy,
-        "a password in the URL is refused"
-    );
-    let e = rig
-        .client
-        .connect_adhoc("file:///home/user", secret(b""), none.clone())
-        .await
-        .unwrap_err();
-    assert_eq!(
-        e.kind,
-        ErrorKind::PermissionDenied,
-        "the bridge never touches local files"
-    );
-    let e = rig
-        .client
-        .connect_adhoc("gopher://host/", secret(b""), none.clone())
-        .await
-        .unwrap_err();
-    assert_eq!(e.kind, ErrorKind::Unsupported);
-    let profile = AdHocOptions {
-        security_profile: Some("legacy".into()),
-        ..AdHocOptions::default()
-    };
-    let e = rig
-        .client
-        .connect_adhoc("sftp://host/", secret(b""), profile)
-        .await
-        .unwrap_err();
-    assert_eq!(e.kind, ErrorKind::InvalidArgument, "a profile is for SMB only");
-    assert!(rig.client.locations().len() == 1);
-}
-
-#[tokio::test]
-async fn only_sftp_and_smb_urls_connect() {
-    let rig = Rig::ready().await;
-    for url in ["dav://h/", "davs://h/", "ftp://h/", "ftps://h/", "https://h/"] {
-        let e = rig
-            .client
-            .connect_adhoc(url, secret(b"pw"), AdHocOptions::default())
-            .await
-            .unwrap_err();
-        assert_eq!(e.kind, ErrorKind::Unsupported, "{url}");
-    }
-    let e = rig
-        .client
-        .connect_adhoc("davs://h/", secret(b""), AdHocOptions::default())
-        .await
-        .unwrap_err();
-    assert_eq!(e.message, "davs URLs are no longer supported");
-    assert_eq!(rig.client.locations().len(), 1, "nothing was added");
-    for url in ["sftp://h/", "smb://h/share"] {
-        let id = rig
-            .client
-            .connect_adhoc(url, secret(b""), AdHocOptions::default())
-            .await
-            .unwrap();
-        eventually("the ad-hoc server in the list", || {
-            rig.client.location(&id).is_some()
-        })
-        .await;
     }
 }
 

@@ -20,9 +20,9 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
 .mono{font-family:'Source Code Pro',monospace}
@@ -112,10 +112,36 @@ body{margin:0}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+
+.art{display:block;flex:none}
+.glow{position:absolute;left:-80px;top:-80px;filter:blur(44px) saturate(1.15)}
+.glowov{position:absolute;inset:0;background:rgba(6,10,16,.5)}
+.amb.light .glowov{background:rgba(240,244,247,.62)}
+.info{text-align:center;padding:0 24px}
+.ti{font-size:26px;font-weight:300;color:var(--hl);line-height:1.2}
+.ar{font-size:19px;color:var(--pri);margin-top:6px}
+.al{font-size:15px;color:var(--sec);margin-top:4px}
+.ibtn.r{border-radius:50%;background:var(--btn)}
 </style>
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
-<div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">Ljudbok–Kapitel?.mp3<span class="lossy">lossy</span></div><div class="hdr-d">NAS › /srv/audio</div></div><div style="margin:34px auto 0;width:260px;height:260px;background:linear-gradient(135deg,#355f7a,#8bb2a0);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85)"><svg class="ic l" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></svg></div><div style="text-align:center;margin-top:28px;padding:0 18px"><div class="large">Kapitel 4: Vattnet</div><div class="hl2" style="font-size:19px;margin-top:4px">Selma Lagerlöf</div></div><div class="sl" style="margin-top:22px;padding:8px 24px"><div class="sl-t"><i style="width:34%"></i><b style="left:34%"></b></div><div style="display:flex;justify-content:space-between;font-size:15px" class="sec"><span>12:08</span><span>-23:41</span></div></div><div style="display:flex;justify-content:center;align-items:center;gap:30px;margin-top:14px"><button class="ibtn" aria-label="Previous"><svg class="ic m" viewBox="0 0 24 24"><path d="M18 5v14M16 5L7 12l9 7zM6 5v14"/></svg></button><button class="ibtn" aria-label="Pause"><svg class="ic l" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button><button class="ibtn" aria-label="Next"><svg class="ic m" viewBox="0 0 24 24"><path d="M6 5v14M8 5l9 7-9 7z"/><path d="M18 5v14"/></svg></button></div><div class="sec" style="position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:15px">Streaming from NAS</div>
+<div class="glow"><svg class="art" width="560" height="1020" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>
+<linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d2a5a"/><stop offset=".45" stop-color="#c8577e"/><stop offset=".62" stop-color="#f4a261"/></linearGradient>
+<linearGradient id="seag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#28466b"/><stop offset="1" stop-color="#0c1726"/></linearGradient></defs>
+<rect width="100" height="62" fill="url(#skyg)"/><circle cx="62" cy="58" r="13" fill="#ffd9a0"/>
+<rect y="61" width="100" height="39" fill="url(#seag)"/>
+<g fill="#ffcf8a" opacity=".75"><rect x="55" y="65" width="14" height="1.2"/><rect x="57" y="69" width="10" height="1"/><rect x="59" y="73" width="6" height=".9"/><rect x="60.5" y="77" width="3" height=".8"/></g>
+<path d="M14 61 L19 55 H37 L41 50 H47 L49 55 H52 L49 61 Z" fill="#141a2b"/><rect x="40" y="45" width="2" height="5" fill="#141a2b"/>
+<text x="8" y="86" font-family="Source Sans 3,sans-serif" font-weight="600" font-size="7" fill="#fff" letter-spacing="1.5">THE FERRY PILOTS</text>
+<text x="8" y="95" font-family="Source Sans 3,sans-serif" font-weight="300" font-size="9" fill="#fff">Crossings</text></svg></div><div class="glowov"></div><div style="position:relative;height:100%"><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">03 Harbour Lights.mp3</div><div class="hdr-d">Streaming from NAS</div></div><div style="position:absolute;left:0;right:0;top:80px;bottom:176px;display:flex;flex-direction:column;justify-content:center;align-items:center"><svg class="art" width="300" height="300" viewBox="0 0 100 100" preserveAspectRatio="none"><defs>
+<linearGradient id="skya" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d2a5a"/><stop offset=".45" stop-color="#c8577e"/><stop offset=".62" stop-color="#f4a261"/></linearGradient>
+<linearGradient id="seaa" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#28466b"/><stop offset="1" stop-color="#0c1726"/></linearGradient></defs>
+<rect width="100" height="62" fill="url(#skya)"/><circle cx="62" cy="58" r="13" fill="#ffd9a0"/>
+<rect y="61" width="100" height="39" fill="url(#seaa)"/>
+<g fill="#ffcf8a" opacity=".75"><rect x="55" y="65" width="14" height="1.2"/><rect x="57" y="69" width="10" height="1"/><rect x="59" y="73" width="6" height=".9"/><rect x="60.5" y="77" width="3" height=".8"/></g>
+<path d="M14 61 L19 55 H37 L41 50 H47 L49 55 H52 L49 61 Z" fill="#141a2b"/><rect x="40" y="45" width="2" height="5" fill="#141a2b"/>
+<text x="8" y="86" font-family="Source Sans 3,sans-serif" font-weight="600" font-size="7" fill="#fff" letter-spacing="1.5">THE FERRY PILOTS</text>
+<text x="8" y="95" font-family="Source Sans 3,sans-serif" font-weight="300" font-size="9" fill="#fff">Crossings</text></svg><div style="margin-top:28px;width:100%"><div class="info"><div class="ti">Harbour Lights</div><div class="ar">The Ferry Pilots</div><div class="al">Crossings · 2024</div><div class="al">Track 3 of 11</div></div></div></div><div style="position:absolute;left:0;right:0;bottom:22px"><div class="sl" style="padding:8px 24px"><div class="sl-t"><i style="width:34%"></i><b style="left:34%"></b></div><div style="display:flex;justify-content:space-between;font-size:15px" class="sec"><span>1:12</span><span>-2:21</span></div></div><div style="display:flex;justify-content:center;align-items:center;gap:34px;margin-top:10px"><button class="ibtn r"><svg class="ic" viewBox="0 0 24 24"><path d="M17 6L9 12l8 6zM7 6v12"/></svg></button><button class="ibtn r" style="width:72px;height:72px"><svg class="ic m" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg></button><button class="ibtn r"><svg class="ic" viewBox="0 0 24 24"><path d="M7 6l8 6-8 6zM17 6v12"/></svg></button></div></div></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>

@@ -13,35 +13,45 @@ workspace = true
 [dependencies]
 lautta-bridge-proto = { path = "../lautta-bridge-proto" }
 lautta-pdf = { path = "../lautta-pdf" }
+zbus = { version = "4", default-features = false, features = ["tokio"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util", "net"] }
 futures = "0.3"
 log = "0.4"
 thiserror = "1"
 bitflags = "2"
-rustix = { version = "0.38", features = ["fs", "process", "pipe", "net"] }
+rustix = { version = "0.38", features = ["fs", "process", "pipe", "net", "thread"] }
 rusqlite = { version = "0.31", features = ["blob"] }
 unicode-normalization = "0.1"
 percent-encoding = "2"
-sha2 = "0.10"
-md-5 = "0.10"
-sha1 = "0.10"
-hex = "0.4"
+sha2 = "0.11"
+md-5 = "0.11"
+sha1 = "0.11"
+sha3 = "0.11"
+blake2 = "0.11"
+blake3 = { version = "1", default-features = false, features = ["std"] }
+crc32fast = "1"
+xxhash-rust = { version = "0.8", features = ["xxh64", "xxh3"] }
+aes = "0.9"
+ctr = "0.10"
+hmac = "0.13"
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
+getrandom = "0.4"
 zeroize = "1"
+zxcvbn = { version = "3", default-features = false }
+hex = "0.4"
 notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.5"
+lofty = "0.25"
 pulldown-cmark = { version = "0.9", default-features = false }
-# Text viewer highlighting (PRV-13): parsing with the bundled grammars and the
-# pure-Rust regex engine only; no oniguruma (C), no theme or grammar loading.
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
 tar = "0.4"
 xz2 = "0.1"
 bzip2 = "0.4"
-zstd = { version = "0.13", default-features = false }
-sevenz-rust2 = { version = "0.24", default-features = false }
+zstd = { version = "0.14", default-features = false }
+sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress", "aes256", "bzip2", "deflate", "ppmd", "zstd"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -49,7 +59,8 @@ glob = "0.3"
 tempfile = "3"
 
 [dev-dependencies]
-sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress"] }
+zip = { version = "9", default-features = false, features = ["deflate", "aes-crypto"] }
 tokio = { version = "1", features = ["test-util"] }
+rustix = { version = "0.38", features = ["time"] }
 lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }
 lautta-pdf = { path = "../lautta-pdf", features = ["sample"] }

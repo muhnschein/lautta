@@ -38,7 +38,6 @@ fn a_page_renders_at_the_asked_width_on_white() {
     let r = doc.render(0, 200).unwrap();
     assert_eq!((r.width, r.height), (200, 400), "twice the points, aspect kept");
     assert_eq!(r.rgba.len(), 200 * 400 * 4);
-    // PDF y grows upwards: the square sits in the bottom left corner.
     assert_eq!(pixel(&r, 20, 380), RED);
     assert_eq!(pixel(&r, 180, 20), WHITE_PX, "the background is white");
     assert_eq!(pixel(&r, 120, 380), WHITE_PX, "the square ends at 50 pt");
@@ -46,7 +45,6 @@ fn a_page_renders_at_the_asked_width_on_white() {
 
 #[test]
 fn annotations_are_drawn_like_the_page() {
-    // A square annotation whose appearance fills it red, over a blank page.
     let mut doc = super::sample::Doc::new(vec![page(100, 100, "")]);
     let appearance = doc.ahead(1);
     let annot = doc.object(&format!(
@@ -80,7 +78,6 @@ fn rotated_pages_are_shown_upright() {
     );
     let r = doc.render(0, 200).unwrap();
     assert_eq!((r.width, r.height), (200, 100));
-    // Turned clockwise: the bottom left corner moves to the top left.
     assert_eq!(pixel(&r, 10, 10), RED);
     assert_eq!(pixel(&r, 10, 90), WHITE_PX);
 }
@@ -114,8 +111,6 @@ fn a_damaged_cross_reference_table_is_repaired() {
 
 #[test]
 fn password_protected_documents_are_named_as_such() {
-    // Standard security handler, revision 3, with an /O and /U that match
-    // no password; the empty password does not open it.
     let mut bytes = build(&[page(100, 100, RED_SQUARE)]);
     let at = bytes.windows(7).position(|w| w == b"trailer").unwrap();
     let tail = String::from_utf8(bytes.split_off(at)).unwrap();
@@ -149,15 +144,12 @@ fn renders_stay_within_the_edge_limit() {
         (render_scale(a4, 0) - 1.0 / 595.0).abs() < 1e-9,
         "at least one pixel"
     );
-    // Wider than the edge limit: clamped to it.
     assert!((render_scale(a4, 100_000) * 842.0 - MAX_EDGE as f32).abs() < 0.01);
-    // A long strip: the height, not the asked width, decides.
     let strip = PageSize {
         width: 100.0,
         height: 10_000.0,
     };
     assert!((render_scale(strip, 1000) * 10_000.0 - MAX_EDGE as f32).abs() < 0.01);
-    // Degenerate sizes do not divide by zero.
     let zero = PageSize {
         width: 0.0,
         height: 0.0,
@@ -170,6 +162,73 @@ fn a_huge_page_renders_within_the_limits() {
     let doc = PdfDocument::open(build(&[page(14_400, 14_400, RED_SQUARE)])).unwrap();
     let r = doc.render(0, 100_000).unwrap();
     assert_eq!((r.width, r.height), (MAX_EDGE, MAX_EDGE));
+}
+
+#[test]
+fn a_landscape_page_gives_its_left_square_as_tall_as_asked() {
+    let content = "1 0 0 rg 0 100 50 50 re f 0 0 1 rg 150 0 150 150 re f";
+    let doc = PdfDocument::open(build(&[page(300, 150, content)])).unwrap();
+    let r = doc.render_top_left_square(0, 75).unwrap();
+    assert_eq!((r.width, r.height), (75, 75), "half the points");
+    assert_eq!(r.rgba.len(), 75 * 75 * 4);
+    assert_eq!(pixel(&r, 1, 1), RED, "top left corner");
+    assert_eq!(pixel(&r, 30, 30), WHITE_PX);
+    assert_eq!(pixel(&r, 73, 1), WHITE_PX, "the blue right half is not in it");
+    assert_eq!(pixel(&r, 73, 73), WHITE_PX);
+}
+
+#[test]
+fn a_portrait_page_gives_its_top_square_as_wide_as_asked() {
+    let content = "1 0 0 rg 0 150 50 50 re f 0 0 1 rg 0 0 100 100 re f";
+    let doc = PdfDocument::open(build(&[page(100, 200, content)])).unwrap();
+    let r = doc.render_top_left_square(0, 200).unwrap();
+    assert_eq!((r.width, r.height), (200, 200), "twice the points");
+    assert_eq!(pixel(&r, 2, 2), RED, "top left corner");
+    assert_eq!(pixel(&r, 150, 2), WHITE_PX);
+    assert_eq!(pixel(&r, 2, 197), WHITE_PX, "the blue bottom half is not in it");
+}
+
+#[test]
+fn square_renders_stay_within_the_edge_limit() {
+    let size = |width, height| PageSize { width, height };
+    assert_eq!(square_scale(size(300.0, 150.0), 75), (0.5, 75));
+    assert_eq!(square_scale(size(150.0, 300.0), 300), (2.0, 300));
+    assert_eq!(
+        square_scale(size(300.0, 150.0), 0),
+        (1.0 / 150.0, 1),
+        "at least one pixel"
+    );
+    assert_eq!(
+        square_scale(size(100.0, 100.0), 100_000),
+        (MAX_EDGE as f32 / 100.0, 4096)
+    );
+    for strip in [size(100.0, 10_000.0), size(10_000.0, 100.0)] {
+        let (scale, edge) = square_scale(strip, 64);
+        assert!((scale * 10_000.0 - MAX_EDGE as f32).abs() < 0.01, "{scale}");
+        assert_eq!(edge, 41, "the long edge stays within the limit");
+    }
+    assert_eq!(square_scale(size(1.0, 14_400.0), 64).1, 1, "at least one pixel");
+    assert_eq!(
+        square_scale(size(0.0, 0.0), 10),
+        (10.0, 10),
+        "one point per edge at least"
+    );
+}
+
+#[test]
+fn a_huge_page_square_renders_within_the_limits() {
+    let doc = PdfDocument::open(build(&[page(14_400, 7_200, RED_SQUARE)])).unwrap();
+    let r = doc.render_top_left_square(0, 100_000).unwrap();
+    assert_eq!((r.width, r.height), (2048, 2048));
+}
+
+#[test]
+fn a_missing_page_has_no_square() {
+    let doc = PdfDocument::open(build(&[page(100, 100, "")])).unwrap();
+    assert_eq!(
+        doc.render_top_left_square(1, 10).unwrap_err(),
+        PdfError::NoSuchPage
+    );
 }
 
 #[test]
@@ -207,7 +266,47 @@ fn encrypted_documents_open_with_their_password() {
             "decrypted content"
         );
     }
-    // hayro checks the owner password of AES-256 documents only.
     let doc = PdfDocument::open_with_password(LOCKED_AES256.to_vec(), LOCKED_OWNER_PASSWORD).unwrap();
     assert_eq!(doc.page_count(), 2);
+}
+
+const BOUNDED_CHILD: &str = "LAUTTA_PDF_BOUNDED_CHILD";
+const BOUNDED_TEST: &str = "tests::a_tiling_pattern_with_huge_steps_is_drawn_in_bounded_memory";
+
+fn huge_step_tiling_pattern() -> Vec<u8> {
+    let mut doc = super::sample::Doc::new(vec![page(4000, 400, "/Pattern cs /P1 scn 50 50 3900 300 re f")]);
+    let cell = "1 0 0 rg 50 50 3850 250 re f";
+    let pattern = doc.object(&format!(
+        "<< /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 3950 350] /XStep 90000 /YStep 90000 /Resources << >> /Length {} >>\nstream\n{cell}\nendstream",
+        cell.len()
+    ));
+    doc.page_resource(0, &format!("/Pattern << /P1 {pattern} >>"));
+    doc.build()
+}
+
+#[test]
+fn a_tiling_pattern_with_huge_steps_is_drawn_in_bounded_memory() {
+    if std::env::var_os(BOUNDED_CHILD).is_some() {
+        let doc = PdfDocument::open(huge_step_tiling_pattern()).unwrap();
+        let r = doc.render(0, 1000).unwrap();
+        assert_eq!((r.width, r.height), (1000, 100));
+        assert_eq!(pixel(&r, 500, 50), RED, "the pattern cell is drawn");
+        assert_eq!(pixel(&r, 5, 50), WHITE_PX, "the fill ends at 50 pt");
+        return;
+    }
+    let out = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("ulimit -v 1048576 && exec \"$0\" --exact \"$1\" --test-threads 1")
+        .arg(std::env::current_exe().unwrap())
+        .arg(BOUNDED_TEST)
+        .env(BOUNDED_CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("test result: ok. 1 passed"),
+        "{:?}\n{stdout}\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

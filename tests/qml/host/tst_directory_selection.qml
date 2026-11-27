@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of selection mode (Selection.js), SPEC §15.3: when it starts and
-// ends, what its panel and its More actions page offer (every action of an
-// item's long-press menu with one item selected, as grid view selects on
-// hold; Compress and Move to new folder for several) and how a drag selects a
-// range and scrolls at the edges.
 import QtQuick 2.6
 import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -38,7 +34,8 @@ Item {
     }
 
     function testSelectionActions() {
-        var ending = ["copy", "cut", "share", "compress", "rename", "favourite", "moveToNewFolder"]
+        var ending = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder", "checksums",
+                      "verify"]
         for (var i = 0; i < ending.length; ++i)
             check(Selection.endsSelection(ending[i]), ending[i] + " ends selection")
         check(!Selection.endsSelection("delete"), "delete ends it only after the remorse timer")
@@ -46,15 +43,27 @@ Item {
     }
 
     function testPanel() {
-        same(ids(Selection.panelButtons(3, true)), ["share", "copy", "cut", "delete", "more", "done"],
+        var full = { "changeable": true, "readable": true, "writable": true }
+        var keeps = { "changeable": false, "readable": true, "writable": true }
+        var readOnly = { "changeable": false, "readable": true, "writable": false }
+        same(ids(Selection.panelButtons(3, full)), ["share", "copy", "cut", "delete", "more", "done"],
              "the menu's order, then More actions, then leaving")
-        same(ids(Selection.panelButtons(1, true)), ["share", "copy", "cut", "delete", "more", "done"],
+        same(ids(Selection.panelButtons(1, full)), ["share", "copy", "cut", "delete", "more", "done"],
              "one item: the same buttons, no push-up menu")
-        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "more", "done"], "read-only folder")
-        same(ids(Selection.panelButtons(1, false)), ["share", "copy", "more", "done"],
-             "read-only folder, one item: Add to favourites and Compress stay")
-        same(ids(Selection.panelButtons(0, true)), ["done"], "waiting for the first item")
-        var buttons = Selection.panelButtons(1, true)
+        same(ids(Selection.panelButtons(3, keeps)), ["share", "copy", "more", "done"],
+             "read and add: nothing that changes items, Compress stays")
+        same(ids(Selection.panelButtons(1, keeps)), ["share", "copy", "more", "done"],
+             "read and add, one item: Add to favourites and Compress stay")
+        same(ids(Selection.panelButtons(3, readOnly)), ["share", "copy", "done"],
+             "read only, several: no More actions, nothing on it")
+        same(ids(Selection.panelButtons(1, readOnly)), ["share", "copy", "more", "done"],
+             "read only, one item: Add to favourites stays")
+        same(ids(Selection.panelButtons(2, { "changeable": false, "readable": false })), ["done"],
+             "add only: nothing to read or change")
+        same(ids(Selection.panelButtons(0, full)), ["done"], "waiting for the first item")
+        same(Selection.context({ "changeable": false, "readable": true, "writable": true }),
+             { "isDir": false, "changeable": false, "readable": true, "writable": true }, "the folder's level")
+        var buttons = Selection.panelButtons(1, full)
         same(buttons.map(function (b) { return b.icon }),
              ["image://theme/icon-m-share", "dir-copy", "dir-cut", "image://theme/icon-m-delete",
               "more", "image://theme/icon-m-dismiss"], "icons")
@@ -64,36 +73,49 @@ Item {
     }
 
     function testMoreRows() {
-        var file = { "isDir": false, "writable": true }
-        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "moveToNewFolder"],
+        var file = { "isDir": false, "changeable": true, "readable": true, "writable": true }
+        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "checksums", "moveToNewFolder"],
              "one item: Rename, then its own More actions page")
-        same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })),
+        same(ids(Selection.moreRows(1, { "isDir": true, "changeable": true, "readable": true, "writable": true })),
              ["rename", "favourite", "compress", "moveToNewFolder"], "one folder")
-        same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite", "compress"],
-             "no Rename in a read-only folder")
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "writable": true })),
+             ["favourite", "compress", "checksums"], "no Rename in a read-and-add folder")
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "writable": false })),
+             ["favourite", "checksums"], "no Compress in a read-only folder")
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true })),
+             ["rename", "favourite", "extract", "compress", "checksums", "moveToNewFolder"], "one compressed file: Extract")
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "checksumList": true })),
+             ["verify", "favourite", "checksums"], "one checksum list: Verify files")
+        same(ids(Selection.moreRows(2, { "isDir": false, "changeable": true, "readable": true, "checksumList": true })),
+             ["moveToNewFolder"], "several: no Checksums or Verify files")
         same(ids(Selection.moreRows(2, file)), ["compress", "moveToNewFolder"],
              "several items: only what works on several")
-        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"],
-             "several, read-only: no Move to new folder")
+        same(ids(Selection.moreRows(2, { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true })),
+             ["compress", "moveToNewFolder"], "several: no Extract")
+        same(ids(Selection.moreRows(5, { "isDir": false, "changeable": false, "readable": true, "writable": true })), ["compress"],
+             "several, read and add: no Move to new folder")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
-             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "file-folder"], "icons")
+             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "checksum", "file-folder"], "icons")
         same(Selection.moreRows(2, file).map(function (r) { return r.icon }), ["file-archive", "file-folder"],
-             "Compress shows the glyph archives show")
+             "Compress shows the glyph compressed files show")
         check(Selection.moreRows(1, file)[0].text === Actions.text("rename"), "menu texts")
         check(Selection.moreRows(1, file)[2].text === Actions.text("compress"), "menu texts, second")
-        check(Selection.moreRows(1, file)[3].text === Actions.text("moveToNewFolder"), "menu texts, third")
+        check(Selection.moreRows(1, file)[3].text === Actions.text("checksums"), "menu texts, third")
+        check(Selection.moreRows(1, file)[4].text === Actions.text("moveToNewFolder"), "menu texts, fourth")
+        check(Selection.endsSelection("extract") && Selection.endsSelection("compress"), "Extract and Compress end selecting")
     }
 
-    // Grid view holds to select instead of opening the long-press menu: with
-    // one item selected the panel and its More actions page must offer every
-    // action of that menu.
     function testPanelParity() {
-        var contexts = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
-                        { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
+        var contexts = [{ "isDir": false, "changeable": true, "readable": true, "writable": true },
+                        { "isDir": true, "changeable": true, "readable": true, "writable": true },
+                        { "isDir": false, "changeable": false, "readable": true, "writable": true },
+                        { "isDir": true, "changeable": false, "readable": true, "writable": false },
+                        { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true },
+                        { "isDir": false, "changeable": true, "readable": true, "writable": true, "checksumList": true }]
         for (var c = 0; c < contexts.length; ++c) {
             var ctx = contexts[c]
-            var offered = ids(Selection.panelButtons(1, ctx.writable)).concat(ids(Selection.moreRows(1, ctx)))
+            var offered = ids(Selection.panelButtons(1, ctx)).concat(ids(Selection.moreRows(1, ctx)))
             var menu = ids(Actions.menu(ctx)).concat(ids(Actions.more(ctx)))
             for (var i = 0; i < menu.length; ++i)
                 check(menu[i] === "more" || offered.indexOf(menu[i]) >= 0,
@@ -103,8 +125,6 @@ Item {
         }
     }
 
-    // Runs a drag over `path` (the items under the finger, the first one
-    // held) on items whose states before it are `states`; the states after.
     function dragOver(states, path) {
         var now = states.slice()
         var before = function (i) { return states[i] }
@@ -176,5 +196,6 @@ Item {
         testDragRange()
         testDragSteps()
         testAutoScroll()
+        reachedEnd = true
     }
 }

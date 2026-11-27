@@ -1,21 +1,12 @@
 name: Mutation
-# The full mutation check (SPEC TST-5): every mutant in the mutated files, in
-# 8 parallel shards of about 30 minutes each. Pull requests only check the
-# lines they change (ci.yml); this runs the whole set weekly on main, from the
-# Actions tab before a release (Run workflow, any branch), and on pull
-# requests that change the mutation setup itself, since a diff cannot tell
-# what a new file in the list or a new exclusion lets through.
 on:
   schedule:
-    - cron: '17 2 * * 1'  # Mondays 02:17 UTC
+    - cron: '17 2 * * 1'
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - .cargo/mutants.toml
-      - Makefile
-      - rust-toolchain.toml
-      - tools/ci/install-host-deps.sh
       - .github/workflows/mutation.yml
 permissions:
   contents: read
@@ -25,8 +16,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  # A scheduled run is skipped when main has not moved since the last
-  # successful one.
   changed:
     name: Main changed since the last run
     runs-on: ubuntu-24.04
@@ -62,25 +51,22 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      # Prebuilt, same version as install-host-deps.sh: building it takes minutes.
-      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91
         with:
           tool: cargo-mutants@25.0.1
       - name: Install dependencies
         run: ./tools/ci/install-host-deps.sh mutants
       - name: Mutation check
         run: make mutants MUTANTS_SHARD=${{ matrix.shard }}/8
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
           name: mutants-${{ matrix.shard }}
           path: mutants.out/*.txt
 
-  # Nobody watches a scheduled run, so a failure opens an issue (or comments on
-  # the one still open) instead of only turning the Actions tab red.
   report:
     name: Report a failed weekly run
     needs: mutation

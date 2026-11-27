@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! In-process fake bridge (SPEC TST-2): serves `org.netvfs.Bridge1` over a
-//! unix socket pair (or a real socket path) with an in-memory file tree per
-//! location, configurable consent, locations, capabilities, scripted latency,
-//! failures and disconnects. The same fake replays the shared contract
-//! sequences ([`replay`]).
 
 mod args;
 mod fail;
@@ -13,8 +8,9 @@ mod state;
 mod transfer;
 pub mod tree;
 
-pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
+pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure};
 
+use crate::access::Level;
 use crate::connect::Connection;
 use crate::errors::BridgeError;
 use crate::wire::{WireCapabilities, WireLocation, WireNearby, OBJECT_PATH};
@@ -25,7 +21,6 @@ use std::time::Duration;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::time::Instant;
 
-/// Default capability set of a fake location.
 pub const DEFAULT_CAPS: &[&str] = &[
     "Symlinks",
     "Hardlinks",
@@ -37,9 +32,9 @@ pub const DEFAULT_CAPS: &[&str] = &[
     "ServerCopy",
     "SpaceInfo",
     "Checksums",
+    "Search",
 ];
 
-/// A fake bridge. Cheap to clone; clones share all state.
 #[derive(Clone)]
 pub struct FakeBridge {
     shared: Arc<Shared>,
@@ -52,16 +47,12 @@ impl Default for FakeBridge {
 }
 
 impl FakeBridge {
-    /// A bridge with consent granted and no locations.
     pub fn new() -> FakeBridge {
         FakeBridge {
             shared: Arc::new(Shared::new(State::default())),
         }
     }
 
-    // ---- serving -------------------------------------------------------
-
-    /// A client connection to a fresh in-process session over a socket pair.
     pub async fn connect(&self) -> Result<Connection, BridgeError> {
         let (client, server) = UnixStream::pair()?;
         let serving = self.serve_stream(server);
@@ -71,25 +62,28 @@ impl FakeBridge {
         connected
     }
 
-    /// Serves one client on `stream` (the server handshake).
     pub async fn serve_stream(&self, stream: UnixStream) -> Result<(), BridgeError> {
         let session = self.shared.new_session();
-        let guid = zbus::Guid::generate();
-        let conn = zbus::connection::Builder::unix_stream(stream)
-            .server(guid)?
-            .p2p()
-            .serve_at(
-                OBJECT_PATH,
-                iface::Checked::new(self.shared.clone(), session.clone()),
-            )?
-            .build()
-            .await?;
+        let conn = self.serve_session(stream, session.clone()).await?;
         session.set_conn(conn);
         Ok(())
     }
 
-    /// Listens on a socket path like the bridge's socket-activated unit (the
-    /// real app never creates this path; tests of the discovery do, here).
+    async fn serve_session(
+        &self,
+        stream: UnixStream,
+        session: Arc<state::Session>,
+    ) -> Result<zbus::Connection, BridgeError> {
+        let guid = zbus::Guid::generate();
+        let conn = zbus::connection::Builder::unix_stream(stream)
+            .server(guid)?
+            .p2p()
+            .serve_at(OBJECT_PATH, iface::Checked::new(self.shared.clone(), session))?
+            .build()
+            .await?;
+        Ok(conn)
+    }
+
     pub fn listen(&self, path: &Path) -> std::io::Result<Listener> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -109,7 +103,6 @@ impl FakeBridge {
                 }
                 let serving = me.clone();
                 tokio::spawn(async move {
-                    // A client that hangs up during the handshake is not an error here.
                     let _ = serving.serve_stream(stream).await;
                 });
             }
@@ -120,23 +113,18 @@ impl FakeBridge {
         })
     }
 
-    /// While `false`, connections are accepted and closed at once (a bridge that
-    /// keeps crashing), so reconnect attempts can be counted.
     pub fn set_accepting(&self, accepting: bool) {
         self.shared.with(|s| s.accepting = accepting);
     }
 
-    /// Times at which connections reached the listener.
     pub fn accept_times(&self) -> Vec<Instant> {
         self.shared.with(|s| s.accepts.clone())
     }
 
-    /// Closes every client connection (the client sees EOF, NVB-12).
     pub async fn disconnect_clients(&self) {
         for session in self.shared.take_sessions() {
             session.shut();
             if let Some(conn) = session.take_conn() {
-                // The peer may already be gone.
                 let _ = conn.close().await;
             }
         }
@@ -146,71 +134,53 @@ impl FakeBridge {
         self.shared.with(|s| s.sessions.len())
     }
 
-    // ---- bridge identity ------------------------------------------------
-
-    /// What `Hello` answers (the bridge version).
     pub fn set_hello(&self, version: &str) {
         self.shared.with(|s| version.clone_into(&mut s.bridge_version));
     }
 
-    /// What `GetFeatures` answers (XB-19); `None` makes this a bridge without
-    /// the method (a netvfs without XB-19), which answers `UnknownMethod` to it and
-    /// to `OpenStorageSettings`. The drive methods answer only while it names
-    /// [`crate::feature::DRIVES`] (XB-20), which it does not by default.
     pub fn set_features(&self, features: Option<&[&str]>) {
         let features = features.map(|f| f.iter().map(|n| (*n).to_owned()).collect());
         self.shared.with(|s| s.features = features);
     }
 
-    /// Replaces what `ListDrives` lists and tells every client
-    /// (`DrivesChanged`). The fake has the drive methods only while
-    /// [`FakeBridge::set_features`] names [`crate::feature::DRIVES`].
     pub async fn set_drives(&self, drives: Vec<FakeDrive>) {
         self.shared.with(|s| s.drives = drives);
         self.shared.broadcast_drives().await;
     }
 
-    /// The drives, as mounted and unmounted.
     pub fn drives(&self) -> Vec<FakeDrive> {
         self.shared.with(|s| s.drives.clone())
     }
 
-    /// Where `Mount` mounts drives: with a root, it makes the drive's folder
-    /// there and `Unmount` removes it, as udisks does in the media folder;
-    /// without one (the default) drives are mounted below `/run/media/user`
-    /// and no folder is made.
     pub fn set_mount_root(&self, root: Option<&std::path::Path>) {
         self.shared
             .with(|s| s.mount_root = root.map(std::path::Path::to_path_buf));
     }
 
-    // ---- consent --------------------------------------------------------
-
     pub fn consent(&self) -> Consent {
         self.shared.with(|s| s.consent)
     }
 
-    /// Changes consent and tells every client (`ConsentChanged`).
     pub async fn set_consent(&self, consent: Consent) {
-        self.shared.with(|s| s.consent = consent);
-        self.shared.broadcast_consent(consent).await;
+        self.shared.decide(|s| s.consent = consent).await;
     }
 
-    /// How often the user was asked (first `Hello` while `unknown`,
-    /// `RequestConsent`).
+    pub async fn set_access(&self, id: &str, level: Option<Level>) {
+        self.shared
+            .decide(|s| {
+                s.access.insert(id.to_owned(), level);
+            })
+            .await;
+    }
+
     pub fn consent_requests(&self) -> u32 {
         self.shared.with(|s| s.consent_requests)
     }
 
-    /// Answer the notification at once, as if the user tapped it.
     pub fn auto_consent(&self, answer: Option<Consent>) {
         self.shared.with(|s| s.auto_consent = answer);
     }
 
-    // ---- locations ------------------------------------------------------
-
-    /// An account location `account:<n>` (netvfs info keys `kind`, `host`,
-    /// `accountId`, `path`, and `state` disconnected).
     pub async fn add_account(&self, n: i32, provider: &str, name: &str, host: &str) -> String {
         let id = format!("account:{n}");
         let info = vec![
@@ -233,8 +203,6 @@ impl FakeBridge {
         self.shared.broadcast_locations().await;
     }
 
-    /// Sets or clears the `attention` info key (`auth-failed`,
-    /// `server-identity-changed`).
     pub async fn set_attention(&self, id: &str, attention: Option<&str>) {
         self.shared.with(|s| {
             if let Some(rec) = s.locations.get_mut(id) {
@@ -248,18 +216,12 @@ impl FakeBridge {
         self.shared.broadcast_locations().await;
     }
 
-    /// Sets the connection state of `id` (`state`: `disconnected`,
-    /// `connecting`, `connected` or `failed`, with `error` the XC-21 name of
-    /// a failure) and tells every client if it changed. On its own the fake
-    /// shows a location disconnected until a call needs a connection, and
-    /// again after `Disconnect` (netvfs XB-12).
     pub async fn set_state(&self, id: &str, state: &str, error: Option<&str>) {
         if self.shared.with(|s| s.set_state(id, state, error)) {
             self.shared.broadcast_locations().await;
         }
     }
 
-    /// The `ListLocations` result as sent now.
     pub fn locations(&self) -> Vec<WireLocation> {
         self.shared.with(|s| s.wire_locations())
     }
@@ -289,15 +251,29 @@ impl FakeBridge {
         });
     }
 
-    // ---- discovery ------------------------------------------------------
-
-    /// Replaces the discovery result and notifies clients that asked for it.
     pub async fn set_nearby(&self, nearby: Vec<WireNearby>) {
         self.shared.with(|s| s.nearby = nearby);
         self.shared.broadcast_nearby().await;
     }
 
-    // ---- files ----------------------------------------------------------
+    pub async fn set_network(&self, kind: &str) {
+        self.shared.with(|s| s.network = kind.to_owned());
+        self.shared.broadcast_network().await;
+    }
+
+    pub fn set_now_ms(&self, loc: &str, now_ms: i64) {
+        self.shared.with(|s| s.tree_mut(loc).now_ms = now_ms);
+    }
+
+    pub fn set_deep_etags(&self, loc: &str, on: bool) {
+        self.shared.with(|s| s.tree_mut(loc).deep_etags = on);
+    }
+
+    pub fn set_mtime(&self, loc: &str, path: &[u8], mtime_ms: i64) {
+        self.shared.with(|s| {
+            let _ = s.tree_mut(loc).set_attributes(path, None, Some(mtime_ms));
+        });
+    }
 
     pub fn put_file(&self, loc: &str, path: &[u8], data: &[u8]) {
         self.shared.with(|s| s.tree_mut(loc).put_file(path, data));
@@ -311,7 +287,6 @@ impl FakeBridge {
         self.shared.with(|s| s.tree_mut(loc).put_symlink(path, target));
     }
 
-    /// Contents of a file on the fake server.
     pub fn file(&self, loc: &str, path: &[u8]) -> Option<Vec<u8>> {
         self.shared.with(|s| {
             s.trees
@@ -325,29 +300,26 @@ impl FakeBridge {
             .with(|s| s.trees.get(loc).is_some_and(|t| t.node(path).is_some()))
     }
 
-    // ---- scripting ------------------------------------------------------
-
-    /// Every call takes at least `latency` (virtual time under a paused clock).
     pub fn set_latency(&self, latency: Duration) {
         self.shared.with(|s| s.latency = latency);
     }
 
-    /// Bytes per transfer step; progress is sent after each step.
+    pub fn stall_narrowing(&self, stall: Duration) {
+        self.shared.with(|s| s.narrowing_stall = stall);
+    }
+
     pub fn set_chunk_size(&self, bytes: usize) {
         self.shared.with(|s| s.chunk = bytes.max(1));
     }
 
-    /// Fails matching calls with `org.netvfs.Error.<name>`.
     pub fn fail(&self, failure: Failure) {
         self.shared.with(|s| s.failures.push(failure));
     }
 
-    /// Fails the next call of `method` once.
     pub fn fail_next(&self, method: &str, name: &str, message: &str) {
         self.fail(Failure::new(method, name, message).times(1));
     }
 
-    /// Makes jobs end with an error in `JobFinished` after some bytes.
     pub fn fail_job(&self, failure: JobFailure) {
         self.shared.with(|s| s.job_failures.push(failure));
     }
@@ -359,31 +331,16 @@ impl FakeBridge {
         });
     }
 
-    /// Questions `ConnectAdHoc` asks (in order) before it connects.
-    pub fn script_adhoc_questions(&self, questions: Vec<ScriptedQuestion>) {
-        self.shared.with(|s| s.adhoc_questions = questions);
-    }
-
-    /// The bridge asks a question out of the blue (keyboard-interactive during
-    /// a session); resolves with the app's answer.
-    pub async fn ask(&self, kind: &str, details: Vec<(String, InfoValue)>) -> Option<RecordedAnswer> {
-        self.shared.ask(kind, &details).await
-    }
-
-    // ---- observation ----------------------------------------------------
-
-    /// Secrets that reached `ConnectAdHoc`.
-    pub fn received_secrets(&self) -> Vec<Vec<u8>> {
-        self.shared.with(|s| s.received_secrets.clone())
-    }
-
-    pub fn answers(&self) -> Vec<RecordedAnswer> {
-        self.shared.with(|s| s.answers.clone())
-    }
-
-    /// Calls received, in order.
     pub fn calls(&self) -> Vec<CallRecord> {
         self.shared.with(|s| s.calls.clone())
+    }
+
+    pub fn jobs_canceled(&self) -> usize {
+        self.shared.with(|s| s.jobs_canceled)
+    }
+
+    pub fn location_replies(&self) -> usize {
+        self.shared.with(|s| s.location_replies)
     }
 
     pub fn calls_of(&self, method: &str) -> Vec<CallRecord> {
@@ -394,7 +351,6 @@ impl FakeBridge {
         self.shared.with(|s| s.calls.clear());
     }
 
-    /// `settings:<loc>`, `add:<provider>` and `storage` handoffs.
     pub fn handoffs(&self) -> Vec<String> {
         self.shared.with(|s| s.handoffs.clone())
     }
@@ -408,8 +364,6 @@ impl FakeBridge {
     }
 }
 
-/// A listening socket of the fake; dropping it closes and removes the socket
-/// (the bridge is gone).
 pub struct Listener {
     path: PathBuf,
     task: tokio::task::JoinHandle<()>,
@@ -431,6 +385,8 @@ impl Drop for Listener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signals::Signal;
+    use futures::StreamExt;
 
     #[tokio::test]
     async fn locations_files_and_scripts_are_visible_to_the_test() {
@@ -457,7 +413,29 @@ mod tests {
         fake.remove_location(&id).await;
         assert!(fake.locations().is_empty());
         assert_eq!(fake.session_count(), 0);
-        assert!(fake.calls().is_empty() && fake.handoffs().is_empty() && fake.answers().is_empty());
+        assert!(fake.calls().is_empty() && fake.handoffs().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_client_with_an_answer_hears_of_every_later_change() {
+        let fake = FakeBridge::new();
+        let (client, server) = UnixStream::pair().unwrap();
+        let session = fake.shared.new_session();
+        let (served, conn) = tokio::join!(
+            fake.serve_session(server, session),
+            Connection::from_stream(client)
+        );
+        let (_served, conn) = (served.unwrap(), conn.unwrap());
+        let mut signals = conn.signals();
+        conn.proxy().hello("test").await.unwrap();
+        assert_eq!(conn.proxy().get_consent().await.unwrap(), "decided");
+
+        fake.set_consent(Consent::Unknown).await;
+        let heard = tokio::time::timeout(Duration::from_secs(30), signals.next()).await;
+        let Ok(Some(Ok(Signal::ConsentChanged(consent)))) = heard else {
+            panic!("no ConsentChanged: {heard:?}");
+        };
+        assert_eq!(consent, "unknown");
     }
 
     #[tokio::test]

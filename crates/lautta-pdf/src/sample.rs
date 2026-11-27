@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Small, valid PDFs built in code, for tests here and in the crates that
-//! use this one (feature `sample`).
 
-/// One page of a test PDF: media box size, `/Rotate` and content stream.
-/// Every page has Helvetica (WinAnsiEncoding) as font `/F1`.
 #[derive(Clone)]
 pub struct Spec {
     pub w: u32,
@@ -12,10 +8,8 @@ pub struct Spec {
     pub content: String,
 }
 
-/// Fills a red 50 pt square in the bottom left corner.
 pub const RED_SQUARE: &str = "1 0 0 rg 0 0 50 50 re f";
 
-/// An upright page.
 pub fn page(w: u32, h: u32, content: &str) -> Spec {
     Spec {
         w,
@@ -25,9 +19,6 @@ pub fn page(w: u32, h: u32, content: &str) -> Spec {
     }
 }
 
-/// Content that shows `s` in 12 pt Helvetica, its baseline starting at
-/// `x`, `y` (PDF points from the bottom left). Latin-1 letters such as ä
-/// are written in WinAnsiEncoding.
 pub fn text(x: u32, y: u32, s: &str) -> String {
     let s: String = s
         .chars()
@@ -41,76 +32,70 @@ pub fn text(x: u32, y: u32, s: &str) -> String {
 }
 
 const FONT: &str =
-    "<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>";
+    "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>";
 
-/// A minimal, valid PDF with a correct cross-reference table.
 pub fn build(pages: &[Spec]) -> Vec<u8> {
     Doc::new(pages.to_vec()).build()
 }
 
-/// The reference to page `index` of a [`Doc`] or [`build`] PDF.
 pub fn page_ref(index: usize) -> String {
     format!("{} 0 R", 3 + 2 * index)
 }
 
-/// A link annotation over `rect` (`x0 y0 x1 y1` in points) with `target`,
-/// e.g. `/Dest [3 0 R /Fit]` or `/A << /S /URI /URI (https://example.org) >>`.
 pub fn link(rect: [i32; 4], target: &str) -> String {
     let [x0, y0, x1, y1] = rect;
     format!("<< /Type /Annot /Subtype /Link /Rect [{x0} {y0} {x1} {y1}] {target} >>")
 }
 
-/// A test PDF with more than pages: catalog and page entries, further
-/// objects and an outline.
 pub struct Doc {
     pages: Vec<Spec>,
     catalog: String,
     page_entries: Vec<String>,
+    page_resources: Vec<String>,
     objects: Vec<String>,
 }
 
 impl Doc {
     pub fn new(pages: Vec<Spec>) -> Doc {
         let page_entries = vec![String::new(); pages.len()];
+        let page_resources = page_entries.clone();
         Doc {
             pages,
             catalog: String::new(),
             page_entries,
+            page_resources,
             objects: Vec::new(),
         }
     }
 
-    /// Adds `entry` (e.g. `/Dests << ... >>`) to the catalog.
     pub fn catalog(&mut self, entry: &str) -> &mut Doc {
         self.catalog.push(' ');
         self.catalog.push_str(entry);
         self
     }
 
-    /// Adds `entry` (e.g. `/Annots [...]`) to page `index`.
     pub fn page_entry(&mut self, index: usize, entry: &str) -> &mut Doc {
         self.page_entries[index].push(' ');
         self.page_entries[index].push_str(entry);
         self
     }
 
-    /// The reference the object added `k` objects from now gets: `ahead(0)`
-    /// is the next [`Doc::object`].
+    pub fn page_resource(&mut self, index: usize, entry: &str) -> &mut Doc {
+        self.page_resources[index].push(' ');
+        self.page_resources[index].push_str(entry);
+        self
+    }
+
     pub fn ahead(&self, k: usize) -> String {
         format!("{} 0 R", 3 + 2 * self.pages.len() + self.objects.len() + k)
     }
 
-    /// Adds an object and returns its reference.
     pub fn object(&mut self, body: &str) -> String {
         let r = self.ahead(0);
         self.objects.push(body.to_string());
         r
     }
 
-    /// Adds an outline of one or more `(title, level, target)` items in
-    /// reading order, starting at level 0. Titles are PDF strings such as `(Intro)`, targets
-    /// entries such as `/Dest [3 0 R /Fit]`. Items get only `/Title`,
-    /// `/First` and `/Next`.
     pub fn outline(&mut self, items: &[(&str, u32, &str)]) -> &mut Doc {
         let root = self.ahead(0);
         let refs: Vec<String> = (0..items.len()).map(|k| self.ahead(1 + k)).collect();
@@ -132,7 +117,6 @@ impl Doc {
         self
     }
 
-    /// The PDF, with a correct cross-reference table.
     pub fn build(&self) -> Vec<u8> {
         let n = self.pages.len();
         let mut objects = vec![
@@ -144,10 +128,11 @@ impl Doc {
         ];
         for (i, p) in self.pages.iter().enumerate() {
             objects.push(format!(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Resources {FONT} /Contents {} 0 R{} >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Resources << {FONT}{} >> /Contents {} 0 R{} >>",
                 p.w,
                 p.h,
                 p.rotate,
+                self.page_resources[i],
                 4 + 2 * i,
                 self.page_entries[i]
             ));
@@ -180,12 +165,7 @@ impl Doc {
     }
 }
 
-/// Password that opens [`LOCKED_AES256`] and [`LOCKED_RC4`] as a reader.
 pub const LOCKED_PASSWORD: &str = "sesame";
-/// The owner password, which opens [`LOCKED_AES256`] too.
 pub const LOCKED_OWNER_PASSWORD: &str = "owner-key";
-/// Two pages as in [`RED_SQUARE`] on 100×200 and an empty 300×150,
-/// encrypted with AES-256 (made with pypdf).
 pub const LOCKED_AES256: &[u8] = include_bytes!("fixtures/locked-aes256.pdf");
-/// The same, encrypted with 128-bit RC4.
 pub const LOCKED_RC4: &[u8] = include_bytes!("fixtures/locked-rc4.pdf");

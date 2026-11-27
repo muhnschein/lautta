@@ -8,10 +8,10 @@ toggle-pill switches, no modal sheets sliding from bottom, no snackbars with
 no separators between list rows, no centred titles.
 
 Silica idioms to use instead:
-- PageHeader: right-aligned, light weight, highlight colour; description below it.
+- PageHeader: right-aligned, light weight, highlight colour; description below it. Folder header: one line at list-text size, path crumbs then folder name in highlight colour.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Edit path, Favourite) live in the header path menu. Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions live in the folder pulley; folder header carries path crumbs (Lautta glyph while whole path fits right of page's left quarter, folders above, "…" for what doesn't fit, its menu ends with Browse). Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.
@@ -26,6 +26,9 @@ Silica idioms to use instead:
   ComboBox (label + highlight value; opens inline menu), Slider (value above,
   label below), TextField (underline, label below).
 - Empty states = ViewPlaceholder (big light highlight text centred + hint).
+- Server warnings (`FolderPlaceholder` `level`) = placeholder with `icon-l-attention` on top, buttons
+  stacked, fix first on highlight background. Security level (identity changed): icon and title
+  `Theme.errorColor`, "Security warning" label above title.
 - Busy = BusyIndicator ring. Progress = thin highlight line.
 - Buttons (rare in Silica; only in page content) = `.btn` rounded.
 - Section headers = small, right-aligned, highlight colour.
@@ -54,7 +57,7 @@ Phone frame 400×860 (portrait); landscape 860×400. A frame may be taller (e.g.
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
 <style>
 ...PASTE THE CSS BELOW VERBATIM...
 </style>
@@ -81,6 +84,15 @@ below); real `<button>`/`<a href>`/`<input>`/`<label>` for controls, `aria-label
 icon-only buttons; no `<iframe>`; no scripts building DOM. Use `&amp;` for & in
 attribute values, `&lt;` `&gt;` in text.
 
+## Line weight
+Sailfish's icons draw every outline 2 units × pixel ratio wide (3 px at ratio 1.5), at small,
+medium and large size alike; secondary parts dimmed (60 % opacity), not thinner.
+- Lautta's own icons (`qml/icons`): same. `FileIcons.source` loads them via `image://lautta-icon`,
+  which scales every `stroke-width` so the root's (= outline) comes out that wide at drawn size.
+- Grid per main size, lines on half units: 32 units for medium (64, 96, 128 px), 48 for large,
+  28 for 112 px and grid tiles. Inner lines no wider than outline.
+- Kit (`.ic`): 1.1 px at every size (3 px of 1080).
+
 ## CSS (paste verbatim in each artboard's helmet `<style>`)
 
 ```css
@@ -93,12 +105,12 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
-.mono{font-family:'Source Code Pro',monospace}
+.mono{font-family:'JetBrains Mono',monospace}
 /* page-stack indicators */
 .ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
 .ind-back{left:10px}.ind-fwd{right:10px}
@@ -119,6 +131,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 10px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:17px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* dialog header */
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
@@ -220,7 +237,7 @@ music `<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" 
 video `<rect x="3" y="6" width="13" height="12"/><path d="M16 10l5-3v10l-5-3"/>`
 archive `<rect x="4" y="3" width="16" height="18"/><path d="M12 3v2M12 7v2M12 11v2"/><rect x="10.5" y="14" width="3" height="4"/>`
 database `<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>`
-server `<rect x="3" y="4" width="18" height="7"/><rect x="3" y="13" width="18" height="7"/><path d="M7 7.5h.01M7 16.5h.01"/>`
+server `<rect x="3.5" y="4.5" width="17" height="6"/><rect x="3.5" y="13.5" width="17" height="6"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="7" cy="16.5" r="1" fill="currentColor" stroke="none"/>`
 sd-card `<path d="M7 3h8l4 4v14H7zM10 3v4M13 3v4"/>`
 usb `<path d="M12 3v14M9 6l3-3 3 3M7 10v3l5 3M17 9v3l-5 3"/><circle cx="12" cy="19" r="2"/>`
 phone(android) `<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>`
@@ -259,7 +276,7 @@ pin `<path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8"/>`
 
 ## Content conventions
 - App name "Lautta". Sample data: realistic, no lorem ipsum. Servers: "NAS" (SFTP,
-  nas.home), "Office" (SMB), ad-hoc "files.kotisivu.fi" (SFTP). Volume "SD card".
+  nas.home), "Office" (SMB); nearby "raspberrypi" (SFTP). Volume "SD card".
 - Sizes "4.2 MB", times "Today 09:14", "Yesterday", "12 Sep".
 - Everything Finnish-flavoured is fine but English UI copy.
 - Never show bridge features in artboards labelled "standalone".

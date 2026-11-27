@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The netvfs provider against the fake bridge: listing, metadata, namespace
-//! operations, read handles, lanes, capabilities and error mapping
-//! (SPEC NVB-7, NVB-8, LOC-7, §20).
 
 mod bridge_support;
 
 use bridge_support::{eventually, Rig};
+use lautta_core::bridge::Network;
 use lautta_core::entry::{cap, EntryFlags, Kind};
 use lautta_core::error::ErrorKind;
-use lautta_core::provider::{list_all, read_all, AttributeChanges, CopyOptions, Lane, Provider, RenameMode};
+use lautta_core::index::crawl::{Crawl, CrawlOutcome};
+use lautta_core::index::store::{IndexStore, RootState, QUERY_LIMIT};
+use lautta_core::provider::{
+    list_all, no_progress, read_all, AttributeChanges, CopyOptions, FolderCheck, KnownFolder, Lane, Provider,
+    RenameMode,
+};
 use lautta_core::vpath::VPath;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -63,10 +67,8 @@ async fn known_capabilities_are_fetched_on_first_use() {
     let caps = provider.known_capabilities().await;
     assert!(caps.has(cap::RESTRICTED_NAMES) && caps.writable());
     assert!(provider.has_capabilities());
-    // Asked once: what the bridge says later is not fetched again.
     rig.fake.set_capabilities("account:1", &["Symlinks"], &[], 255);
     assert!(!provider.known_capabilities().await.has(cap::SYMLINKS));
-    // A location the bridge cannot answer for keeps the assumed ones.
     let unknown = rig.client.provider("nv-account:9");
     assert!(unknown.known_capabilities().await.writable());
     assert!(!unknown.has_capabilities());
@@ -147,7 +149,6 @@ async fn listing_errors_come_with_the_done_signal() {
     assert_eq!(e.kind, ErrorKind::NotFound);
     let e = list_all(&provider, &p("f"), Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::NotADirectory);
-    // An empty folder is a complete listing, not an error.
     rig.fake.put_dir("account:1", b"empty");
     assert!(list_all(&provider, &p("empty"), Lane::Interactive)
         .await
@@ -320,7 +321,6 @@ async fn links_attributes_copies_checksums_and_space() {
     let e = provider.stat(&p("a"), true, Lane::Interactive).await.unwrap();
     assert_eq!(e.mode, Some(0o600), "only the permission bits travel");
     assert_eq!(e.modified, Some(UNIX_EPOCH + Duration::from_millis(42_000)));
-    // Nothing to change is not a round trip.
     rig.fake.clear_calls();
     provider
         .set_attributes(&p("a"), AttributeChanges::default())
@@ -329,12 +329,12 @@ async fn links_attributes_copies_checksums_and_space() {
     assert!(rig.fake.calls_of("SetAttributes").is_empty());
 
     provider
-        .server_copy(&p("a"), &p("copy"), CopyOptions::default())
+        .server_copy(&p("a"), &p("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     assert_eq!(rig.fake.file("account:1", b"copy").unwrap(), b"abc");
     let e = provider
-        .server_copy(&p("a"), &p("copy"), CopyOptions::default())
+        .server_copy(&p("a"), &p("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::AlreadyExists);
@@ -346,6 +346,7 @@ async fn links_attributes_copies_checksums_and_space() {
                 replace: true,
                 preserve_mtime: false,
             },
+            no_progress(),
         )
         .await
         .unwrap();
@@ -396,7 +397,6 @@ async fn reads_are_capped_at_one_mebibyte() {
         "a larger request is answered with at most 1 MiB"
     );
     assert_eq!(first, data[..1 << 20]);
-    // `read_all` still reads everything in pieces.
     assert_eq!(read_all(handle.as_ref(), 8 << 20).await.unwrap(), data);
 }
 
@@ -463,11 +463,9 @@ async fn bridge_errors_keep_their_name_message_detail_and_retry_hint() {
     assert_eq!(e.detail.as_deref(), Some("sharing violation"));
     assert_eq!(e.retry_after_ms, Some(2500));
 
-    // A name the app does not know is a protocol error, never a success.
     rig.fake.fail_next("Stat", "Brandnew", "?");
     let e = provider.stat(&p("f"), true, Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::ProtocolError);
-    // A path that climbs out cannot even be formed (SEC-2).
     assert_eq!(VPath::parse(b"a/../b").unwrap_err().kind, ErrorKind::InvalidName);
 }
 
@@ -501,4 +499,213 @@ async fn a_dropped_connection_is_connection_lost() {
     assert_eq!(e.kind, ErrorKind::ConnectionLost, "{e}");
     let e = handle.read_at(0, 1).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::ConnectionLost, "{e}");
+}
+
+const T0: i64 = 1_700_000_000_000;
+
+fn known(path: &str, etag: Option<&[u8]>, modified_ms: Option<i64>) -> KnownFolder {
+    KnownFolder {
+        path: p(path),
+        etag: etag.map(<[u8]>::to_vec),
+        modified_ms,
+    }
+}
+
+fn outcome(check: &FolderCheck) -> String {
+    match check {
+        FolderCheck::Failed(e) => format!("failed {:?}", e.kind),
+        FolderCheck::Unchanged(e) => format!("unchanged {}", String::from_utf8_lossy(&e.name)),
+        FolderCheck::Listed(e, children) => {
+            let mut names: Vec<String> = children
+                .iter()
+                .map(|c| String::from_utf8_lossy(&c.name).into_owned())
+                .collect();
+            names.sort();
+            format!("listed {} {}", String::from_utf8_lossy(&e.name), names.join(","))
+        }
+    }
+}
+
+#[tokio::test]
+async fn folders_are_checked_in_one_bridge_call() {
+    let rig = Rig::ready().await;
+    rig.fake.put_file("account:1", b"t/a/1", b"x");
+    rig.fake.put_file("account:1", b"t/b/2", b"x");
+    rig.fake.set_now_ms("account:1", T0 + 10_000);
+    let provider = rig.provider();
+    let folders = [
+        known("t/a", None, Some(T0)),
+        known("t/gone", None, None),
+        known("t/b", None, Some(T0 - 1)),
+    ];
+    let checks = provider.check_folders(&folders, T0, Lane::Bulk).await.unwrap();
+    let seen: Vec<String> = checks.iter().map(outcome).collect();
+    assert_eq!(seen, vec!["unchanged a", "failed NotFound", "listed b 2"]);
+    assert_eq!(rig.fake.calls_of("Check").len(), 1);
+    assert_eq!(rig.fake.calls_of("Check")[0].lane, "bulk");
+    assert!(rig.fake.calls_of("Stat").is_empty() && rig.fake.calls_of("List").is_empty());
+    match &checks[0] {
+        FolderCheck::Unchanged(e) => assert_eq!(e.modified_ms(), Some(T0)),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_bridge_without_check_is_asked_folder_by_folder() {
+    let rig = Rig::ready().await;
+    rig.fake.set_features(Some(&["storage-settings"]));
+    rig.fake.put_file("account:1", b"t/a/1", b"x");
+    let rig = {
+        rig.fake.disconnect_clients().await;
+        rig
+    };
+    eventually("the features are read again", || !rig.client.offers("check")).await;
+    bridge_support::status(&rig.client, lautta_core::bridge::BridgeStatus::Ready).await;
+    let provider = rig.provider();
+    let checks = provider
+        .check_folders(&[known("t/a", None, None)], T0 + 10_000, Lane::Bulk)
+        .await
+        .unwrap();
+    assert_eq!(outcome(&checks[0]), "listed a 1");
+    assert!(rig.fake.calls_of("Check").is_empty());
+    assert_eq!(rig.fake.calls_of("Stat").len(), 1);
+    assert_eq!(rig.fake.calls_of("List").len(), 1);
+}
+
+#[tokio::test]
+async fn more_folders_than_one_call_takes_are_sent_in_parts_and_a_failed_call_fails() {
+    let rig = Rig::ready().await;
+    rig.fake.put_dir("account:1", b"t");
+    let provider = rig.provider();
+    let many: Vec<KnownFolder> = (0..1500).map(|_| known("t", None, None)).collect();
+    let checks = provider.check_folders(&many, T0, Lane::Bulk).await.unwrap();
+    assert_eq!(checks.len(), 1500);
+    assert!(checks.iter().all(|c| matches!(c, FolderCheck::Listed(..))));
+    assert_eq!(rig.fake.calls_of("Check").len(), 2);
+    rig.fake.fail_next("Check", "ConnectionLost", "gone");
+    let e = provider
+        .check_folders(&many[..2], T0, Lane::Bulk)
+        .await
+        .unwrap_err();
+    assert_eq!(e.kind, ErrorKind::ConnectionLost);
+}
+
+#[tokio::test]
+async fn a_server_is_crawled_through_check_and_deep_etags_skip_what_did_not_change() {
+    let rig = Rig::ready().await;
+    for path in ["a/x/1.txt", "a/y/deep/2.txt", "b/3.txt", "b/z/4.txt", "top.txt"] {
+        rig.fake.put_file("account:1", path.as_bytes(), b"x");
+    }
+    rig.fake.set_deep_etags("account:1", true);
+    let mut flags: Vec<&str> = lautta_bridge_proto::fake::DEFAULT_CAPS.to_vec();
+    flags.push("DeepETags");
+    rig.fake.set_capabilities("account:1", &flags, &["sha256"], 255);
+    let provider = rig.provider();
+    let dir = tempfile::tempdir().unwrap();
+    let store = IndexStore::open(&dir.path().join("names.db")).unwrap();
+    let root = store.root("nv-account:1", &VPath::root()).unwrap();
+    let stop = AtomicBool::new(false);
+    let now = || T0;
+    let crawl = || Crawl {
+        store: &store,
+        provider: &provider,
+        stop: &stop,
+        now_ms: &now,
+        events: None,
+    };
+    assert_eq!(crawl().run(&root).await.unwrap(), CrawlOutcome::Done);
+    assert_eq!(store.query(&[root.id], ".txt", QUERY_LIMIT).unwrap().len(), 5);
+    let folders = |calls: usize| rig.fake.calls_of("Check").len() - calls;
+    let first = rig.fake.calls_of("Check").len();
+    assert!(first <= 5, "one call per level, not per folder: {first}");
+
+    assert_eq!(crawl().run(&root).await.unwrap(), CrawlOutcome::Done);
+    assert_eq!(
+        folders(first),
+        1,
+        "an unchanged server costs one call for one folder"
+    );
+
+    rig.fake.put_file("account:1", b"a/y/deep/new.txt", b"x");
+    let before = rig.fake.calls_of("Check").len();
+    assert_eq!(crawl().run(&root).await.unwrap(), CrawlOutcome::Done);
+    assert_eq!(
+        folders(before),
+        4,
+        "the top folder, then one call per level down to the change"
+    );
+    let found = store.query(&[root.id], "new.txt", QUERY_LIMIT).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].folder, p("a/y/deep"));
+    assert!(rig.fake.calls_of("Stat").is_empty() && rig.fake.calls_of("List").is_empty());
+
+    rig.fake.fail_next("Check", "ConnectionLost", "gone");
+    let e = crawl().run(&root).await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::ConnectionLost);
+    assert_eq!(
+        store.root_info(root.id).unwrap().unwrap().state,
+        RootState::Failed
+    );
+    assert_eq!(
+        store.query(&[root.id], ".txt", QUERY_LIMIT).unwrap().len(),
+        6,
+        "the index is kept"
+    );
+}
+
+#[tokio::test]
+async fn a_server_that_offers_search_is_asked_for_names() {
+    let rig = Rig::ready().await;
+    for path in ["docs/Tax/tax-2026.pdf", "docs/other.txt", "taxi.jpg"] {
+        rig.fake.put_file("account:1", path.as_bytes(), b"12");
+    }
+    let provider = rig.provider_with_caps().await;
+    let mut found = provider.search_names(&p("docs"), "TAX", 100).await.unwrap();
+    found.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    let paths: Vec<String> = found.iter().map(|(path, _)| path.display()).collect();
+    assert_eq!(paths, vec!["docs/Tax", "docs/Tax/tax-2026.pdf"]);
+    assert_eq!((found[0].1.kind, found[1].1.kind), (Kind::Dir, Kind::File));
+    assert_eq!(found[1].1.size, Some(2));
+    assert_eq!(
+        provider
+            .search_names(&VPath::root(), "tax", 2)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+    let e = provider.search_names(&p("gone"), "tax", 5).await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::NotFound);
+
+    rig.fake.set_capabilities("account:1", &["ReadHandles"], &[], 255);
+    provider.refresh_capabilities().await.unwrap();
+    rig.fake.clear_calls();
+    let e = provider.search_names(&p("docs"), "tax", 5).await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::Unsupported);
+    assert!(
+        rig.fake.calls_of("Search").is_empty(),
+        "a server without Search is not asked"
+    );
+}
+
+#[tokio::test]
+async fn the_network_kind_follows_the_bridge() {
+    let rig = Rig::ready().await;
+    eventually("the kind is read", || rig.client.network() == Network::Wifi).await;
+    let watch = rig.client.watch_network();
+    rig.fake.set_network("mobile").await;
+    eventually("mobile data is seen", || rig.client.network() == Network::Mobile).await;
+    assert!(watch.has_changed().unwrap());
+    rig.fake.set_network("none").await;
+    eventually("no network is seen", || rig.client.network() == Network::Offline).await;
+    assert!(!Network::Mobile.unmetered() && Network::Wifi.unmetered() && Network::Ethernet.unmetered());
+    assert!(!Network::Offline.unmetered() && !Network::Unknown.unmetered() && !Network::Other.unmetered());
+    assert_eq!(Network::from_wire("ethernet"), Network::Ethernet);
+    assert_eq!(Network::from_wire("other"), Network::Other);
+    assert_eq!(Network::from_wire("carrier pigeon"), Network::Unknown);
+    rig.fake.disconnect_clients().await;
+    eventually("a lost bridge leaves the kind unknown or reads it again", || {
+        matches!(rig.client.network(), Network::Unknown | Network::Offline)
+    })
+    .await;
 }

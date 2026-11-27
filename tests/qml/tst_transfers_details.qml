@@ -4,5 +4,13 @@ import Sailfish.Silica 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
-    initialPage: Component { TransferDetailsPage { transferId: 1 } }
+    id: test
+    property bool reachedEnd
+
+    initialPage: Component {
+        TransferDetailsPage {
+            transferId: 1
+            Component.onCompleted: test.reachedEnd = true
+        }
+    }
 }

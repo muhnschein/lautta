@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `DirectoryModel { uri }` (doc/QML-API.md, SPEC §9): a folder listing on
-//! top of `lautta_core::listing::ListingState`. Listings stream in from the
-//! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
-//! local folders are watched (BRW-6) and the view settings are the global
-//! ones (BRW-4), followed while the folder is open.
 
-use crate::browse::Guard;
+use crate::home::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
+use cpp::cpp;
 use lautta_core::app::Core;
-use lautta_core::app_directory::{file_url, ListEvent};
-use lautta_core::entry::{cap, Entry, EntryFlags};
+use lautta_core::app_directory::{file_url, forward_coalesced, ListEvent};
+use lautta_core::bridge::Level;
+use lautta_core::entry::{system_time_to_ms, Capabilities, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
 use lautta_core::foldercount::FolderCount;
@@ -19,8 +16,9 @@ use lautta_core::locations::{LocationKind, LocationStatus};
 use lautta_core::mime;
 use lautta_core::sort::SortKey;
 use lautta_core::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
+use lautta_core::thumbs_text::{thumb_monospace, type_icon};
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
-use lautta_core::watch::{DirWatcher, DIR_DEBOUNCE};
+use lautta_core::watch::DirWatch;
 use lautta_core::{Error, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{queued_callback, QByteArray, QPointer, QVariantList};
@@ -29,10 +27,16 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use tokio::sync::mpsc::unbounded_channel;
+
+cpp! {{
+    #include <QtCore/QAbstractItemModel>
+}}
 use tokio::task::AbortHandle;
 
+const BATCH_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
+const SUGGEST_SAMPLE: usize = 64;
 const ROLE_BASE: i32 = 0x0100;
-const ROLES: [&str; 22] = [
+const ROLES: [&str; 26] = [
     "name",
     "nameIsLossy",
     "uri",
@@ -55,10 +59,12 @@ const ROLES: [&str; 22] = [
     "inaccessible",
     "itemCount",
     "itemCountCapped",
+    "textThumb",
+    "textPreview",
+    "textPreviewMono",
+    "typeIcon",
 ];
 
-/// Errors that mean "can't reach it right now": a cached copy stays visible
-/// and the page says it is offline (BRW-7).
 fn is_connectivity(kind: ErrorKind) -> bool {
     matches!(
         kind,
@@ -69,23 +75,39 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
+fn lost_bridge(kind: ErrorKind) -> bool {
+    matches!(kind, ErrorKind::ConnectionLost | ErrorKind::BridgeUnavailable)
+}
+
+fn level_of(core: &Core, location: &str) -> Option<Level> {
+    core.bridge.as_ref()?.access(location)
+}
+
 fn qs(s: &str) -> QString {
     QString::from(s)
 }
 
-/// What an item count was made for: it is counted again when the folder
-/// changed (its modified time) or the hidden files were switched.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct CountStamp {
     modified: Option<i64>,
     show_hidden: bool,
 }
 
-/// The count of one folder in the view, `result` `None` until it is made
-/// or when the folder cannot be read.
 struct CountSlot {
     stamp: CountStamp,
     result: Option<FolderCount>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PreviewStamp {
+    modified: Option<i64>,
+    size: Option<u64>,
+}
+
+struct PreviewSlot {
+    stamp: PreviewStamp,
+    key: Option<String>,
+    text: Option<String>,
 }
 
 #[derive(QObject, Default)]
@@ -102,14 +124,14 @@ pub struct DirectoryModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     count: qt_property!(i32; NOTIFY stateChanged),
-    /// When the cached copy on screen was fetched (ms since the epoch), -1 if none.
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
     writable: qt_property!(bool; NOTIFY stateChanged),
+    changeable: qt_property!(bool; NOTIFY stateChanged),
+    readable: qt_property!(bool; NOTIFY stateChanged),
+    access: qt_property!(QString; NOTIFY stateChanged),
     locationName: qt_property!(QString; NOTIFY stateChanged),
     title: qt_property!(QString; NOTIFY stateChanged),
-    /// Folders here have an item count (`requestCount`): the folder is on
-    /// this device or a drive, not on a server or in an archive.
     folderCounts: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
@@ -126,8 +148,6 @@ pub struct DirectoryModel {
     prefsChanged: qt_signal!(),
 
     filterText: qt_property!(QString; NOTIFY filterChanged WRITE set_filter_text),
-    /// Hide files (the folder picker).
-    foldersOnly: qt_property!(bool; NOTIFY filterChanged WRITE set_folders_only),
     filterChanged: qt_signal!(),
 
     refresh: qt_method!(fn(&mut self)),
@@ -140,15 +160,14 @@ pub struct DirectoryModel {
     selectedUris: qt_method!(fn(&self) -> QVariantList),
     setViewPrefs: qt_method!(fn(&mut self, prefs_json: QString) -> bool),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
-    /// The uri of row `index`, empty outside the rows (drag selection, SPEC §15.3).
     uriAt: qt_method!(fn(&self, index: i32) -> QString),
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
-    /// "folder", "file" or "" for the item `uri` of this folder.
     kindOf: qt_method!(fn(&self, uri: QString) -> QString),
-    /// Counts the items of the folder `uri` for the `itemCount` role,
-    /// off the GUI thread; asks again only when the folder changed.
+    shareType: qt_method!(fn(&self, uris_json: QString) -> QString),
     requestCount: qt_method!(fn(&mut self, uri: QString)),
+    requestPreview: qt_method!(fn(&mut self, uri: QString)),
+    cancelPreview: qt_method!(fn(&mut self, uri: QString)),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
@@ -161,35 +180,33 @@ pub struct DirectoryModel {
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    /// The global view settings `prefs` last followed (BRW-4).
     global: ViewPrefs,
-    /// The view was set here (`setViewPrefs`) or for every folder since
-    /// the folder opened: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
-    /// The settings that pick the files with a thumbnail, as of the last
-    /// load or change; none before the folder is open.
+    adds: bool,
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
+    listing: u64,
     task: Option<AbortHandle>,
     pending: Option<Vec<Entry>>,
     dirty: bool,
-    /// Archives do not change while open: coming back never lists them again.
     archive: bool,
-    watcher: Option<DirWatcher>,
-    /// Ends the task following the settings when the model goes.
+    location_offline: bool,
+    watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
+    level: Option<Level>,
+    bridge_watch: Option<Guard>,
+    bridge_ready: u64,
+    listing_ready: u64,
+    relist_when_ready: bool,
     transfer_states: HashMap<Vec<u8>, String>,
-    /// Item counts of the folders in this one, by name; asked for by the
-    /// cells that show them.
     counts: HashMap<Vec<u8>, CountSlot>,
+    previews: HashMap<Vec<u8>, PreviewSlot>,
 }
 
 impl DirectoryModel {
-    // ---- loading ----
-
     fn set_uri(&mut self, value: QString) {
         if self.uri == value {
             return;
@@ -202,26 +219,33 @@ impl DirectoryModel {
     fn load(&mut self) {
         self.generation += 1;
         self.stop_tasks();
-        self.reset_state();
         let parsed = Uri::parse(&self.uri.to_string());
         let (Some(core), Ok(dir)) = (core(), parsed) else {
+            self.reset_state();
             self.fail(&Error::new(ErrorKind::InvalidArgument, "bad folder address"));
             return;
         };
         self.prefs = core.view_prefs();
         self.global = self.prefs;
         self.prefs_set = false;
+        self.reset_state();
         self.thumb_settings = Some(ThumbSettings::new(&core.settings()));
         if self.settings_watch.is_none() {
             self.watch_settings(&core);
         }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(&dir);
+        if self.bridge_watch.is_none() {
+            self.watch_bridge(&core);
+        }
+        self.level = level_of(&core, &dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
         self.folderCounts = self.local_dir.is_some();
         let location = core.location(&dir.location);
         self.archive = location.as_ref().is_some_and(|l| l.kind == LocationKind::Archive);
-        self.offline = location
+        self.offline = false;
+        self.location_offline = location
             .as_ref()
             .is_some_and(|l| l.status == LocationStatus::Offline);
         let location_name = location.map(|l| l.name).unwrap_or_default();
@@ -249,6 +273,7 @@ impl DirectoryModel {
     fn reset_state(&mut self) {
         self.begin_reset_model();
         self.state = ListingState::from_prefs(&self.prefs);
+        self.filter.show_hidden = self.prefs.show_hidden;
         self.state.set_filter(self.filter.clone());
         self.shown = 0;
         self.end_reset_model();
@@ -258,6 +283,7 @@ impl DirectoryModel {
         self.suggestGrid = false;
         self.transfer_states.clear();
         self.counts.clear();
+        self.drop_previews();
         self.folderCounts = false;
         self.dir = None;
         self.local_dir = None;
@@ -269,33 +295,40 @@ impl DirectoryModel {
         };
         let me = QPointer::from(&*self);
         let generation = self.generation;
+        let listing = self.next_listing();
         let cb = queued_callback(move |ev: ListEvent| {
             if let Some(m) = me.as_pinned() {
-                m.borrow_mut().on_event(generation, ev);
+                m.borrow_mut().on_event(generation, listing, ev);
             }
         });
         let task = runtime::handle().spawn(async move {
-            let (tx, mut rx) = unbounded_channel();
-            let forward = async {
-                while let Some(ev) = rx.recv().await {
-                    cb(ev);
-                }
-            };
+            let (tx, rx) = unbounded_channel();
+            let forward = forward_coalesced(rx, BATCH_EVERY, cb);
             tokio::join!(core.list_stream(&dir, use_cache, tx), forward);
         });
         self.task = Some(task.abort_handle());
     }
 
+    fn next_listing(&mut self) -> u64 {
+        self.listing += 1;
+        self.listing_ready = self.bridge_ready;
+        self.relist_when_ready = false;
+        self.listing
+    }
+
     fn start_watch(&mut self) {
-        let Some(path) = self.local_dir.clone() else {
+        let (Some(core), Some(path)) = (core(), self.local_dir.clone()) else {
             return;
         };
-        let Ok((watcher, mut rx)) = DirWatcher::new(DIR_DEBOUNCE) else {
-            return;
+        let (watcher, mut rx) = match core.watch_dir(&path) {
+            Ok(w) => w,
+            Err(e) => {
+                if e.kind != ErrorKind::NotFound {
+                    log::warn!("folder does not update live: {e}");
+                }
+                return;
+            }
         };
-        if watcher.watch(&path).is_err() {
-            return;
-        }
         let me = QPointer::from(&*self);
         let generation = self.generation;
         let cb = queued_callback(move |()| {
@@ -311,9 +344,75 @@ impl DirectoryModel {
         self.watcher = Some(watcher);
     }
 
-    /// Follows the settings while the model lives: a change made on another
-    /// page (Settings, or View options in another folder) shows here at
-    /// once (BRW-4), not only when the folder is opened again.
+    fn watch_bridge(&mut self, core: &Core) {
+        let Some(bridge) = core.bridge.as_ref() else {
+            return;
+        };
+        let mut locations = bridge.watch_locations();
+        let mut status = bridge.watch_status();
+        let guard = Guard::default();
+        let mut stop = guard.subscribe();
+        let me = QPointer::from(&*self);
+        let cb = queued_callback(move |ready: bool| {
+            if let Some(m) = me.as_pinned() {
+                let mut m = m.borrow_mut();
+                if ready {
+                    m.on_bridge_ready();
+                } else {
+                    m.follow_level();
+                }
+            }
+        });
+        runtime::handle().spawn(async move {
+            loop {
+                tokio::select! {
+                    r = locations.changed() => {
+                        if r.is_err() { return }
+                        locations.borrow_and_update();
+                        cb(false);
+                    }
+                    r = status.changed() => {
+                        if r.is_err() { return }
+                        if status.borrow_and_update().is_ready() {
+                            cb(true);
+                        }
+                    }
+                    _ = stop.changed() => return,
+                }
+            }
+        });
+        self.bridge_watch = Some(guard);
+    }
+
+    fn on_bridge_ready(&mut self) {
+        self.bridge_ready += 1;
+        if std::mem::take(&mut self.relist_when_ready) {
+            self.refresh();
+        }
+    }
+
+    fn relist_once_bridge_ready(&mut self) {
+        if self.bridge_ready == self.listing_ready {
+            self.relist_when_ready = true;
+        } else {
+            self.refresh();
+        }
+    }
+
+    fn follow_level(&mut self) {
+        let (Some(core), Some(dir)) = (core(), self.dir.as_ref()) else {
+            return;
+        };
+        let level = level_of(&core, &dir.location);
+        if level == self.level {
+            return;
+        }
+        self.level = level;
+        self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(dir);
+        self.refresh();
+    }
+
     fn watch_settings(&mut self, core: &Core) {
         let guard = Guard::default();
         let mut stop = guard.subscribe();
@@ -361,8 +460,6 @@ impl DirectoryModel {
         self.publish();
     }
 
-    /// The folder is on screen again (BRW-11): a folder nobody watches is
-    /// listed again, the cached rows staying until the fresh ones arrive.
     fn revisit(&mut self) {
         if self.watcher.is_none() && !self.archive && !self.loading {
             self.refresh();
@@ -379,8 +476,8 @@ impl DirectoryModel {
         self.publish();
     }
 
-    fn on_event(&mut self, generation: u64, ev: ListEvent) {
-        if generation != self.generation {
+    fn on_event(&mut self, generation: u64, listing: u64, ev: ListEvent) {
+        if generation != self.generation || listing != self.listing {
             return;
         }
         match ev {
@@ -388,17 +485,27 @@ impl DirectoryModel {
                 let changes = self.state.show_cached(entries);
                 self.apply(changes);
                 self.cachedAt = fetched_ms as f64;
+                self.offline = self.location_offline;
                 self.pending = Some(Vec::new());
+                self.maybe_suggest_grid();
             }
             ListEvent::Batch(batch) => match self.pending.as_mut() {
                 Some(p) => p.extend(batch),
                 None => {
                     let changes = self.state.apply_batch(batch);
                     self.apply(changes);
+                    if self.state.len() >= SUGGEST_SAMPLE {
+                        self.maybe_suggest_grid();
+                    }
                 }
             },
             ListEvent::Done(Ok(())) => self.finish_ok(),
-            ListEvent::Done(Err(e)) => self.fail(&e),
+            ListEvent::Done(Err(e)) => {
+                self.fail(&e);
+                if lost_bridge(e.kind) {
+                    self.relist_once_bridge_ready();
+                }
+            }
         }
         self.publish();
     }
@@ -413,7 +520,7 @@ impl DirectoryModel {
         }
         self.loading = false;
         self.offline = false;
-        self.cachedAt = -1.0;
+        self.cachedAt = system_time_to_ms(std::time::SystemTime::now()) as f64;
         self.errorKind = QString::default();
         self.errorMessage = QString::default();
         self.maybe_suggest_grid();
@@ -426,8 +533,7 @@ impl DirectoryModel {
         if self.prefs_set || self.prefs.view_mode != ViewMode::List || self.state.is_large() {
             return;
         }
-        let entries: Vec<Entry> = self.state.visible_entries().cloned().collect();
-        if suggest_grid(&entries) {
+        if suggest_grid(self.state.visible_entries()) {
             self.suggestGrid = true;
             self.viewMode = qs(ViewMode::Grid.as_str());
             self.prefsChanged();
@@ -438,7 +544,7 @@ impl DirectoryModel {
         self.pending = None;
         self.loading = false;
         self.state.finish();
-        if is_connectivity(e.kind) && self.state.total_len() > 0 {
+        if is_connectivity(e.kind) && self.state.total_len() > 0 && self.cachedAt >= 0.0 {
             self.offline = true;
             self.state.set_stale(true);
         }
@@ -447,10 +553,24 @@ impl DirectoryModel {
         self.publish();
     }
 
-    // ---- model plumbing ----
-
     fn apply(&mut self, changes: Vec<ListChange>) {
+        self.apply_roles(changes, &[]);
+    }
+
+    fn apply_roles(&mut self, changes: Vec<ListChange>, roles: &[&str]) {
+        let mut updated: Option<(usize, usize)> = None;
         for change in changes {
+            if let ListChange::Update { index } = change {
+                match updated {
+                    Some((first, last)) if last + 1 == index => updated = Some((first, index)),
+                    _ => {
+                        self.rows_changed(updated.take(), roles);
+                        updated = Some((index, index));
+                    }
+                }
+                continue;
+            }
+            self.rows_changed(updated.take(), roles);
             match change {
                 ListChange::Insert { index, count } => {
                     self.begin_insert_rows(index as i32, (index + count - 1) as i32);
@@ -462,16 +582,33 @@ impl DirectoryModel {
                     self.shown = self.shown.saturating_sub(count);
                     self.end_remove_rows();
                 }
-                ListChange::Update { index } => {
-                    let i = self.row_index(index as i32);
-                    self.data_changed(i, i);
-                }
+                ListChange::Update { .. } => {}
                 ListChange::Reset => self.reset_rows(),
             }
         }
+        self.rows_changed(updated, roles);
         if self.shown != self.state.len() {
             self.reset_rows();
         }
+    }
+
+    fn rows_changed(&mut self, range: Option<(usize, usize)>, roles: &[&str]) {
+        let Some((first, last)) = range else { return };
+        let (a, b) = (self.row_index(first as i32), self.row_index(last as i32));
+        let ids: Vec<i32> = roles
+            .iter()
+            .filter_map(|name| ROLES.iter().position(|r| r == name))
+            .map(|i| ROLE_BASE + i as i32)
+            .collect();
+        let (ids, len, obj) = (ids.as_ptr(), ids.len(), self.get_cpp_object());
+        cpp!(unsafe [obj as "QAbstractItemModel*", a as "QModelIndex", b as "QModelIndex",
+                     ids as "const int*", len as "size_t"] {
+            QVector<int> roles;
+            for (size_t i = 0; i < len; ++i)
+                roles << ids[i];
+            if (obj)
+                emit obj->dataChanged(a, b, roles);
+        });
     }
 
     fn reset_rows(&mut self) {
@@ -484,8 +621,15 @@ impl DirectoryModel {
         self.count = self.state.len() as i32;
         self.stale = self.state.is_stale();
         self.large = self.state.is_large();
-        self.writable =
-            self.flags.iter().any(|f| f == cap::WRITE) && !self.flags.iter().any(|f| f == cap::READ_ONLY);
+        let flags: Vec<&str> = self.flags.iter().map(String::as_str).collect();
+        let caps = Capabilities::with(&flags);
+        self.writable = self.adds;
+        self.changeable = caps.changeable();
+        self.readable = caps.readable();
+        self.access = qs(match self.level {
+            Some(level) if level != Level::Full => level.as_str(),
+            _ => "",
+        });
         let mut list = QVariantList::default();
         for f in &self.flags {
             list.push(QVariant::from(qs(f)));
@@ -508,23 +652,44 @@ impl DirectoryModel {
         (u.parent().as_ref() == self.dir.as_ref()).then(|| u.name().map(<[u8]>::to_vec))?
     }
 
-    fn thumbnail_source(&self, e: &Entry) -> String {
-        let Some(settings) = &self.thumb_settings else {
-            return String::new();
-        };
-        if !self.state.thumbnails_enabled() {
-            return String::new();
-        }
-        let local = self.local_dir.as_ref();
-        match thumbnail_source(e, local.is_some(), self.prefs.thumbnails, settings) {
-            ThumbSource::Icon => String::new(),
-            ThumbSource::System => {
-                local.map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name))))
+    fn thumb_source(&self, e: &Entry) -> ThumbSource {
+        match &self.thumb_settings {
+            Some(settings) if self.state.thumbnails_enabled() => {
+                thumbnail_source(e, self.local_dir.is_some(), self.prefs.thumbnails, settings)
             }
+            _ => ThumbSource::Icon,
+        }
+    }
+
+    fn thumbnail_source(&self, e: &Entry) -> String {
+        match self.thumb_source(e) {
+            ThumbSource::Icon | ThumbSource::Text => String::new(),
+            ThumbSource::System => self
+                .local_dir
+                .as_ref()
+                .map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name)))),
             ThumbSource::App => self
                 .entry_uri(e)
                 .map_or_else(String::new, |u| app_thumbnail_url(&u)),
         }
+    }
+
+    fn preview_stamp(e: &Entry) -> PreviewStamp {
+        PreviewStamp {
+            modified: e.modified_ms(),
+            size: e.size,
+        }
+    }
+
+    fn preview_of(&self, e: &Entry) -> &str {
+        if self.thumb_source(e) != ThumbSource::Text {
+            return "";
+        }
+        self.previews
+            .get(&e.name)
+            .filter(|slot| slot.stamp == Self::preview_stamp(e))
+            .and_then(|slot| slot.text.as_deref())
+            .unwrap_or("")
     }
 
     fn stamp_of(&self, e: &Entry) -> CountStamp {
@@ -534,8 +699,6 @@ impl DirectoryModel {
         }
     }
 
-    /// The count of the folder `e` as it is now; none while it is being
-    /// made again after a change.
     fn count_of(&self, e: &Entry) -> Option<FolderCount> {
         let slot = self.counts.get(&e.name)?;
         if slot.stamp == self.stamp_of(e) {
@@ -573,11 +736,13 @@ impl DirectoryModel {
             19 => e.flags.contains(EntryFlags::NOT_ACCESSIBLE).into(),
             20 => self.count_of(e).map_or(-1, |c| count_role(c.shown)).into(),
             21 => self.count_of(e).is_some_and(|c| c.capped).into(),
+            22 => (self.thumb_source(e) == ThumbSource::Text).into(),
+            23 => qs(self.preview_of(e)).into(),
+            24 => thumb_monospace(&e.name).into(),
+            25 => qs(type_icon(&e.name)).into(),
             _ => QVariant::default(),
         }
     }
-
-    // ---- view settings, filter ----
 
     fn apply_prefs_state(&mut self) {
         let p = self.prefs;
@@ -585,7 +750,6 @@ impl DirectoryModel {
         self.descending = p.descending;
         self.foldersFirst = p.folders_first;
         self.showHidden = p.show_hidden;
-        // A suggested grid (SPEC 15.3) stays until a view is chosen.
         let mode = if self.suggestGrid {
             ViewMode::Grid
         } else {
@@ -597,8 +761,6 @@ impl DirectoryModel {
         self.prefsChanged();
     }
 
-    /// Shows the folder with other view settings. Storing them for every
-    /// folder is `App.setSetting`'s job.
     fn setViewPrefs(&mut self, prefs_json: QString) -> bool {
         if self.dir.is_none() {
             return false;
@@ -636,8 +798,6 @@ impl DirectoryModel {
         true
     }
 
-    /// The global settings changed. What changed shows here at once; what
-    /// was set for this folder alone and did not change stays (BRW-4).
     fn follow_settings(&mut self) {
         let Some(core) = core() else { return };
         let global = core.view_prefs();
@@ -654,14 +814,11 @@ impl DirectoryModel {
         self.show_prefs(prefs);
     }
 
-    /// A view was chosen for this folder or for all: it replaces a
-    /// suggested grid and no other is suggested.
     fn view_chosen(&mut self) {
         self.prefs_set = true;
         self.suggestGrid = false;
     }
 
-    /// Shows the folder with the view settings `p`.
     fn show_prefs(&mut self, p: ViewPrefs) {
         self.prefs = p;
         self.apply_prefs_state();
@@ -672,7 +829,6 @@ impl DirectoryModel {
         self.publish();
     }
 
-    /// Thumbnails may have been switched: every row's data changed.
     fn reload_roles(&mut self) {
         if self.shown == 0 {
             return;
@@ -687,12 +843,6 @@ impl DirectoryModel {
         self.refilter();
     }
 
-    fn set_folders_only(&mut self, value: bool) {
-        self.foldersOnly = value;
-        self.filter.folders_only = value;
-        self.refilter();
-    }
-
     fn refilter(&mut self) {
         let changes = self.state.set_filter(self.filter.clone());
         self.apply(changes);
@@ -700,12 +850,10 @@ impl DirectoryModel {
         self.publish();
     }
 
-    // ---- selection ----
-
     fn select(&mut self, uri: QString) {
         if let Some(name) = self.name_of(&uri) {
             let changes = self.state.select(&name);
-            self.apply(changes);
+            self.apply_roles(changes, &["selected"]);
             self.publish();
         }
     }
@@ -713,20 +861,20 @@ impl DirectoryModel {
     fn toggle(&mut self, uri: QString) {
         if let Some(name) = self.name_of(&uri) {
             let changes = self.state.toggle(&name);
-            self.apply(changes);
+            self.apply_roles(changes, &["selected"]);
             self.publish();
         }
     }
 
     fn selectAll(&mut self) {
         let changes = self.state.select_all();
-        self.apply(changes);
+        self.apply_roles(changes, &["selected"]);
         self.publish();
     }
 
     fn clearSelection(&mut self) {
         let changes = self.state.clear_selection();
-        self.apply(changes);
+        self.apply_roles(changes, &["selected"]);
         self.publish();
     }
 
@@ -740,8 +888,6 @@ impl DirectoryModel {
         }
         out
     }
-
-    // ---- queries ----
 
     fn indexOf(&self, uri: QString) -> i32 {
         self.name_of(&uri)
@@ -763,16 +909,26 @@ impl DirectoryModel {
         self.flags.contains(&flag)
     }
 
-    /// "folder", "file" or "" for what is called `name` here (before filtering).
     fn nameKind(&self, name: QString) -> QString {
         qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
     }
 
-    /// By uri, so names that are not UTF-8 are found too (the selection
-    /// panel's one item, SPEC §15.3).
     fn kindOf(&self, uri: QString) -> QString {
         let name = self.name_of(&uri).unwrap_or_default();
         qs(kind_of(self.state.entry_named(&name)))
+    }
+
+    fn shareType(&self, uris_json: QString) -> QString {
+        let uris: Vec<String> = from_json(&uris_json.to_string()).unwrap_or_default();
+        let types: Vec<Option<String>> = uris
+            .iter()
+            .map(|u| {
+                self.name_of(&qs(u))
+                    .and_then(|name| self.state.entry_named(&name))
+                    .and_then(mime::mime_of)
+            })
+            .collect();
+        qs(&mime::share_type(types.iter().map(Option::as_deref)))
     }
 
     fn requestCount(&mut self, uri: QString) {
@@ -806,8 +962,6 @@ impl DirectoryModel {
         );
     }
 
-    /// A count arrived. One made for an older state of the folder, or for
-    /// another folder, is dropped: the cell asked again.
     fn counted(&mut self, generation: u64, name: &[u8], stamp: CountStamp, result: Option<FolderCount>) {
         if generation != self.generation {
             return;
@@ -817,8 +971,76 @@ impl DirectoryModel {
         };
         slot.result = result;
         if let Some(i) = self.state.index_of(name) {
-            let idx = self.row_index(i as i32);
-            self.data_changed(idx, idx);
+            self.rows_changed(Some((i, i)), &["itemCount", "itemCountCapped"]);
+        }
+    }
+
+    fn requestPreview(&mut self, uri: QString) {
+        let (Some(core), Some(name)) = (core(), self.name_of(&uri)) else {
+            return;
+        };
+        let Some(entry) = self.state.entry_named(&name) else {
+            return;
+        };
+        if self.thumb_source(entry) != ThumbSource::Text {
+            return;
+        }
+        let stamp = Self::preview_stamp(entry);
+        if self.previews.get(&name).is_some_and(|slot| slot.stamp == stamp) {
+            return;
+        }
+        let (Some(file), Ok(previews)) = (self.entry_uri(entry), core.previews(&runtime::handle())) else {
+            return;
+        };
+        if let Some(old) = self.previews.get(&name).and_then(|slot| slot.key.as_deref()) {
+            previews.cancel_text(old);
+        }
+        let ticket = previews.request_text(core, file);
+        let key = ticket.key.clone();
+        self.previews.insert(
+            name.clone(),
+            PreviewSlot {
+                stamp,
+                key: Some(ticket.key),
+                text: None,
+            },
+        );
+        let me = QPointer::from(&*self);
+        spawn_then(async move { ticket.rx.await.ok().flatten() }, move |text| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().previewed(&key, &name, text);
+            }
+        });
+    }
+
+    fn previewed(&mut self, key: &str, name: &[u8], text: Option<String>) {
+        let Some(slot) = self
+            .previews
+            .get_mut(name)
+            .filter(|slot| slot.key.as_deref() == Some(key))
+        else {
+            return;
+        };
+        slot.key = None;
+        slot.text = text;
+        if let Some(i) = self.state.index_of(name) {
+            self.rows_changed(Some((i, i)), &["textPreview"]);
+        }
+    }
+
+    fn cancelPreview(&mut self, uri: QString) {
+        let Some(name) = self.name_of(&uri) else { return };
+        if let Some(key) = self.previews.get(&name).and_then(|slot| slot.key.clone()) {
+            self.previews.remove(&name);
+            cancel_text(&key);
+        }
+    }
+
+    fn drop_previews(&mut self) {
+        for slot in std::mem::take(&mut self.previews).into_values() {
+            if let Some(key) = slot.key {
+                cancel_text(&key);
+            }
         }
     }
 
@@ -831,12 +1053,9 @@ impl DirectoryModel {
             self.transfer_states.insert(name.clone(), state);
         }
         if let Some(i) = self.state.index_of(&name) {
-            let idx = self.row_index(i as i32);
-            self.data_changed(idx, idx);
+            self.rows_changed(Some((i, i)), &["transferState"]);
         }
     }
-
-    // ---- changes made here ----
 
     fn rename(&mut self, uri: QString, name: QString) {
         let (Some(core), Ok(u)) = (core(), Uri::parse(&uri.to_string())) else {
@@ -883,12 +1102,16 @@ impl DirectoryModel {
     }
 }
 
-/// The `itemCount` role: the count, `-1` when there is none.
+pub(crate) fn cancel_text(key: &str) {
+    if let Some(previews) = core().and_then(|core| core.previews(&runtime::handle()).ok()) {
+        previews.cancel_text(key);
+    }
+}
+
 fn count_role(shown: usize) -> i32 {
     i32::try_from(shown).unwrap_or(i32::MAX)
 }
 
-/// What `nameKind` and `kindOf` answer for an entry or none.
 fn kind_of(entry: Option<&Entry>) -> &'static str {
     match entry {
         Some(e) if e.is_dir() => "folder",
@@ -918,5 +1141,240 @@ impl QAbstractListModel for DirectoryModel {
             .enumerate()
             .map(|(i, n)| (ROLE_BASE + i as i32, QByteArray::from(*n)))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lautta_core::entry::Kind;
+
+    fn text_of<'a>(m: &'a DirectoryModel, name: &[u8]) -> Option<(Option<&'a str>, Option<&'a str>)> {
+        m.previews
+            .get(name)
+            .map(|slot| (slot.key.as_deref(), slot.text.as_deref()))
+    }
+
+    #[test]
+    fn a_text_thumbnail_counts_only_for_the_request_still_pending() {
+        let mut m = DirectoryModel::default();
+        let stamp = PreviewStamp {
+            modified: Some(1),
+            size: Some(3),
+        };
+        m.previews.insert(
+            b"a.txt".to_vec(),
+            PreviewSlot {
+                stamp,
+                key: Some("text:2:a".into()),
+                text: None,
+            },
+        );
+        m.previewed("text:1:a", b"a.txt", Some("old".into()));
+        assert_eq!(
+            text_of(&m, b"a.txt"),
+            Some((Some("text:2:a"), None)),
+            "a cancelled request's answer is dropped"
+        );
+        m.previewed("text:2:a", b"a.txt", Some("hei".into()));
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))));
+        m.previewed("text:2:a", b"a.txt", None);
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))), "answered once");
+        m.previewed("text:3:b", b"b.txt", Some("b".into()));
+        assert_eq!(text_of(&m, b"b.txt"), None, "never asked for");
+    }
+
+    #[test]
+    fn an_aborted_listing_does_not_end_the_one_after_it() {
+        let mut m = DirectoryModel::default();
+        let aborted = m.next_listing();
+        let current = m.next_listing();
+        m.loading = true;
+        m.pending = Some(Vec::new());
+        m.on_event(m.generation, aborted, ListEvent::Done(Ok(())));
+        assert!(m.loading && m.pending.is_some(), "old listing's Done dropped");
+        m.on_event(m.generation, current, ListEvent::Done(Ok(())));
+        assert!(
+            !m.loading && m.pending.is_none(),
+            "current listing's Done ends it"
+        );
+    }
+
+    fn lost() -> ListEvent {
+        ListEvent::Done(Err(Error::new(ErrorKind::ConnectionLost, "gone")))
+    }
+
+    fn now() -> f64 {
+        system_time_to_ms(std::time::SystemTime::now()) as f64
+    }
+
+    fn opened() -> DirectoryModel {
+        DirectoryModel {
+            cachedAt: -1.0,
+            ..DirectoryModel::default()
+        }
+    }
+
+    fn on_server() -> DirectoryModel {
+        DirectoryModel {
+            dir: Uri::parse("lautta://nv-account:1/").ok(),
+            ..opened()
+        }
+    }
+
+    fn refused() -> ListEvent {
+        ListEvent::Done(Err(Error::new(
+            ErrorKind::ConnectionLost,
+            "reconnecting to the bridge",
+        )))
+    }
+
+    #[test]
+    fn a_listing_refused_while_the_bridge_reconnects_lists_again_once_it_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, refused());
+        assert!(!m.loading, "refused listing ends");
+        m.on_bridge_ready();
+        assert!(m.loading, "bridge ready: folder lists again");
+    }
+
+    #[test]
+    fn a_listing_refused_before_the_bridge_was_ready_lists_again_when_the_news_of_ready_came_first() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_bridge_ready();
+        assert!(m.loading, "still the first listing");
+        m.on_event(m.generation, first, refused());
+        assert!(
+            m.loading,
+            "bridge ready since the listing began: lists again at once"
+        );
+    }
+
+    #[test]
+    fn a_listing_cut_by_a_lost_bridge_waits_for_the_next_ready() {
+        let mut m = on_server();
+        m.on_bridge_ready();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, lost());
+        assert!(!m.loading, "bridge not back yet: no listing");
+        m.on_bridge_ready();
+        assert!(m.loading, "bridge back: lists again");
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, lost());
+        assert!(!m.loading, "lost again: waits, no loop");
+        m.on_bridge_ready();
+        assert!(m.loading, "and lists once the bridge is back");
+    }
+
+    #[test]
+    fn a_listing_that_fails_for_another_reason_is_not_listed_again_when_the_bridge_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Done(Err(Error::new(ErrorKind::PermissionDenied, "no"))),
+        );
+        m.on_bridge_ready();
+        assert!(!m.loading);
+    }
+
+    #[test]
+    fn a_folder_listed_since_is_not_listed_again_when_the_bridge_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, refused());
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, ListEvent::Done(Ok(())));
+        m.on_bridge_ready();
+        assert!(!m.loading);
+    }
+
+    fn relist(m: &mut DirectoryModel) -> u64 {
+        m.loading = true;
+        m.pending = Some(Vec::new());
+        m.next_listing()
+    }
+
+    #[test]
+    fn a_folder_relisted_while_its_server_is_gone_says_when_its_rows_were_listed() {
+        let mut m = opened();
+        let first = m.next_listing();
+        m.loading = true;
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Batch(vec![Entry::new(b"a.jpg", Kind::File)]),
+        );
+        let before = now();
+        m.on_event(m.generation, first, ListEvent::Done(Ok(())));
+        let listed = m.cachedAt;
+        assert!(before <= listed && listed <= now(), "listing time {listed}");
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, lost());
+        assert!(m.offline, "rows stay, page offline");
+        assert_eq!(m.cachedAt, listed, "time of the rows shown");
+    }
+
+    #[test]
+    fn a_listing_cut_short_shows_its_error_not_offline() {
+        let mut m = opened();
+        let first = m.next_listing();
+        m.loading = true;
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Batch(vec![Entry::new(b"a.jpg", Kind::File)]),
+        );
+        m.on_event(m.generation, first, lost());
+        assert_eq!(m.count, 1);
+        assert!(
+            !m.offline && m.cachedAt < 0.0,
+            "rows without a time are no stored copy"
+        );
+        assert_eq!(m.errorKind.to_string(), "ConnectionLost");
+    }
+
+    #[test]
+    fn a_folder_of_an_offline_server_is_offline_once_its_stored_copy_shows() {
+        let mut m = opened();
+        m.location_offline = true;
+        let first = relist(&mut m);
+        let copy = vec![Entry::new(b"a.jpg", Kind::File)];
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Cached {
+                entries: copy,
+                fetched_ms: 1_700_000_000_000,
+            },
+        );
+        assert!(
+            m.offline && m.cachedAt == 1_700_000_000_000.0,
+            "stored copy with its time"
+        );
+        m.on_event(m.generation, first, lost());
+        assert!(
+            m.offline && m.cachedAt == 1_700_000_000_000.0,
+            "still the stored copy"
+        );
+
+        let mut online = opened();
+        let first = relist(&mut online);
+        let copy = vec![Entry::new(b"a.jpg", Kind::File)];
+        online.on_event(
+            online.generation,
+            first,
+            ListEvent::Cached {
+                entries: copy,
+                fetched_ms: 1,
+            },
+        );
+        assert!(
+            !online.offline,
+            "server online: stored copy shows until fresh rows come"
+        );
     }
 }

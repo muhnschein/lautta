@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the rows of the grid (GridRows.js, SPEC §15.3, BRW-4): 3
-// tiles per row in portrait, more in landscape at the same tile size, the
-// rows a folder takes, which item is under a point and the height of a row,
-// which is its tallest cell's. Fails when the number per row, the grouping
-// into rows, the item under a finger or a row's height is wrong.
 import QtQuick 2.6
 import "../../../qml/components/directory/GridRows.js" as GridRows
 
 Item {
     id: root
+    property bool reachedEnd
 
-    // A phone's screen, 540 by 960: 3 tiles of 180 in portrait.
     readonly property real tile: 180
 
     function check(cond, what) {
@@ -22,8 +17,6 @@ Item {
         check(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // The items of each row of `count` items in a view `width` wide, as the
-    // grid groups them.
     function grouped(count, width) {
         var columns = GridRows.columns(width, root.tile, 3)
         var rows = []
@@ -61,6 +54,13 @@ Item {
         same(GridRows.rowOf(4, 0), 0, "and with no columns")
     }
 
+    function testSpan() {
+        same(GridRows.span(0, 3, 7), { "from": 0, "to": 3 }, "the first row's cells")
+        same(GridRows.span(1, 3, 7), { "from": 3, "to": 6 }, "the second row's")
+        same(GridRows.span(2, 3, 7), { "from": 6, "to": 7 }, "the last row holds what is left")
+        same(GridRows.span(-1, 3, 7), { "from": 0, "to": 0 }, "a row the view has removed holds no cells")
+    }
+
     function testIndexAt() {
         same(GridRows.indexAt(0, 0, 180, 3, 7), 0, "the first cell")
         same(GridRows.indexAt(0, 179.5, 180, 3, 7), 0, "up to its right edge")
@@ -73,7 +73,6 @@ Item {
         same(GridRows.indexAt(0, 10, 0, 3, 7), -1, "a view of no width")
     }
 
-    // Rotating regroups the same items into longer rows and back.
     function testRegroup() {
         same(grouped(7, 540), [[0, 1, 2], [3, 4, 5], [6]], "7 items in portrait")
         same(grouped(7, 960), [[0, 1, 2, 3, 4], [5, 6]], "and in landscape")
@@ -88,11 +87,67 @@ Item {
              "an item of no height (the Repeater) changes nothing")
     }
 
+    function testSectionRows() {
+        same(GridRows.sectionRows(["today", "today", "today", "today", "yesterday", "older", "older"], 3),
+             [{ "section": "today", "first": 0, "count": 3 }, { "section": "today", "first": 3, "count": 1 },
+              { "section": "yesterday", "first": 4, "count": 1 }, { "section": "older", "first": 5, "count": 2 }],
+             "a section starts its own row, a full row goes on in the next")
+        same(GridRows.sectionRows(["today", "today", "today", "today", "yesterday"], 5),
+             [{ "section": "today", "first": 0, "count": 4 }, { "section": "yesterday", "first": 4, "count": 1 }],
+             "in landscape")
+        same(GridRows.sectionRows([], 3), [], "nothing, no rows")
+        same(GridRows.sectionRows(["today"], 0), [], "no columns, no rows")
+    }
+
+    ListModel {
+        id: fitted
+
+        property int changed
+        property int inserted
+        property int removed
+        property int reset
+
+        onDataChanged: changed++
+        onRowsInserted: inserted++
+        onRowsRemoved: removed++
+        onModelReset: reset++
+    }
+
+    function rowsOf(model) {
+        var out = []
+        for (var i = 0; i < model.count; ++i) {
+            var r = model.get(i)
+            out.push({ "section": r.section, "first": r.first, "count": r.count })
+        }
+        return out
+    }
+
+    function testFitRows() {
+        var three = GridRows.sectionRows(["today", "today", "today", "today", "older"], 3)
+        GridRows.fitRows(fitted, three)
+        same(rowsOf(fitted), three, "rows come")
+        fitted.changed = fitted.inserted = fitted.removed = fitted.reset = 0
+        GridRows.fitRows(fitted, three)
+        same([fitted.changed, fitted.inserted, fitted.removed, fitted.reset], [0, 0, 0, 0], "same rows: nothing moves")
+        var after = GridRows.sectionRows(["today", "today", "today", "older"], 3)
+        GridRows.fitRows(fitted, after)
+        same(rowsOf(fitted), after, "an item gone")
+        same([fitted.changed, fitted.inserted, fitted.removed, fitted.reset], [1, 0, 1, 0],
+             "second row changes, last goes, first stays: view keeps its place")
+        GridRows.fitRows(fitted, three)
+        same(rowsOf(fitted), three, "and back")
+        same(fitted.inserted, 1, "a row comes at the end")
+    }
+
     Component.onCompleted: {
         testColumns()
         testRows()
+        testSpan()
         testIndexAt()
         testRegroup()
         testTallest()
+        testSectionRows()
+        testFitRows()
+        reachedEnd = true
     }
 }

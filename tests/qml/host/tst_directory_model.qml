@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of DirectoryModel, PathModel and PickerRootsModel (no Silica):
-// listing a temp HOME's Documents, create/rename errors, sort, filter, hidden
-// files, selection, live updates, per-folder view settings, open folders
-// following the global ones, thumbnails of PDFs and the path menu.
 import QtQuick 2.6
 import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property var events: []
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
     readonly property string docs: "lautta://user-documents/"
 
     function check(cond, what) {
@@ -37,7 +40,20 @@ Item {
 
     function wait(ms) { pump.pump(ms) }
 
-    // A file in Documents, copied from a fixture: the app makes folders only.
+    function until(cond, what) {
+        for (var i = 0; i < 400 && !cond(); ++i)
+            pump.pump(25)
+        check(cond(), "timed out waiting for " + what)
+    }
+
+    function has(event) {
+        return function () { return root.events.indexOf(event) >= 0 }
+    }
+
+    function shows(want) {
+        return function () { return !dir.loading && JSON.stringify(names(rep)) === JSON.stringify(want) }
+    }
+
     function install(fixture, name) {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), root.docs + name), "fixture " + name)
     }
@@ -57,7 +73,8 @@ Item {
         id: rep
         model: dir
         delegate: Item {
-            property string nm: name
+            property string nm: root.read(name)
+            property string transfer: transferState
             property bool dirRow: isDir
             property string thumb: thumbnailSource
             property string mime: mimeType
@@ -73,8 +90,7 @@ Item {
     PathModel { id: rootPath; uri: root.docs }
 
     function testBasics() {
-        wait(300)
-        check(!dir.loading, "listing finished")
+        until(function () { return !dir.loading }, "listing finished")
         check(dir.count === 0 && rep.count === 0, "empty Documents")
         check(dir.errorKind === "", "no error")
         check(dir.title === "Documents" && dir.locationName === "Documents", "title at the root is the location: " + dir.title)
@@ -90,9 +106,9 @@ Item {
         install("photo.jpg", "Beta.png")
         install("doc.md", "notes.md")
         install("data.bin", ".hidden")
-        wait(500)
+        until(has("created:" + root.docs + "Zeta"), "Zeta made")
         dir.refresh()
-        wait(500)
+        until(shows(["Zeta", "alpha.txt", "Beta.png", "notes.md"]), "new rows listed")
         same(names(rep), ["Zeta", "alpha.txt", "Beta.png", "notes.md"], "folders first, hidden files off")
         same(root.events, ["created:" + root.docs + "Zeta"], "created signal for the folder")
         check(dir.createFile === undefined, "no empty files: the app makes folders only")
@@ -105,7 +121,7 @@ Item {
         dir.createFolder("Zeta")
         dir.createFolder("alpha.txt")
         dir.createFolder("bad/name")
-        wait(300)
+        until(function () { return root.events.length === 4 }, "three failures reported")
         check(root.events.filter(function (e) { return e === "createFailed:AlreadyExists" }).length === 2, "name clashes are reported: " + root.events)
         check(root.events.indexOf("createFailed:InvalidName") >= 0, "invalid names are reported")
         check(dir.nameKind("Zeta") === "folder" && dir.nameKind("alpha.txt") === "file" && dir.nameKind("zzz") === "", "nameKind")
@@ -123,9 +139,6 @@ Item {
         dir.filterText = "ALPHA"
         same(names(rep), ["alpha.txt"], "filter ignores case")
         dir.filterText = ""
-        dir.foldersOnly = true
-        same(names(rep), ["Zeta"], "folders only")
-        dir.foldersOnly = false
         check(dir.count === 4, "files back")
         check(dir.setViewPrefs(JSON.stringify({ sortKey: "type" })) && dir.sortKey === "type", "sort key")
         dir.setViewPrefs(JSON.stringify({ sortKey: "name" }))
@@ -133,6 +146,7 @@ Item {
 
     function testSelection() {
         var a = root.docs + "alpha.txt"
+        var reads = root.nameReads.n
         dir.toggle(a)
         check(dir.selectedCount === 1 && row(rep, "alpha.txt").sel, "toggle selects")
         same(dir.selectedUris(), [a], "selectedUris")
@@ -147,49 +161,60 @@ Item {
         check(dir.selectedCount === 4 && dir.selectedUris().length === 4, "select all")
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
+        check(root.nameReads.n === reads, "selecting leaves names unread: " + (root.nameReads.n - reads))
+        dir.setTransferState(a, "copying")
+        check(row(rep, "alpha.txt").transfer === "copying", "transfer state shown")
+        dir.setTransferState(a, "")
+        check(row(rep, "alpha.txt").transfer === "", "transfer state gone")
+        check(root.nameReads.n === reads, "a transfer leaves names unread: " + (root.nameReads.n - reads))
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
-        // Drag selection reads the rows by index, the selection panel the kind by uri.
         same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
         check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
         same([dir.kindOf(root.docs + "Zeta"), dir.kindOf(a), dir.kindOf(root.docs + "none"),
               dir.kindOf("lautta://user-downloads/Zeta"), dir.kindOf("garbage")], ["folder", "file", "", "", ""], "kindOf")
+        var png = root.docs + "Beta.png"
+        var md = root.docs + "notes.md"
+        function shareType(uris) { return dir.shareType(JSON.stringify(uris)) }
+        same([shareType([png]), shareType([png, png]), shareType([a, md]), shareType([a, png]),
+              shareType(["lautta://user-downloads/x.png"]), dir.shareType("garbage")],
+             ["image/png", "image/png", "text/*", "application/octet-stream", "application/octet-stream",
+              "application/octet-stream"], "shareType")
     }
 
     function testRename() {
         var a = root.docs + "alpha.txt"
         dir.rename(a, "gamma.txt")
-        wait(400)
+        until(function () { return has("renamed:" + a + ">" + root.docs + "gamma.txt")()
+                                   && shows(["Zeta", "Beta.png", "gamma.txt", "notes.md"])() }, "alpha.txt renamed")
         check(root.events.indexOf("renamed:" + a + ">" + root.docs + "gamma.txt") >= 0, "renamed signal: " + root.events)
         same(names(rep), ["Zeta", "Beta.png", "gamma.txt", "notes.md"], "list follows the rename")
         dir.rename(root.docs + "gamma.txt", "notes.md")
         dir.rename(root.docs + "gamma.txt", "a/b")
-        wait(300)
+        until(function () { return has("renameFailed:AlreadyExists")() && has("renameFailed:InvalidName")() }, "renames refused")
         check(root.events.indexOf("renameFailed:AlreadyExists") >= 0, "rename onto an existing name fails")
         check(root.events.indexOf("renameFailed:InvalidName") >= 0, "invalid new name fails")
     }
 
     function testLiveUpdate() {
         install("notes-crlf.txt", "watched.txt")
-        wait(1200)
+        until(function () { return names(rep).indexOf("watched.txt") >= 0 }, "watched.txt listed")
         check(names(rep).indexOf("watched.txt") >= 0, "changes by others appear without refresh: " + names(rep))
         install("notes-crlf.txt", "watched2.txt")
-        wait(1200)
+        until(function () { return dir.count === 6 }, "watched2.txt listed")
         check(dir.count === 6, "second live update")
     }
 
     function testStates() {
-        wait(200)
+        until(function () { return !missing.loading && !broken.loading }, "missing and broken listed")
         check(missing.errorKind === "NotFound" && missing.count === 0 && !missing.loading, "missing folder: " + missing.errorKind)
         check(broken.errorKind === "InvalidArgument" && !broken.loading, "bad URI")
         var zeta = root.docs + "Zeta"
-        check(path.count === 2 && path.address === "~/Documents/Zeta", "path model: " + path.count + " " + path.address)
+        check(path.count === 2, "path model: " + path.count)
         check(rootPath.count === 1, "root path has one step")
         check(path.fullPath === "Documents › Zeta", "full path: " + path.fullPath)
         check(rootPath.fullPath === "Documents", "root full path")
-        var found = path.complete("~/Documents/z")
-        same(found, [zeta], "completion from the cached listing")
-        check(path.resolve("~/Documents/Zeta") === zeta, "resolve")
-        check(path.resolve("nowhere") === "", "resolve refuses")
+        same(path.trail, [root.docs, zeta], "trail: the place's top folder first, the folder itself last")
+        same(rootPath.trail, [root.docs], "trail of a place's top folder: itself")
     }
 
     function testPrefsAreGlobal() {
@@ -204,18 +229,16 @@ Item {
         dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
-    // BRW-4: folders already open follow a change made elsewhere (Settings,
-    // or View options in another folder) without being opened again.
     function testOpenFoldersFollowSettings() {
         var open = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
-        wait(300)
+        until(function () { return !open.loading }, "Zeta listed")
         check(!open.descending && open.viewMode === "list", "an open folder starts with the global settings")
         var before = names(rep)
-        // Set for this folder alone; the global settings do not touch it.
         dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
         App.setSetting("sort_descending", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("grid"))
-        wait(300)
+        until(function () { return open.descending && open.viewMode === "grid" && dir.descending && dir.viewMode === "grid" },
+              "settings reach open folders")
         check(open.descending && open.viewMode === "grid", "an open folder follows: " + open.descending + " " + open.viewMode)
         check(dir.descending && dir.viewMode === "grid", "so does the folder on screen")
         same(names(rep), [before[0]].concat(before.slice(1).reverse()), "its rows are in the new order")
@@ -226,21 +249,36 @@ Item {
         App.setSetting("sort_descending", JSON.stringify(false))
         App.setSetting("view_mode", JSON.stringify("list"))
         App.setSetting("remorse_seconds", JSON.stringify(5))
-        wait(300)
+        until(function () { return !open.descending && open.viewMode === "list" && shows(before)() }, "settings back")
         check(!open.descending && open.viewMode === "list", "and back: " + open.viewMode)
         same(names(rep), before, "the rows are back in name order")
         dir.setViewPrefs(JSON.stringify({ thumbnails: true }))
         open.destroy()
     }
 
-    // PRV-1, PRV-14: a local PDF is the system thumbnailer's, as a picture
-    // is: its file:// URL and its PDF type, which Nemo.Thumbnailer draws by.
-    // It follows Show thumbnails, not the servers' switch.
+    function testFirstListingFollowsSettings() {
+        dir.setViewPrefs(JSON.stringify({ descending: true, showHidden: true }))
+        var want = names(rep)
+        dir.setViewPrefs(JSON.stringify({ descending: false, showHidden: false }))
+        check(want.indexOf(".hidden") >= 0 && want.length > 2, "a hidden file to show: " + want)
+        App.setSetting("sort_descending", JSON.stringify(true))
+        App.setSetting("show_hidden", JSON.stringify(true))
+        var opened = Qt.createQmlObject('import QtQuick 2.6; import Lautta 1.0; Repeater { property alias dir: m; '
+            + 'model: DirectoryModel { id: m; uri: "' + root.docs + '" } delegate: Item { property string nm: name } }', root)
+        until(function () { return !opened.dir.loading && opened.count === want.length }, "first listing")
+        check(opened.dir.descending && opened.dir.showHidden, "settings shown")
+        same(names(opened), want, "first listing in the set order, hidden files shown")
+        App.setSetting("sort_descending", JSON.stringify(false))
+        App.setSetting("show_hidden", JSON.stringify(false))
+        until(function () { return !opened.dir.descending && !opened.dir.showHidden }, "settings back")
+        opened.destroy()
+    }
+
     function testPdfThumbnails() {
         install("two-pages.pdf", "Doc.pdf")
-        wait(500)
+        until(function () { return row(rep, "Doc.pdf") !== null }, "Doc.pdf listed")
         dir.refresh()
-        wait(500)
+        until(function () { return !dir.loading && row(rep, "Doc.pdf") !== null }, "Doc.pdf listed again")
         var want = row(rep, "Doc.pdf").thumb
         var path = "/Documents/Doc.pdf"
         check(want.indexOf("file://") === 0 && want.slice(-path.length) === path,
@@ -272,7 +310,9 @@ Item {
         testStates()
         testPrefsAreGlobal()
         testOpenFoldersFollowSettings()
+        testFirstListingFollowsSettings()
         testPdfThumbnails()
         testPicker()
+        reachedEnd = true
     }
 }

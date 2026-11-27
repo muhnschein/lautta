@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Replays the shared golden sequences (`tests/bridge-contract/*.json`,
-//! netvfs SPEC-v2 XT-7) against the fake bridge, so that this client and the
-//! real bridge agree on the protocol (SPEC TST-2). The format and the matching
-//! rules are in the README next to the files.
 
 use super::{Consent, FakeBridge};
 use crate::connect::Connection;
@@ -20,10 +16,8 @@ use zbus::message::Type as MessageType;
 use zbus::zvariant::{Array, Dict, Signature, Structure, StructureBuilder, Value};
 
 const STEP_TIMEOUT: Duration = Duration::from_secs(5);
-/// The one account the sequences run against.
 pub const ACCOUNT: &str = "account:1";
 
-/// A parsed sequence file.
 #[derive(Debug)]
 pub struct Sequence {
     pub description: String,
@@ -85,15 +79,10 @@ fn parse_step(step: &Json) -> Result<Step, String> {
     })
 }
 
-/// Parses a sequence file.
 pub fn parse(source: &str) -> Result<Sequence, String> {
     let doc: Json = serde_json::from_str(source).map_err(|e| e.to_string())?;
-    let consent = match text(&doc, "consent")? {
-        "granted" => Consent::Granted,
-        "denied" => Consent::Denied,
-        "unknown" => Consent::Unknown,
-        other => return Err(format!("unknown consent \"{other}\"")),
-    };
+    let word = text(&doc, "consent")?;
+    let consent = Consent::parse(word).ok_or_else(|| format!("unknown consent \"{word}\""))?;
     let files = doc
         .get("files")
         .and_then(Json::as_object)
@@ -116,9 +105,6 @@ pub fn parse(source: &str) -> Result<Sequence, String> {
     })
 }
 
-// ---- value encoding ------------------------------------------------------
-
-/// Splits a signature into its complete types (`"saya{sv}"` -> `s`, `ay`, `a{sv}`).
 fn split_types(sig: &str) -> Result<Vec<&str>, String> {
     let bytes = sig.as_bytes();
     let mut out = Vec::new();
@@ -232,7 +218,6 @@ fn encode_array(elem: &str, v: &Json) -> Result<Value<'static>, String> {
     Ok(Value::Array(arr))
 }
 
-/// `a{sv}`: integers travel as `x`.
 fn encode_dict(v: &Json) -> Result<Value<'static>, String> {
     let obj = v
         .as_object()
@@ -254,11 +239,8 @@ fn encode_dict(v: &Json) -> Result<Value<'static>, String> {
     Ok(Value::Dict(dict))
 }
 
-// ---- value decoding ------------------------------------------------------
-
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::new(), |mut out, b| {
-        // Writing into a String cannot fail.
         let _ = write!(out, "{b:02x}");
         out
     })
@@ -318,8 +300,6 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
     };
     let s: Structure = body.deserialize().map_err(|e| e.to_string())?;
     let fields: Vec<Json> = s.fields().iter().map(decode).collect();
-    // zbus reads a body that is one struct as that struct's fields; on the wire
-    // it is a single argument (a reply such as `Stat`'s entry).
     let one_struct = sig.starts_with('(') && split_types(&sig).is_ok_and(|t| t.len() == 1);
     Ok(if one_struct {
         vec![Json::Array(fields)]
@@ -328,9 +308,6 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
     })
 }
 
-// ---- matching ------------------------------------------------------------
-
-/// Byte arrays may be written as `{"bytes": ...}`; both sides compare as hex.
 fn normalise(v: &Json) -> Json {
     if v.as_object()
         .is_some_and(|o| o.len() == 1 && (o.contains_key("bytes") || o.contains_key("hex")))
@@ -391,7 +368,6 @@ fn match_arrays(e: &[Json], a: &[Json], binds: &mut Bindings) -> Result<(), Stri
     Ok(())
 }
 
-/// Replaces `"$name"` strings by their bindings.
 fn substitute(v: &Json, binds: &Bindings) -> Result<Json, String> {
     match v {
         Json::String(s) if s.starts_with('$') => binds
@@ -411,8 +387,6 @@ fn substitute(v: &Json, binds: &Bindings) -> Result<Json, String> {
         other => Ok(other.clone()),
     }
 }
-
-// ---- running -------------------------------------------------------------
 
 #[derive(Default)]
 struct Inbox {
@@ -519,7 +493,6 @@ async fn signal_step(
         loop {
             let notified = inbox.arrived.notified();
             tokio::pin!(notified);
-            // Arm before looking, so that a signal pushed in between is not missed.
             notified.as_mut().enable();
             if let Some(args) = inbox.take(signal) {
                 return args;
@@ -534,7 +507,6 @@ async fn signal_step(
         .map_err(|m| format!("signal {signal}: {m}"))
 }
 
-/// Replays `seq` on a fresh fake bridge with the account `account:1`.
 pub async fn replay(seq: &Sequence) -> Result<(), String> {
     let fake = FakeBridge::new();
     fake.set_consent(seq.consent).await;
@@ -561,8 +533,6 @@ pub async fn replay(seq: &Sequence) -> Result<(), String> {
     Ok(())
 }
 
-/// Replays every `*.json` file of `dir` (the contract directory); returns the
-/// names of the sequences that ran.
 pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
     let sources = tokio::task::spawn_blocking({
         let dir = dir.to_owned();
@@ -581,7 +551,6 @@ pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
     Ok(ran)
 }
 
-/// The `*.json` files of `dir` in name order, as (file name, contents).
 fn read_sequences(dir: &Path) -> Result<Vec<(String, String)>, String> {
     let mut files: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
@@ -690,6 +659,9 @@ mod tests {
         assert_eq!(seq.files, vec![("a".to_owned(), "b".to_owned())]);
         assert_eq!(seq.steps.len(), 3);
         assert!(parse(r#"{"description":"d","consent":"maybe","steps":[]}"#).is_err());
+        assert!(parse(r#"{"description":"d","consent":"granted","steps":[]}"#).is_err());
+        let read = parse(r#"{"description":"d","consent":"read-add","steps":[]}"#).unwrap();
+        assert_eq!(read.consent, Consent::Allowed(crate::access::Level::ReadAdd));
         assert!(
             parse(r#"{"description":"d","consent":"denied","steps":[{"call":"X","sig":"","args":[]}]}"#)
                 .is_err()
@@ -712,7 +684,7 @@ mod tests {
     #[tokio::test]
     async fn a_failing_expectation_is_reported() {
         let seq = parse(
-            r#"{"description":"d","consent":"granted","steps":[
+            r#"{"description":"d","consent":"full","steps":[
                 {"call":"Hello","sig":"s","args":["t"],"reply":["another version"]}]}"#,
         )
         .unwrap();

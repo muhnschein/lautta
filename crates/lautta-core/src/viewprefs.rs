@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! View settings (BRW-4): one global set for every folder, kept in the
-//! settings (SPEC §18). Grid suggestion for media folders (SPEC 15.3).
 
 use crate::entry::Entry;
 use crate::mime::{self, FileCategory};
@@ -62,9 +60,6 @@ impl ViewPrefs {
         }
     }
 
-    /// What a folder showing `self` shows after the global settings went
-    /// from `before` to `after` (BRW-4): every setting that changed, and
-    /// only those, so what was set for this folder alone stays.
     pub fn follow(self, before: ViewPrefs, after: ViewPrefs) -> ViewPrefs {
         fn pick<T: PartialEq>(shown: T, before: T, after: T) -> T {
             if before == after {
@@ -84,14 +79,15 @@ impl ViewPrefs {
     }
 }
 
-/// Grid is suggested when more than 60 % of the entries are images or videos
-/// (SPEC 15.3).
-pub fn suggest_grid(entries: &[Entry]) -> bool {
-    let media = entries
-        .iter()
-        .filter(|e| matches!(mime::category_of(e), FileCategory::Image | FileCategory::Video))
-        .count();
-    media * 10 > entries.len() * 6
+pub fn suggest_grid<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> bool {
+    let (mut media, mut all) = (0usize, 0usize);
+    for e in entries {
+        all += 1;
+        if matches!(mime::category_of(e), FileCategory::Image | FileCategory::Video) {
+            media += 1;
+        }
+    }
+    media * 10 > all * 6
 }
 
 #[cfg(test)]
@@ -116,7 +112,6 @@ mod tests {
     #[test]
     fn following_takes_what_changed_and_keeps_the_rest() {
         let before = ViewPrefs::default();
-        // This folder was switched to grid without thumbnails by itself.
         let shown = ViewPrefs {
             view_mode: ViewMode::Grid,
             thumbnails: false,

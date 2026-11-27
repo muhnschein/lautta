@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// PlaceLabel on the target (real Silica, §15.5): a line naming a server's
-// place has the small server icon right before the name, in the line's
-// colour, and a local place has none; text before the name stays before
-// the icon; a right-aligned line (a section header) ends at its right edge
-// with the icon against the name; too long a line keeps the icon and the
-// name inside the line. The search page marks its folder headers on a
-// server only. Fails naming the line that is laid out otherwise. Headless,
-// nothing is on screen: the lines are checked by their layout, not by
-// `visible`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,9 +9,9 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
 
-    // Straight in the window: ids inside a page component are not seen here.
     Column {
         width: 540
 
@@ -50,6 +41,13 @@ ApplicationWindow {
             text: "photos › 2024"
             remote: true
             horizontalAlignment: Text.AlignRight
+        }
+        PlaceLabel {
+            id: centredLine
+            width: parent.width
+            text: "Office"
+            remote: true
+            horizontalAlignment: Text.AlignHCenter
         }
         PlaceLabel {
             id: longLine
@@ -89,7 +87,6 @@ ApplicationWindow {
             else if (kids[i].text !== undefined)
                 found.labels.push(kids[i])
         }
-        // Left to right: the text before the name, then the name.
         found.lead = found.labels[0]
         found.name = found.labels[1]
         return found
@@ -97,7 +94,8 @@ ApplicationWindow {
 
     function check() {
         var r = partsOf(remoteLine)
-        expect(remoteLine.iconShown && String(r.icon.source).indexOf("icon-m-computer") >= 0,
+        expect(remoteLine.iconShown && /\/icons\/server\.svg\?stroke=/.test(String(r.icon.source))
+               && r.icon.status === Image.Ready,
                "a server's place has the server icon")
         expect(r.icon.x + r.icon.width <= r.name.x && r.icon.x === 0, "the icon stands right before the name")
         expect(Qt.colorEqual(r.icon.color, remoteLine.color) && Qt.colorEqual(r.name.color, remoteLine.color),
@@ -116,6 +114,14 @@ ApplicationWindow {
         expect(headerLine.iconShown && h.icon.x + h.icon.width <= h.name.x && h.name.x - h.icon.x < h.icon.width * 2,
                "with the icon against the name")
 
+        var c = partsOf(centredLine)
+        expect(centredLine.iconShown && c.icon.x > 0
+               && Math.abs(c.icon.x - (centredLine.width - c.name.x - c.name.width)) <= 1,
+               "a centred line has as much room left of the icon as right of the name: " + c.icon.x + ", "
+               + (centredLine.width - c.name.x - c.name.width))
+        expect(c.icon.x + c.icon.width <= c.name.x && c.name.x - c.icon.x < c.icon.width * 2,
+               "with the icon against the name")
+
         var g = partsOf(longLine)
         expect(g.lead.width < longLine.width && longLine.iconShown && g.name.x + g.name.width <= longLine.width + 0.5,
                "too long a line keeps the icon and the name inside: " + g.lead.width + ", " + g.name.x + "+" + g.name.width)
@@ -132,6 +138,7 @@ ApplicationWindow {
             if (++win.waited < 3)
                 return
             win.check()
+            win.reachedEnd = true
             win.scenarioRunning = false
         }
     }

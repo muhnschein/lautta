@@ -1,15 +1,5 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Checks the built RPM (RPMS/*.rpm) in the Sailfish OS Platform SDK:
-#   - Harbour intake: sdk-harbour-rpmvalidator at the commit SPEC §3.2 names
-#     (TST-7); any error fails, warnings must be listed in doc/harbour-warnings.md;
-#   - the binary exports `main` and links __libc_start_main@GLIBC_2.34 (HBR-4),
-#     carries no RPATH and needs only HBR-2 libraries;
-#   - the package installs into the target and every library resolves;
-#   - every shipped QML file and tests/qml/tst_*.qml load in the target (TST-6);
-#     a test with a `scenarioRunning` property runs until it clears it;
-#   - the catalogue the package ships gives the English plural forms (UI-7).
-# Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
 : "${SDK_IMAGE:?}" "${TARGET:?}"
 VALIDATOR_COMMIT=7dd7dd5
@@ -20,10 +10,8 @@ if [ "${1:-}" != --in-sdk ]; then
     trap 'rm -rf "$work" 2>/dev/null || sudo rm -rf "$work"' EXIT
     git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
     git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
-    # The SDK runs as mersdk (uid 100000): check a world-writable copy.
-    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tools/ci doc/harbour-warnings.md "$work/")
+    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tests/fonts tools/ci doc/harbour-warnings.md "$work/")
     chmod -R a+rwX "$work"
-    # shellcheck disable=SC2086
     docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
         "$SDK_IMAGE" bash -euc "${SDK_PREPARE:-true}; sh tools/ci/check-rpm.sh --in-sdk"
     exit 0
@@ -39,8 +27,6 @@ rpm=$(ls RPMS/harbour-lautta-*.aarch64.rpm | grep -v -e debuginfo -e debugsource
 echo "== $rpm"
 rpm -qp --requires "$rpm" | sed 's/^/  requires: /'
 
-# Harbour validator. Output lines starting with ERROR fail the build;
-# WARNING lines must be documented.
 validator_status=0
 out=$(cd .validator && ./rpmvalidation.sh -c -g . "../$rpm" 2>&1) || validator_status=$?
 echo "$out"
@@ -58,8 +44,8 @@ done
 work=$(mktemp -d)
 (cd "$work" && rpm2cpio "$OLDPWD/$rpm" | cpio -idm --quiet)
 bin=$work/usr/bin/harbour-lautta
-nm -D "$bin" | grep -qE ' T main$' || fail "main is not exported (HBR-4)"
-nm -D "$bin" | grep -q '__libc_start_main@GLIBC_2.34' || fail "__libc_start_main@GLIBC_2.34 not linked (HBR-4)"
+nm -D "$bin" | grep -qE ' T main$' || fail "main is not exported"
+nm -D "$bin" | grep -q '__libc_start_main@GLIBC_2.34' || fail "__libc_start_main@GLIBC_2.34 not linked"
 if readelf -d "$bin" | grep -E 'RPATH|RUNPATH'; then
     fail "binary carries a library search path"
 fi
@@ -69,14 +55,14 @@ libsailfishapp.so.1 libsqlite3.so.0 libz.so.1 liblzma.so.5 libbz2.so.1 ld-linux-
 for needed in $(readelf -d "$bin" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'); do
     case " $allowed " in
         *" $needed "*) echo "  needs $needed" ;;
-        *) fail "links $needed, not in the HBR-2 list" ;;
+        *) fail "links $needed, not in the allowed list" ;;
     esac
 done
+grep -q 'GNU LESSER GENERAL PUBLIC LICENSE' "$work/usr/share/harbour-lautta/LICENSE" ||
+    fail "LGPL text not shipped in /usr/share/harbour-lautta/LICENSE"
 size=$(stat -c %s "$bin")
-[ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget (RS-7)"
+[ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget"
 
-# The executable's TLS must start past the Android TLS slots that the GL
-# driver writes on libhybris devices (see crates/harbour-lautta/src/main.rs).
 tls_align=$(readelf -lW "$bin" | awk '$1 == "TLS" { print $NF }')
 [ $((tls_align)) -ge 128 ] || fail "TLS segment alignment is ${tls_align:-missing}, needs 128 (libhybris)"
 
@@ -85,58 +71,91 @@ if sb2 -t "$TARGET" ldd /usr/bin/harbour-lautta | grep 'not found'; then
     fail "unresolved libraries"
 fi
 
-# The PDF viewer test installs its fixtures into Documents, which is a
-# location only when the folder exists; the SDK home has none.
 mkdir -p "$HOME/Documents"
 
-# QML on the target (TST-6): every shipped QML file and the QML tests compile
-# and instantiate with the installed binary's engine (Qt 5.6, real Silica,
-# the real Lautta types), without warnings naming them.
-# Host-only tests (tests/qml/host) need fixtures and run in `make test`.
-# The tests import "../../qml/…": point that at the installed QML so they
-# exercise what the package ships.
-qml_files=$(find "$PWD/tests/qml" -path '*/host' -prune -o -name 'tst_*.qml' -print | sort)
+qml_files=$(find "$PWD/tests/qml" \( -path '*/host' -o -path '*/canary' \) -prune -o -name 'tst_*.qml' -print | sort)
 rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
-# QML_JOBS processes at once (default one per core): emulated loads were most
-# of the job. Each gets own home with the user folders tests put fixtures in
-# (as tools/sdk-qml-check.sh): no shared files or database. Homes in the tree:
-# a mktemp folder under /tmp did not reach the app under scratchbox.
 jobs=${QML_JOBS:-$(nproc)}
 share="$PWD/.qml-share"
 rm -rf "$share"
 mkdir -p "$share"
 i=0
-for file in $shipped $qml_files; do
-    echo "$file" >> "$share/$((i % jobs)).list"
+for file in $shipped; do
+    echo "$file" >> "$share/$((i % jobs)).shipped"
     i=$((i + 1))
 done
+i=0
+for file in $qml_files; do
+    echo "$file" >> "$share/$((i % jobs)).tests"
+    i=$((i + 1))
+done
+qml_check() {
+    h=$1
+    shift
+    mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
+    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml "$@"
+}
 k=0
-while [ "$k" -lt "$jobs" ] && [ -f "$share/$k.list" ]; do
-    mkdir -p "$share/$k.home/Documents" "$share/$k.home/Downloads" "$share/$k.home/Pictures"
-    # shellcheck disable=SC2046 # one word per file
-    (sb2 -t "$TARGET" env HOME="$share/$k.home" QT_QPA_PLATFORM=minimal \
-        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $(cat "$share/$k.list") \
-        > "$share/$k.log" 2>&1 || touch "$share/$k.failed") &
+while [ "$k" -lt "$jobs" ]; do
+    (
+        : > "$share/$k.log"
+        if [ -f "$share/$k.shipped" ]; then
+            qml_check "$share/$k.home" $(cat "$share/$k.shipped") >> "$share/$k.log" 2>&1 || touch "$share/$k.failed"
+        fi
+        n=0
+        if [ -f "$share/$k.tests" ]; then
+            while read -r file; do
+                n=$((n + 1))
+                qml_check "$share/$k.$n.home" "$file" >> "$share/$k.log" 2>&1 || touch "$share/$k.failed"
+            done < "$share/$k.tests"
+        fi
+    ) &
     k=$((k + 1))
 done
 wait
 k=0
-while [ -f "$share/$k.list" ]; do
+while [ "$k" -lt "$jobs" ]; do
     cat "$share/$k.log"
     [ ! -f "$share/$k.failed" ] || fail "QML check on the target (share $k, log above)"
     k=$((k + 1))
 done
+if qml_check "$share/canary.home" "$PWD/tests/qml/canary/tst_must_fail.qml" > "$share/canary.log" 2>&1; then
+    cat "$share/canary.log"
+    fail "QML check passed the canary test that reports a failure"
+fi
+crash="$share/crash"
+mkdir -p "$crash/Documents" "$crash/Downloads" "$crash/Pictures"
+sb2 -t "$TARGET" env HOME="$crash" QT_QPA_PLATFORM=minimal sh -c '
+    /usr/bin/harbour-lautta --qml-check "$1" > "$2.out" 2> "$2.err" &
+    pid=$!
+    tries=0
+    until grep -q "canary waits for its crash" "$2.err" || [ "$tries" -ge 120 ]; do
+        tries=$((tries + 1))
+        sleep 1
+    done
+    kill -SEGV "$pid"
+    wait "$pid"' sh "$PWD/tests/qml/canary/waits_for_crash.qml" "$crash/log" || true
+if ! grep -q '^CRASH   signal 11 in thread ' "$crash/log.err" || ! grep -q 'harbour-lautta(.*\[0x' "$crash/log.err"; then
+    cat "$crash/log.out" "$crash/log.err"
+    fail "QML check killed by SIGSEGV printed no backtrace"
+else
+    sed -n '/^CRASH/,$p' "$crash/log.err"
+fi
 home="$PWD/.qml-home"
 rm -rf "$home"
 mkdir -p "$home"
-# The catalogue the package installed, read by the target's Qt 5.6: "1 item",
-# not "1 items" (UI-7). `-T` fails when the package ships no catalogue.
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
+fi
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
+        /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \
+        "$PWD/tests/fonts/tst_bundled_font.qml"; then
+    fail "bundled font on the target"
 fi
 rm -rf "$work" "$home" "$share"
 exit $status

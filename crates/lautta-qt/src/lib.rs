@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Qt glue (SPEC ARC-3): exposes `lautta-core` to QML through qmetaobject
-//! models and QObject facades. No business logic lives here.
-// The C++ blocks are large for the `cpp!` macro expansion.
 #![recursion_limit = "1024"]
-// QML-facing names (properties, methods, signals) follow QML's camelCase.
 #![allow(non_snake_case)]
-// The qmetaobject derive macros expand to transmutes clippy flags.
 #![allow(clippy::useless_transmute)]
 
 pub mod app;
-pub mod browse;
+pub mod checksum;
 pub mod directory;
+pub mod home;
+pub mod icons;
 pub mod json;
 pub mod operations;
 pub mod runtime;
+pub mod scan;
 pub mod search;
 pub mod transfers;
 pub mod viewers;
@@ -22,30 +20,21 @@ use cpp::cpp;
 use std::os::raw::{c_char, c_int};
 
 cpp! {{
-    #include <QtGui/QGuiApplication>
-    #include <QtQuick/QQuickView>
-    // Defined in viewers/images.rs (all cpp! blocks share one translation unit).
-    static void lauttaRegisterImageProviders(QQmlEngine *engine);
-    #include <QtQml/QQmlEngine>
-    #include <QtQml/QQmlContext>
-    #include <QtCore/QUrl>
     #include <QtCore/QCoreApplication>
-    #include <QtCore/QElapsedTimer>
-    #include <QtCore/QEvent>
-    #include <QtCore/QEventLoop>
-    #include <QtQml/QQmlComponent>
-    #include <QtCore/QTranslator>
+    #include <QtCore/QDir>
     #include <QtCore/QLocale>
-    #include <cstdio>
-    #include <memory>
-#ifdef LAUTTA_SAILFISH
-    #include <sailfishapp.h>
-#endif
+    #include <QtCore/QTranslator>
+    #include <QtGui/QFontDatabase>
 
-    // Installs the catalogues of `directory`: engineering English first, then
-    // the user's language. The translator installed last is asked first, so a
-    // language that lacks a message falls back to engineering English, which
-    // has the English plural forms (UI-7). False when that catalogue is missing.
+    static bool lauttaLoadFonts(const QString &directory)
+    {
+        bool loaded = false;
+        const QDir dir(directory);
+        for (const QString &name : dir.entryList(QStringList(QStringLiteral("*.ttf")), QDir::Files))
+            loaded = QFontDatabase::addApplicationFont(dir.filePath(name)) >= 0 || loaded;
+        return loaded;
+    }
+
     static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
     {
         QTranslator *english = new QTranslator(app);
@@ -57,13 +46,79 @@ cpp! {{
             app->installTranslator(local);
         return found;
     }
+}}
 
-    // QML check mode (SPEC TST-6, tests/qml): compiles and instantiates QML
-    // documents with this binary's engine, so the real Silica modules and the
-    // real Lautta types are used. Any error, and any warning or console.error
-    // naming a checked document, fails. `-T <directory>` installs the
-    // catalogues of that directory first (tests/translations); without it
-    // qsTrId gives back the id.
+cpp! {{
+    #include <cstdio>
+    #include <cstring>
+    #include <csignal>
+    #include <execinfo.h>
+    #include <sys/prctl.h>
+    #include <unistd.h>
+
+    static void lauttaSay(const char *text)
+    {
+        const ssize_t written = ::write(STDERR_FILENO, text, std::strlen(text));
+        (void)written;
+    }
+
+    static void lauttaCrashTrace(int sig)
+    {
+        char number[4] = { 0, 0, 0, 0 };
+        int at = 0;
+        if (sig >= 10)
+            number[at++] = char('0' + sig / 10 % 10);
+        number[at] = char('0' + sig % 10);
+        char thread[17] = { 0 };
+        prctl(PR_GET_NAME, thread, 0, 0, 0);
+        lauttaSay("CRASH   signal ");
+        lauttaSay(number);
+        lauttaSay(" in thread ");
+        lauttaSay(thread);
+        lauttaSay("\n");
+        void *frames[64];
+        backtrace_symbols_fd(frames, backtrace(frames, 64), STDERR_FILENO);
+        std::raise(sig);
+    }
+
+    static void lauttaReportCrashes()
+    {
+        std::setvbuf(stdout, nullptr, _IOLBF, 0);
+        void *warm[1];
+        backtrace(warm, 1);
+        struct sigaction action;
+        std::memset(&action, 0, sizeof action);
+        action.sa_handler = lauttaCrashTrace;
+        action.sa_flags = SA_RESETHAND | SA_ONSTACK;
+        sigemptyset(&action.sa_mask);
+        for (int sig : { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT })
+            sigaction(sig, &action, nullptr);
+    }
+}}
+
+cpp! {{
+    #include <QtGui/QGuiApplication>
+    #include <QtQuick/QQuickView>
+    static void lauttaRegisterImageProviders(QQmlEngine *engine);
+    #include <QtQml/QQmlEngine>
+    #include <QtQml/QQmlContext>
+    #include <QtCore/QUrl>
+    #include <QtCore/QCoreApplication>
+    #include <QtCore/QElapsedTimer>
+    #include <QtCore/QFileInfo>
+    #include <QtCore/QEvent>
+    #include <QtCore/QEventLoop>
+    #include <QtQml/QQmlComponent>
+    #include <QtCore/QTranslator>
+    #include <QtCore/QLocale>
+    #include <QtCore/QLibraryInfo>
+    #include <QtCore/QRegularExpression>
+    #include <cstdio>
+    #include <memory>
+#ifdef LAUTTA_SAILFISH
+    #include <sailfishapp.h>
+#endif
+
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -77,6 +132,13 @@ cpp! {{
             std::fprintf(stderr, "note    %s\n", qPrintable(msg));
     }
 
+    static bool lauttaThrown(const QQmlError &e)
+    {
+        static const QRegularExpression thrown(QStringLiteral("^[A-Za-z]*Error: "));
+        static const QString qt = QLibraryInfo::location(QLibraryInfo::Qml2ImportsPath) + QLatin1Char('/');
+        return thrown.match(e.description()).hasMatch() && !e.url().toLocalFile().startsWith(qt);
+    }
+
     static int lauttaQmlCheck(int argc, char **argv)
     {
         static int count = 0;
@@ -85,17 +147,24 @@ cpp! {{
         QStringList importPaths;
         QStringList files;
         QString translations;
+        QString fonts;
         const QStringList args = QCoreApplication::arguments().mid(2);
         for (int i = 0; i < args.size(); ++i) {
             if (args.at(i) == QLatin1String("-I") && i + 1 < args.size())
                 importPaths << args.at(++i);
             else if (args.at(i) == QLatin1String("-T") && i + 1 < args.size())
                 translations = args.at(++i);
+            else if (args.at(i) == QLatin1String("-F") && i + 1 < args.size())
+                fonts = args.at(++i);
             else
                 files << args.at(i);
         }
         if (!translations.isEmpty() && !lauttaInstallTranslations(&app, translations)) {
             std::printf("ERROR   no harbour-lautta.qm in %s\n", qPrintable(translations));
+            return 1;
+        }
+        if (!fonts.isEmpty() && !lauttaLoadFonts(fonts)) {
+            std::printf("ERROR   no font loads from %s\n", qPrintable(fonts));
             return 1;
         }
         int failures = 0;
@@ -107,7 +176,7 @@ cpp! {{
             QStringList problems;
             QObject::connect(&engine, &QQmlEngine::warnings, [&problems, &file](const QList<QQmlError> &list) {
                 for (const QQmlError &e : list) {
-                    if (e.url().toLocalFile() == file || e.toString().contains(file))
+                    if (e.url().toLocalFile() == file || e.toString().contains(file) || lauttaThrown(e))
                         problems << e.toString();
                     else
                         std::printf("note    %s\n", qPrintable(e.toString()));
@@ -122,8 +191,6 @@ cpp! {{
             std::unique_ptr<QObject> object(component.isReady() ? component.create() : nullptr);
             for (int spin = 0; spin < 10; ++spin)
                 QCoreApplication::processEvents();
-            // A scenario test keeps `scenarioRunning` true until its steps
-            // are done; it fails by logging an error.
             if (object && object->property("scenarioRunning").isValid()) {
                 QElapsedTimer clock;
                 clock.start();
@@ -134,6 +201,9 @@ cpp! {{
                 if (object->property("scenarioRunning").toBool())
                     problems << QStringLiteral("scenario still running after 60 s");
             }
+            if (object && QFileInfo(file).fileName().startsWith(QLatin1String("tst_"))
+                && !object->property("reachedEnd").toBool())
+                problems << QStringLiteral("checks unproven: root reachedEnd is not true");
             for (const QQmlError &e : component.errors())
                 problems << e.toString();
             if (!object && problems.isEmpty())
@@ -151,32 +221,35 @@ cpp! {{
     }
 }}
 
-/// Starts the application: Qt, the QML engine and the main page. `argv`
-/// comes from the exported C `main` (SPEC RS-3). Panics abort the process,
-/// apart from PDF drawing's (RS-4); tests that start the QML engine with
-/// [`qml_check`] keep the default hook.
-///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     lautta_core::panics::abort_outside_catch();
-    start();
+    *lock_opening() = Some(std::thread::spawn(open_core));
+    register_types();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
-            if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
+            if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0) {
+                lauttaReportCrashes();
+                rust!(LauttaWaitCoreCheck [] { wait_core() });
                 return lauttaQmlCheck(argc, argv);
+            }
             static int count = 0;
             count = argc;
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
+            if (!lauttaLoadFonts(SailfishApp::pathTo(QStringLiteral("fonts")).toLocalFile()))
+                qWarning("bundled fonts missing");
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
+            rust!(LauttaWaitCore [] { wait_core() });
             view->setSource(SailfishApp::pathToMainQml());
             view->show();
     #else
             QGuiApplication *app = new QGuiApplication(count, argv);
             QQuickView *view = new QQuickView();
             lauttaRegisterImageProviders(view->engine());
+            rust!(LauttaWaitCoreHost [] { wait_core() });
             QByteArray qml = qgetenv("LAUTTA_QML");
             view->setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(qml)));
             view->show();
@@ -188,53 +261,61 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
         })
 }
 
-/// QML module URI of the app's types.
 pub const QML_URI: &str = "Lautta";
 
-/// Opens the core (SPEC §5) and registers the QML types. A failure to open
-/// the core is shown by the start page through `App.startError`.
-fn start() {
+static OPENING: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> = std::sync::Mutex::new(None);
+
+fn lock_opening() -> std::sync::MutexGuard<'static, Option<std::thread::JoinHandle<()>>> {
+    OPENING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn wait_core() {
+    let opening = lock_opening().take();
+    if let Some(t) = opening {
+        let _ = t.join();
+    }
+}
+
+fn open_core() {
     let paths = lautta_core::paths::AppPaths::from_env();
     if let Err(e) = runtime::init(paths) {
         log::error!("cannot open the app data: {e}");
     }
-    register_types();
 }
 
-/// Registers every QML type under `Lautta 1.0` (doc/QML-API.md).
 pub fn register_types() {
     qmetaobject::qml_register_singleton_type::<app::App>(&qml_uri(), 1, 0, &cstr("App"));
-    browse::register();
+    home::register();
+    checksum::register();
     directory::register();
     operations::register();
+    scan::register();
     transfers::register();
     viewers::register();
     search::register();
 }
 
-/// `QML_URI` as a C string for the registration functions.
 pub fn qml_uri() -> std::ffi::CString {
     cstr(QML_URI)
 }
 
-/// A C string from a type name literal (no interior NUL in our names).
 pub fn cstr(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap_or_default()
 }
 
-/// Runs the QML check (see `--qml-check`) in this process with the given
-/// arguments (`-I <path>`, `-T <catalogue folder>` and files). Opens the core
-/// from `$HOME` and registers the types first, like the app does. Used by the
-/// host QML tests.
+pub fn report_crashes() {
+    cpp!(unsafe [] { lauttaReportCrashes(); })
+}
+
 pub fn qml_check(args: &[String]) -> c_int {
-    start();
+    open_core();
+    register_types();
     let mut owned: Vec<std::ffi::CString> = vec![cstr("harbour-lautta"), cstr("--qml-check")];
     owned.extend(args.iter().map(|a| cstr(a)));
     let mut ptrs: Vec<*mut c_char> = owned.iter().map(|c| c.as_ptr() as *mut c_char).collect();
     ptrs.push(std::ptr::null_mut());
     let argc = c_int::try_from(owned.len()).unwrap_or(c_int::MAX);
     let argv = ptrs.as_mut_ptr();
-    // SAFETY: argv points to NUL-terminated strings that outlive the call.
     unsafe {
         cpp!([argc as "int", argv as "char**"] -> c_int as "int" { return lauttaQmlCheck(argc, argv); })
     }

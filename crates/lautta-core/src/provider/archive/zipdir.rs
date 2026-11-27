@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Zip central directory parser and entry reader (PRV-10).
-//!
-//! The `zip` crate reads every entry's local header when it opens an entry,
-//! which would touch the whole file just to list it. This reader parses the
-//! end-of-central-directory record and the central directory (two or three
-//! ranged reads), and reads an entry's local header only when it is opened.
 
 use super::blocks::{from_io, BlockReader, BlockSource};
 use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
+use crate::zipaes::{self, AesField, Decryptor};
+use crate::zipcrypto;
+use chrono::{DateTime, Local, Offset, TimeZone};
 use std::io::{self, Read, Seek, SeekFrom};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 const EOCD_SIG: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
@@ -22,10 +20,9 @@ const ZIP64_EOCD_SIG: u32 = 0x0606_4b50;
 const CENTRAL_SIG: u32 = 0x0201_4b50;
 const LOCAL_SIG: u32 = 0x0403_4b50;
 const CENTRAL_FIXED: usize = 46;
-/// A central directory larger than this is refused (memory bound).
 const MAX_DIRECTORY: u64 = 256 * 1024 * 1024;
+const FULL_CHECK_MAX: u64 = 1024 * 1024;
 
-/// Where and how an entry's bytes are stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZipLoc {
     pub method: u16,
@@ -34,6 +31,46 @@ pub struct ZipLoc {
     pub compressed: u64,
     pub size: u64,
     pub header_offset: u64,
+    pub aes: Option<AesField>,
+}
+
+const FLAG_ENCRYPTED: u16 = 0x0001;
+const FLAG_DESCRIPTOR: u16 = 0x0008;
+const FLAG_STRONG: u16 = 0x0040;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lock {
+    Open,
+    Aes(AesField),
+    ZipCrypto,
+    Strong,
+}
+
+impl ZipLoc {
+    pub fn aes(&self) -> Option<AesField> {
+        self.aes
+            .filter(|_| self.flags & FLAG_ENCRYPTED != 0 && self.method == zipaes::METHOD)
+    }
+
+    pub fn lock(&self) -> Lock {
+        if self.flags & FLAG_ENCRYPTED == 0 {
+            Lock::Open
+        } else if let Some(aes) = self.aes() {
+            Lock::Aes(aes)
+        } else if self.flags & FLAG_STRONG != 0 {
+            Lock::Strong
+        } else {
+            Lock::ZipCrypto
+        }
+    }
+
+    fn zipcrypto_check(&self, local_time: u16) -> u8 {
+        if self.flags & FLAG_DESCRIPTOR != 0 {
+            local_time.to_be_bytes()[0]
+        } else {
+            self.crc.to_be_bytes()[0]
+        }
+    }
 }
 
 fn corrupt(what: &str) -> Error {
@@ -57,14 +94,12 @@ fn le64(b: &[u8], at: usize) -> Option<u64> {
     Some(u64::from_le_bytes(a))
 }
 
-/// Location of the central directory: (offset, size, entry count).
 struct Directory {
     offset: u64,
     size: u64,
     count: u64,
 }
 
-/// Reads the whole archive's entries (ranged: tail, then the directory).
 pub fn read_entries(reader: &mut BlockReader) -> Result<Vec<RawEntry>> {
     let dir = locate_directory(reader)?;
     if dir.size > MAX_DIRECTORY || dir.offset.checked_add(dir.size).is_none_or(|e| e > reader.size()) {
@@ -163,10 +198,12 @@ fn parse_central_entry(b: &[u8], at: usize) -> Result<(RawEntry, usize)> {
         return Err(bad());
     }
     let mut mtime = Some(dos_to_time(dos_date, dos_time));
+    let mut aes = None;
     for (id, data) in extra_fields(extra) {
         match id {
             0x0001 => apply_zip64(data, &mut size, &mut compressed, &mut header_offset),
             0x5455 => mtime = unix_mtime(data).or(mtime),
+            zipaes::EXTRA_ID => aes = AesField::parse(data),
             _ => {}
         }
     }
@@ -178,6 +215,7 @@ fn parse_central_entry(b: &[u8], at: usize) -> Result<(RawEntry, usize)> {
         compressed,
         size,
         header_offset,
+        aes,
     };
     let entry = RawEntry {
         name: name.to_vec(),
@@ -208,8 +246,6 @@ fn extra_fields(mut extra: &[u8]) -> Vec<(u16, &[u8])> {
     out
 }
 
-/// The zip64 field carries, in order, only the values that were `0xFFFFFFFF`
-/// in the fixed header; whichever ones the header marks are replaced here.
 fn apply_zip64(data: &[u8], size: &mut u64, compressed: &mut u64, offset: &mut u64) {
     let mut at = 0;
     for slot in [size, compressed, offset] {
@@ -251,15 +287,24 @@ fn classify(made_by: u16, attrs: u32, name: &[u8]) -> (Kind, Option<u32>) {
     }
 }
 
-/// DOS date/time (local time, treated as UTC) to `SystemTime`.
 pub fn dos_to_time(date: u16, time: u16) -> SystemTime {
+    dos_to_time_in(&Local, date, time)
+}
+
+fn dos_to_time_in<Tz: TimeZone>(tz: &Tz, date: u16, time: u16) -> SystemTime {
     let year = 1980 + i64::from(date >> 9);
     let month = i64::from((date >> 5) & 0xF).clamp(1, 12);
     let day = i64::from(date & 0x1F).max(1);
-    let secs = days_from_civil(year, month, day) * 86_400
+    let wall = days_from_civil(year, month, day) * 86_400
         + i64::from(time >> 11) * 3600
         + i64::from((time >> 5) & 0x3F) * 60
         + i64::from(time & 0x1F) * 2;
+    let offset = DateTime::from_timestamp(wall, 0).map_or(0, |t| {
+        tz.offset_from_utc_datetime(&t.naive_utc())
+            .fix()
+            .local_minus_utc()
+    });
+    let secs = wall - i64::from(offset);
     SystemTime::UNIX_EPOCH + Duration::from_secs(u64::try_from(secs).unwrap_or(0))
 }
 
@@ -273,16 +318,13 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// Opens the decompressed bytes of one entry (reads its local header).
-pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read + Send>> {
-    if loc.flags & 1 != 0 {
-        return Err(Error::new(ErrorKind::Unsupported, "encrypted zip entry"));
-    }
+fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<(io::Take<BlockReader>, u16)> {
     let mut reader = src.reader();
     let head = reader.read_exact_at(loc.header_offset, 30).map_err(from_io)?;
     if le32(&head, 0) != Some(LOCAL_SIG) {
         return Err(corrupt("bad local header"));
     }
+    let local_time = le16(&head, 10).unwrap_or(0);
     let name_len = u64::from(le16(&head, 26).unwrap_or(0));
     let extra_len = u64::from(le16(&head, 28).unwrap_or(0));
     let data_at = loc.header_offset + 30 + name_len + extra_len;
@@ -290,31 +332,125 @@ pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read +
         return Err(corrupt("entry data out of range"));
     }
     reader.seek(SeekFrom::Start(data_at)).map_err(from_io)?;
-    let raw = reader.take(loc.compressed);
-    let stream: Box<dyn Read + Send> = match loc.method {
-        0 => Box::new(raw),
-        8 => Box::new(flate2::read::DeflateDecoder::new(raw)),
-        m => return Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
-    };
-    Ok(Box::new(Checked::new(stream, loc)))
+    Ok((reader.take(loc.compressed), local_time))
 }
 
-/// Bounds the output to the declared size and verifies CRC-32 at the end, so
-/// a decompression bomb or a corrupt entry cannot pass silently.
+fn needs_password(password: Option<&Password>) -> Result<&Password> {
+    password.ok_or_else(|| Error::kind(ErrorKind::PasswordRequired))
+}
+
+pub fn check_password(
+    src: &Arc<BlockSource>,
+    entries: &[RawEntry],
+    password: Option<&Password>,
+) -> Result<bool> {
+    let zips = || {
+        entries.iter().filter_map(|e| match &e.loc {
+            Loc::Zip(z) => Some(z),
+            _ => None,
+        })
+    };
+    if let Some((loc, aes)) = zips().find_map(|z| z.aes().map(|aes| (z, aes))) {
+        Decryptor::new(
+            stored_data(src, loc)?.0,
+            loc.compressed,
+            needs_password(password)?,
+            aes.strength,
+        )?;
+        return Ok(true);
+    }
+    let Some(loc) = zips()
+        .filter(|z| z.lock() == Lock::ZipCrypto)
+        .min_by_key(|z| (!decodable(z.method), z.compressed))
+    else {
+        return Ok(false);
+    };
+    let (raw, local_time) = stored_data(src, loc)?;
+    let dec = zipcrypto::Decryptor::new(raw, needs_password(password)?, loc.zipcrypto_check(local_time))?;
+    if loc.compressed > FULL_CHECK_MAX || !decodable(loc.method) {
+        return Ok(true);
+    }
+    let mut entry = Checked::new(decode(loc.method, Box::new(dec))?, loc, None);
+    match io::copy(&mut entry, &mut io::sink()) {
+        Ok(_) => Ok(true),
+        Err(e) if matches!(e.kind(), io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput) => {
+            Err(Error::kind(ErrorKind::WrongPassword))
+        }
+        Err(e) => Err(from_io(e)),
+    }
+}
+
+fn decodable(method: u16) -> bool {
+    matches!(method, 0 | 8)
+}
+
+fn decode(method: u16, data: Box<dyn Read + Send>) -> Result<Box<dyn Read + Send>> {
+    match method {
+        0 => Ok(data),
+        8 => Ok(Box::new(flate2::read::DeflateDecoder::new(data))),
+        m => Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
+    }
+}
+
+struct Shared<R: Read>(Arc<Mutex<Decryptor<R>>>);
+
+impl<R: Read> Read for Shared<R> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).read(out)
+    }
+}
+
+type Finish = Box<dyn FnMut() -> io::Result<()> + Send>;
+
+pub fn open_entry(
+    src: &Arc<BlockSource>,
+    loc: &ZipLoc,
+    password: Option<&Password>,
+) -> Result<Box<dyn Read + Send>> {
+    let (raw, local_time) = stored_data(src, loc)?;
+    let (method, data, finish): (u16, Box<dyn Read + Send>, Option<Finish>) = match loc.lock() {
+        Lock::Aes(aes) => {
+            let dec = Decryptor::new(raw, loc.compressed, needs_password(password)?, aes.strength)?;
+            let dec = Arc::new(Mutex::new(dec));
+            let tail = Arc::clone(&dec);
+            let finish: Finish =
+                Box::new(move || tail.lock().unwrap_or_else(PoisonError::into_inner).finish());
+            (aes.method, Box::new(Shared(dec)), Some(finish))
+        }
+        Lock::ZipCrypto => {
+            let check = loc.zipcrypto_check(local_time);
+            let dec = zipcrypto::Decryptor::new(raw, needs_password(password)?, check)?;
+            (loc.method, Box::new(dec), None)
+        }
+        Lock::Strong => {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "zip entry uses PKWARE strong encryption",
+            ))
+        }
+        Lock::Open => (loc.method, Box::new(raw), None),
+    };
+    Ok(Box::new(Checked::new(decode(method, data)?, loc, finish)))
+}
+
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
-    expect_crc: u32,
+    len: u64,
+    expect_crc: Option<u32>,
     expect_len: u64,
+    finish: Option<Finish>,
 }
 
 impl Checked {
-    fn new(inner: Box<dyn Read + Send>, loc: &ZipLoc) -> Checked {
+    fn new(inner: Box<dyn Read + Send>, loc: &ZipLoc, finish: Option<Finish>) -> Checked {
         Checked {
             inner: inner.take(loc.size),
             crc: flate2::Crc::new(),
-            expect_crc: loc.crc,
+            len: 0,
+            expect_crc: loc.aes().is_none_or(|a| a.has_crc()).then_some(loc.crc),
             expect_len: loc.size,
+            finish,
         }
     }
 }
@@ -324,9 +460,15 @@ impl Read for Checked {
         let n = self.inner.read(out)?;
         if n > 0 {
             self.crc.update(&out[..n]);
+            self.len += n as u64;
             return Ok(n);
         }
-        if self.crc.amount() as u64 != self.expect_len || self.crc.sum() != self.expect_crc {
+        let more = self.inner.limit() == 0 && self.inner.get_mut().read(&mut [0u8; 1])? > 0;
+        if let Some(finish) = self.finish.as_mut() {
+            finish()?;
+        }
+        let crc_ok = self.expect_crc.is_none_or(|c| c == self.crc.sum());
+        if more || self.len != self.expect_len || !crc_ok {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "zip entry checksum mismatch",
@@ -339,18 +481,24 @@ impl Read for Checked {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::FixedOffset;
 
     #[test]
     fn dos_time_conversion() {
-        // 2024-03-05 12:34:56
         let date = ((2024 - 1980) << 9) | (3 << 5) | 5;
         let time = (12 << 11) | (34 << 5) | (56 / 2);
-        let t = dos_to_time(date as u16, time as u16);
-        let secs = t
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        assert_eq!(secs, 1_709_642_096);
+        let secs = |tz: &FixedOffset| {
+            dos_to_time_in(tz, date as u16, time as u16)
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        assert_eq!(secs(&FixedOffset::east_opt(0).unwrap()), 1_709_642_096);
+        assert_eq!(secs(&FixedOffset::east_opt(3600).unwrap()), 1_709_642_096 - 3600);
+        assert_eq!(
+            secs(&FixedOffset::west_opt(5 * 3600).unwrap()),
+            1_709_642_096 + 5 * 3600
+        );
     }
 
     #[test]
@@ -382,11 +530,44 @@ mod tests {
     }
 
     #[test]
+    fn entries_past_4_gib_pass_the_size_check() {
+        const LEN: u64 = (1 << 32) + 3;
+        let mib = vec![0u8; 1 << 20];
+        let mut crc = crc32fast::Hasher::new();
+        let mut chunk = crc32fast::Hasher::new();
+        chunk.update(&mib);
+        for _ in 0..LEN >> 20 {
+            crc.combine(&chunk);
+        }
+        crc.update(&mib[..3]);
+        let loc = ZipLoc {
+            method: 0,
+            flags: 0,
+            crc: crc.finalize(),
+            compressed: LEN,
+            size: LEN,
+            header_offset: 0,
+            aes: None,
+        };
+        let mut r = Checked::new(Box::new(io::repeat(0).take(LEN)), &loc, None);
+        let mut buf = vec![0u8; 1 << 20];
+        let mut total = 0u64;
+        loop {
+            match r.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => total += n as u64,
+                Err(e) => panic!("after {total} bytes: {e}"),
+            }
+        }
+        assert_eq!(total, LEN);
+    }
+
+    #[test]
     fn garbage_directory_is_rejected_not_panicking() {
         assert!(parse_directory(&[1, 2, 3], 1).is_err());
         let mut b = CENTRAL_SIG.to_le_bytes().to_vec();
         b.extend_from_slice(&[0u8; 60]);
-        b[28] = 0xFF; // name longer than the buffer
+        b[28] = 0xFF;
         assert!(parse_directory(&b, 1).is_err());
     }
 }

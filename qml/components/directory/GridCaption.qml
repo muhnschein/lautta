@@ -1,27 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// What stands under a tile of the grid (SPEC §15.3): the name on
-// up to two lines, the middle of a long one cut so that its end stays
-// (GridName.js), then right under it the caption lines, small and in the
-// secondary colour (DirFormat.gridCaptions). As high as the lines it has,
-// no empty line kept: the row is as tall as its tallest cell (GridRows.js).
-// Lines stacked by bindings, not a Column: a line that comes moves the next
-// at once, not at the next polish.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../search/Marks.js" as Marks
 
 Item {
     id: caption
 
     property Item metrics
     property string name
-    // At most two lines of text.
+    property string mark
     property var captions: []
-    // Caption lines taken at the least: a folder's count still to come keeps
-    // its line, so the row does not grow when the count comes.
     property int minLines
-    // The name in the highlight colour, for a pressed or selected cell.
     property bool emphasised
     property bool pressed
+    property real glow
     readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
     readonly property int captionLines: Math.max(captions.length, minLines)
 
@@ -37,11 +29,18 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignTop
         wrapMode: Text.NoWrap
-        // A name is text, never markup.
-        textFormat: Text.PlainText
-        text: caption.nameLines.join("\n")
+        readonly property string marked: caption.mark.length > 0
+                                         ? caption.nameLines.map(function (line) {
+                                             return Marks.marked(line, caption.mark, String(Theme.highlightColor))
+                                                    || Marks.escaped(line)
+                                         }).join("<br>")
+                                         : ""
+
+        textFormat: marked.length > 0 ? Text.StyledText : Text.PlainText
+        text: marked.length > 0 ? marked : caption.nameLines.join("\n")
         font.pixelSize: Theme.fontSizeExtraSmall
-        color: caption.emphasised ? Theme.highlightColor : Theme.primaryColor
+        color: caption.emphasised ? Theme.highlightColor
+                                  : Qt.tint(Theme.primaryColor, Theme.rgba(Theme.highlightColor, caption.glow))
     }
     Repeater {
         model: caption.captionLines
@@ -56,7 +55,8 @@ Item {
             text: index < caption.captions.length ? caption.captions[index] : ""
             truncationMode: TruncationMode.Elide
             font.pixelSize: Theme.fontSizeTiny
-            color: caption.pressed ? Theme.secondaryHighlightColor : Theme.secondaryColor
+            color: caption.pressed ? Theme.secondaryHighlightColor
+                                   : Qt.tint(Theme.secondaryColor, Theme.rgba(Theme.secondaryHighlightColor, caption.glow))
         }
     }
 }

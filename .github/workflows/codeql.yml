@@ -1,7 +1,4 @@
 name: CodeQL
-# Advanced setup, because default setup cannot leave paths out. Scans the
-# code that ships (.github/codeql/codeql-config.yml). Default setup must be
-# off (Settings > Code security): GitHub refuses this upload while it is on.
 on:
   push:
     branches:
@@ -13,11 +10,29 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: codeql-${{ github.ref }}
+  group: codeql-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name != 'push' && 2 || 0 }}
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: ./tools/ci/changes.sh >> "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: changes
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -25,20 +40,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, rust]
+        language: ${{ fromJSON(needs.changes.outputs.code == 'true' && '["actions", "rust"]' || '["actions"]') }}
     env:
-      # Rust as the shipped build sees it: no cfg(test), default features
-      # only (`sample` and `fake` are test support; `sailfish` gates no Rust
-      # code).
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_CFG_OVERRIDES: -test
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_FEATURES: default
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - id: init
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           languages: ${{ matrix.language }}
           build-mode: none
-          config-file: ./.github/codeql/codeql-config.yml
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+          config-file: ./.github/codeql/${{ matrix.language == 'rust' && 'codeql-config-rust.yml' || 'codeql-config.yml' }}
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+      - if: matrix.language == 'rust'
+        run: '"$CODEQL" test run --additional-packs .github/codeql .github/codeql/rust-queries-tests'
+        env:
+          CODEQL: ${{ steps.init.outputs.codeql-path }}

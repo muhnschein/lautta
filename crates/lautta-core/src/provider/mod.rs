@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The one provider trait (SPEC ARC-4, Appendix B). The UI and the planner see
-//! only [`Provider`] + [`Capabilities`]; there are no provider-specific
-//! branches above this layer.
 
 pub mod archive;
 pub mod local;
@@ -9,7 +6,7 @@ pub mod memory;
 pub mod netvfs;
 
 use crate::entry::{Capabilities, Entry};
-use crate::error::Result;
+use crate::error::{Error, ErrorKind, Result};
 use crate::vpath::VPath;
 use async_trait::async_trait;
 use std::os::fd::OwnedFd;
@@ -17,7 +14,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Request lane hints (SPEC NVB-7, netvfs XB-10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lane {
     Interactive,
@@ -37,36 +33,28 @@ impl Lane {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenameMode {
-    /// Fail with `AlreadyExists` if the destination exists (the default, OPS table).
     NoReplace,
     Replace,
 }
 
-/// Attribute changes for `set_attributes`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AttributeChanges {
     pub mode: Option<u32>,
     pub modified: Option<SystemTime>,
 }
 
-/// Disposition for writes (`upload_from`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Disposition {
-    /// Create; fail if it exists.
     #[default]
     Create,
-    /// Create or truncate.
     Truncate,
-    /// Append at `offset` (resume, XFR-12).
     Resume,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WriteOptions {
     pub disposition: Disposition,
-    /// Resume offset in the source fd and destination (XFR-12).
     pub offset: u64,
-    /// Total size, required for FIFOs on backends that need a length (XB-11).
     pub size: Option<u64>,
     pub modified: Option<SystemTime>,
     pub mode: Option<u32>,
@@ -74,7 +62,6 @@ pub struct WriteOptions {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReadOptions {
-    /// Start offset (resume of downloads, XFR-12).
     pub offset: u64,
 }
 
@@ -91,26 +78,21 @@ pub struct SpaceInfo {
     pub used: u64,
 }
 
-/// Progress callback: bytes done, total bytes (if known).
 pub type ProgressSink = Arc<dyn Fn(u64, Option<u64>) + Send + Sync>;
 
 pub fn no_progress() -> ProgressSink {
     Arc::new(|_, _| {})
 }
 
-/// Random-access reader (thumbnails, archives, media streaming, hex view).
 #[async_trait]
 pub trait ReadHandle: Send + Sync {
     fn size(&self) -> Option<u64>;
-    /// Reads up to `max` bytes at `offset`; an empty result means end of file.
     async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>>;
-    /// Hint that `bytes` from `offset` will be read soon (PRV-8 read-ahead).
     async fn read_ahead(&self, _offset: u64, _bytes: u64) -> Result<()> {
         Ok(())
     }
 }
 
-/// Reads the whole handle up to `limit` bytes.
 pub async fn read_all(handle: &dyn ReadHandle, limit: u64) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     loop {
@@ -131,23 +113,99 @@ pub async fn read_all(handle: &dyn ReadHandle, limit: u64) -> Result<Vec<u8>> {
     }
 }
 
+pub const RACY_MS: i64 = 2000;
+pub const SEARCH_LIMIT: u32 = 2000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownFolder {
+    pub path: VPath,
+    pub etag: Option<Vec<u8>>,
+    pub modified_ms: Option<i64>,
+}
+
+#[derive(Debug)]
+pub enum FolderCheck {
+    Failed(Error),
+    Unchanged(Entry),
+    Listed(Entry, Vec<Entry>),
+}
+
+pub fn folder_changed(known: &KnownFolder, now: &Entry, now_ms: i64) -> bool {
+    if let Some(etag) = now.etag.as_ref().filter(|e| !e.is_empty()) {
+        return known.etag.as_ref() != Some(etag);
+    }
+    match now.modified_ms() {
+        Some(mtime) if mtime >= 0 && mtime <= now_ms - RACY_MS => known.modified_ms != Some(mtime),
+        _ => true,
+    }
+}
+
+async fn check_folder(
+    provider: &(impl Provider + ?Sized),
+    known: &KnownFolder,
+    now_ms: i64,
+    lane: Lane,
+) -> FolderCheck {
+    let entry = match provider.stat(&known.path, false, lane).await {
+        Ok(entry) => entry,
+        Err(e) => return FolderCheck::Failed(e),
+    };
+    if !folder_changed(known, &entry, now_ms) {
+        return FolderCheck::Unchanged(entry);
+    }
+    let (tx, mut rx) = mpsc::channel(16);
+    let collect = async {
+        let mut all = Vec::new();
+        while let Some(batch) = rx.recv().await {
+            all.extend(batch);
+        }
+        all
+    };
+    let (listed, children) = tokio::join!(provider.list(&known.path, lane, tx), collect);
+    match listed {
+        Ok(()) => FolderCheck::Listed(entry, children),
+        Err(e) => FolderCheck::Failed(e),
+    }
+}
+
+pub async fn check_one_by_one(
+    provider: &(impl Provider + ?Sized),
+    folders: &[KnownFolder],
+    now_ms: i64,
+    lane: Lane,
+) -> Vec<FolderCheck> {
+    let mut out = Vec::with_capacity(folders.len());
+    for known in folders {
+        out.push(check_folder(provider, known, now_ms, lane).await);
+    }
+    out
+}
+
 #[async_trait]
 pub trait Provider: Send + Sync {
     fn capabilities(&self) -> Capabilities;
 
-    /// [`Provider::capabilities`] once they are known: a bridge location
-    /// learns them from the bridge on first use. Plans and transfers decide
-    /// with these (name rules, atomic writes, resume).
+    async fn check_folders(
+        &self,
+        folders: &[KnownFolder],
+        now_ms: i64,
+        lane: Lane,
+    ) -> Result<Vec<FolderCheck>> {
+        Ok(check_one_by_one(self, folders, now_ms, lane).await)
+    }
+
+    async fn search_names(&self, _root: &VPath, _text: &str, _limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        Err(Error::new(ErrorKind::Unsupported, "this location cannot search"))
+    }
+
     async fn known_capabilities(&self) -> Capabilities {
         self.capabilities()
     }
 
-    /// Streams the listing in batches into `out`. Returns when complete.
     async fn list(&self, dir: &VPath, lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()>;
     async fn stat(&self, path: &VPath, follow: bool, lane: Lane) -> Result<Entry>;
     async fn read_link(&self, path: &VPath) -> Result<Vec<u8>>;
     async fn make_dir(&self, path: &VPath, exclusive: bool) -> Result<()>;
-    /// Creates an empty file (exclusive).
     async fn make_file(&self, path: &VPath) -> Result<()>;
     async fn remove_file(&self, path: &VPath) -> Result<()>;
     async fn remove_dir(&self, path: &VPath) -> Result<()>;
@@ -156,7 +214,6 @@ pub trait Provider: Send + Sync {
     async fn make_symlink(&self, target: &[u8], link: &VPath) -> Result<()>;
     async fn make_hardlink(&self, existing: &VPath, new_path: &VPath) -> Result<()>;
     async fn open_read(&self, path: &VPath, lane: Lane) -> Result<Box<dyn ReadHandle>>;
-    /// Writes `dst` from `src`, an fd the caller opened (NVB-9).
     async fn upload_from(
         &self,
         src: OwnedFd,
@@ -164,7 +221,6 @@ pub trait Provider: Send + Sync {
         opts: WriteOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    /// Reads `src` into `dst`, an fd the caller opened (NVB-9).
     async fn download_into(
         &self,
         src: &VPath,
@@ -172,12 +228,20 @@ pub trait Provider: Send + Sync {
         opts: ReadOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()>;
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        progress: ProgressSink,
+    ) -> Result<()>;
+    async fn open_local(&self, _path: &VPath) -> Result<Option<OwnedFd>> {
+        Ok(None)
+    }
     async fn checksum(&self, path: &VPath, algorithm: &str) -> Result<Vec<u8>>;
     async fn space(&self, dir: &VPath) -> Result<SpaceInfo>;
 }
 
-/// Collects a full listing (tests and small folders).
 pub async fn list_all(provider: &dyn Provider, dir: &VPath, lane: Lane) -> Result<Vec<Entry>> {
     let (tx, mut rx) = mpsc::channel(16);
     let collect = async {
@@ -191,13 +255,10 @@ pub async fn list_all(provider: &dyn Provider, dir: &VPath, lane: Lane) -> Resul
     res.map(|()| all)
 }
 
-/// Resolves a location id to its provider. Implemented by the location
-/// registry; tests use [`StaticResolver`].
 pub trait ProviderResolver: Send + Sync {
     fn provider(&self, location: &str) -> Result<Arc<dyn Provider>>;
 }
 
-/// A fixed map of providers (tests, and the archive provider's nesting).
 #[derive(Default, Clone)]
 pub struct StaticResolver {
     pub providers: std::collections::HashMap<String, Arc<dyn Provider>>,

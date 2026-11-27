@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `App` singleton (doc/QML-API.md): readiness, settings, clipboard,
-//! URI helpers, opening files outside the app and the sample folder of the
-//! view options preview.
 
-use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
-use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
+use lautta_core::entry::Capabilities;
+use lautta_core::mime::{category_of_name, viewer_of, Viewer};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
+use lautta_core::volumes::VolumeWords;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QPointer, QSingletonInit, QVariantList};
+use qmetaobject::{QPointer, QSingletonInit};
 
 #[derive(QObject, Default)]
 pub struct App {
@@ -22,6 +20,7 @@ pub struct App {
     ready_changed: qt_signal!(),
     startError: qt_property!(QString; NOTIFY ready_changed),
     version: qt_property!(QString; CONST),
+    monoFont: qt_property!(QString; CONST),
     settingsJson: qt_property!(QString; NOTIFY settingsJsonChanged),
     settingsJsonChanged: qt_signal!(),
     clipboardCount: qt_property!(i32; NOTIFY clipboard_changed),
@@ -31,18 +30,9 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
-    /// The view options preview (BRW-4): the sample entries as a folder
-    /// shows them with these view settings, one map per shown entry.
-    previewRows: qt_method!(
-        fn(
-            &self,
-            entries: QString,
-            sort_key: QString,
-            descending: bool,
-            folders_first: bool,
-            show_hidden: bool,
-        ) -> QVariantList
-    ),
+    setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
+    setAppActive: qt_method!(fn(&self, active: bool)),
+    setSearchOpen: qt_method!(fn(&self, open: bool)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -50,12 +40,16 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
-    /// Whether `uri` is on a server (LOC-7), even one that is gone: lines
-    /// that name its location mark it (§15.5).
+    isFavourite: qt_method!(fn(&self, uri: QString) -> bool),
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
+    canChange: qt_method!(fn(&self, uri: QString) -> bool),
+    canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
+    tileOf: qt_method!(fn(&self, uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
+    checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
+    isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
 
     copy: qt_method!(fn(&mut self, uris_json: QString) -> bool),
     cut: qt_method!(fn(&mut self, uris_json: QString) -> bool),
@@ -69,11 +63,13 @@ pub struct App {
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
+    clipboard_hold: lautta_core::app_archives::ArchiveHold,
 }
 
 impl QSingletonInit for App {
     fn init(&mut self) {
         self.version = QString::from(env!("CARGO_PKG_VERSION"));
+        self.monoFont = QString::from(lautta_core::fonts::MONO_FAMILY);
         match core() {
             Some(core) => {
                 self.ready = true;
@@ -95,12 +91,12 @@ fn parse_uris(json: &QString) -> Option<Vec<Uri>> {
     list.iter().map(|s| Uri::parse(s).ok()).collect()
 }
 
-/// Engineering names of the viewers (doc/QML-API.md, `App.viewerFor`).
 pub fn viewer_name(v: Viewer) -> &'static str {
     match v {
         Viewer::Image => "image",
         Viewer::Text => "text",
         Viewer::Markdown => "markdown",
+        Viewer::Prose => "prose",
         Viewer::Audio => "audio",
         Viewer::Video => "video",
         Viewer::Archive => "archive",
@@ -109,7 +105,6 @@ pub fn viewer_name(v: Viewer) -> &'static str {
     }
 }
 
-/// The last path component of a URI, or the text itself when it is a name.
 fn name_part(s: &str) -> Vec<u8> {
     match Uri::parse(s) {
         Ok(u) => u.name().map(<[u8]>::to_vec).unwrap_or_default(),
@@ -123,13 +118,32 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
-        // The user's retention is known from here on: purge the Trash and
-        // clear its half-made copies (OPS-8).
         handle().spawn_blocking(move || {
             if let Err(e) = core.tidy_trash(now_secs()) {
                 log::warn!("tidying the Trash failed: {e}");
             }
         });
+    }
+
+    fn setAppActive(&self, active: bool) {
+        if let Some(core) = core() {
+            core.index_set_conditions(|c| c.app_active = active);
+        }
+    }
+
+    fn setSearchOpen(&self, open: bool) {
+        if let Some(core) = core() {
+            core.index_set_conditions(|c| c.search_open = open);
+        }
+    }
+
+    fn setVolumeNames(&self, card: QString, usb: QString) {
+        if let Some(core) = core() {
+            core.locations.set_volume_words(VolumeWords {
+                card: card.to_string(),
+                usb: usb.to_string(),
+            });
+        }
     }
 
     fn publish_settings(&mut self) {
@@ -160,20 +174,9 @@ impl App {
             return false;
         }
         core.apply_settings(settings);
+        core.index_kick();
         self.publish_settings();
         true
-    }
-
-    fn previewRows(
-        &self,
-        entries: QString,
-        sort_key: QString,
-        descending: bool,
-        folders_first: bool,
-        show_hidden: bool,
-    ) -> QVariantList {
-        let prefs = preview::prefs(&sort_key.to_string(), descending, folders_first, show_hidden);
-        preview::rows(&entries.to_string(), &prefs)
     }
 
     fn childUri(&self, parent: QString, name: QString) -> QString {
@@ -211,7 +214,6 @@ impl App {
         let loc = parse_uri(&uri)
             .map(|u| u.location)
             .unwrap_or_else(|| uri.to_string());
-        // A server that went away keeps its name, for the message saying so.
         core()
             .and_then(|c| c.locations.name(&loc))
             .map(|name| QString::from(name.as_str()))
@@ -222,8 +224,25 @@ impl App {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
     }
 
+    fn isFavourite(&self, uri: QString) -> bool {
+        matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.favourites.is_favourite(&u).unwrap_or(false))
+    }
+
     fn isRemote(&self, uri: QString) -> bool {
         parse_uri(&uri).is_some_and(|u| is_bridge_location(&u.location))
+    }
+
+    fn canChange(&self, uri: QString) -> bool {
+        let (Some(c), Some(u)) = (core(), parse_uri(&uri)) else {
+            return false;
+        };
+        let flags = c.capability_flags(&u.location);
+        let flags: Vec<&str> = flags.iter().map(String::as_str).collect();
+        Capabilities::with(&flags).changeable()
+    }
+
+    fn canAddTo(&self, folder_uri: QString) -> bool {
+        matches!((core(), parse_uri(&folder_uri)), (Some(c), Some(u)) if c.may_add_to(&u))
     }
 
     fn localUrl(&self, uri: QString) -> QString {
@@ -241,23 +260,29 @@ impl App {
         QString::from(category_of_name(&name_part(&name_or_uri.to_string())).icon_name())
     }
 
+    fn tileOf(&self, uri: QString) -> QString {
+        match (core(), parse_uri(&uri)) {
+            (Some(c), Some(u)) => QString::from(to_json(&c.file_tile(&u, &c.settings())).as_str()),
+            _ => QString::default(),
+        }
+    }
+
+    fn checksumAlgorithms(&self, group: QString) -> QString {
+        QString::from(crate::checksum::algorithms_json(&group.to_string()).as_str())
+    }
+
+    fn isChecksumList(&self, name_or_uri: QString) -> bool {
+        crate::checksum::is_checksum_list(&name_or_uri.to_string())
+    }
+
     fn viewerFor(&self, name_or_uri: QString, mime: QString) -> QString {
+        let local = match (core(), parse_uri(&name_or_uri)) {
+            (Some(c), Some(u)) => c.locations.to_local_path(&u),
+            _ => None,
+        };
         let name = name_part(&name_or_uri.to_string());
-        let category = category_of_name(&name);
-        let mime = if mime.is_empty() {
-            extension_of(&name)
-                .and_then(|e| from_extension(&e))
-                .map(|(m, _)| m.to_owned())
-                .unwrap_or_default()
-        } else {
-            mime.to_string()
-        };
-        let category = if category == FileCategory::Other && !mime.is_empty() {
-            lautta_core::mime::category_from_mime(&mime)
-        } else {
-            category
-        };
-        QString::from(viewer_name(viewer_for(category, &mime)))
+        let viewer = viewer_of(&name, &mime.to_string(), local.as_deref());
+        QString::from(viewer_name(viewer))
     }
 
     fn set_clipboard(&mut self, mode: ClipboardMode, uris_json: QString) -> bool {
@@ -270,6 +295,14 @@ impl App {
     }
 
     fn publish_clipboard(&mut self) {
+        let source = self.clipboard.contents().map(|c| c.source.location.clone());
+        self.clipboard_hold = match (core(), source) {
+            (Some(core), Some(location)) => {
+                let _runtime = handle().enter();
+                core.hold_archive(&location)
+            }
+            _ => Default::default(),
+        };
         let (count, cut) = match self.clipboard.contents() {
             Some(c) => (c.items.len() as i32, c.mode == ClipboardMode::Cut),
             None => (0, false),
@@ -305,7 +338,6 @@ impl App {
         QString::from(to_json(&items).as_str())
     }
 
-    /// The items to paste and whether they move; a cut is consumed (OPS-10).
     fn takeClipboard(&mut self) -> QString {
         let taken = self.clipboard.take();
         self.publish_clipboard();
@@ -318,8 +350,6 @@ impl App {
         QString::from(to_json(&value).as_str())
     }
 
-    /// Makes a file readable by other apps: local files as they are, remote
-    /// ones copied to ~/Downloads/Lautta/Opened first (PRV-6).
     fn prepareExternal(&self, uri: QString) {
         let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
             return;

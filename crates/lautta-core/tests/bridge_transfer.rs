@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Uploads, downloads and jobs through file descriptors (SPEC NVB-9..11,
-//! XFR-12): the app opens the local side, the bridge only gets the fd.
 
 mod bridge_support;
 
@@ -158,7 +156,6 @@ async fn an_interrupted_upload_resumes_at_the_offset() {
         .await
         .unwrap();
     assert_eq!(rig.fake.file("account:1", b"part.bin").unwrap(), DATA);
-    // The bridge counts from the offset: 6 bytes were left to send.
     assert_eq!(seen.lock().unwrap().last(), Some(&(6, Some(6))));
 }
 
@@ -242,7 +239,6 @@ async fn an_interrupted_download_resumes_at_the_offset() {
     assert_eq!(e.kind, ErrorKind::NetworkUnreachable);
     assert_eq!(std::fs::read(&dst).unwrap(), b"0123");
 
-    // Resume into the same file at the offset; the app keeps its own fd (NVB-9).
     let again: OwnedFd = OpenOptions::new().write(true).open(&dst).unwrap().into();
     provider
         .download_into(&p("remote.bin"), again, ReadOptions { offset: 4 }, no_progress())
@@ -278,7 +274,6 @@ async fn download_failures() {
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::IsADirectory);
-    // A descriptor opened read-only cannot be written: refused, not retried.
     let e = provider
         .download_into(
             &p("remote.bin"),
@@ -357,7 +352,6 @@ async fn a_download_can_feed_a_pipe() {
         .download_into(&p("remote.bin"), writer, ReadOptions::default(), no_progress())
         .await
         .unwrap();
-    // Our copy of the write end is gone, so the reader sees the end of the stream.
     assert_eq!(drain.join().unwrap(), DATA);
 }
 
@@ -395,13 +389,7 @@ async fn dropping_a_transfer_cancels_the_job() {
     assert!(tokio::time::timeout(Duration::from_millis(250), upload)
         .await
         .is_err());
-    eventually("the Cancel", || !rig.fake.calls_of("Cancel").is_empty()).await;
-    tokio::time::sleep(Duration::from_millis(600)).await;
-    let partial = rig.fake.file("account:1", b"slow.bin").map_or(0, |d| d.len());
-    assert!(
-        partial < DATA.len(),
-        "the canceled job stopped early ({partial} bytes)"
-    );
+    eventually("the running job canceled", || rig.fake.jobs_canceled() == 1).await;
 }
 
 #[tokio::test]

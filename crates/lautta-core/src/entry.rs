@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Directory entries and location capabilities (SPEC Appendix B, BRW-1,
-//! netvfs XB-9).
 
 use std::collections::BTreeSet;
 use std::time::SystemTime;
@@ -16,7 +14,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// netvfs wire value (XB-9: 0 Unknown, 1 File, 2 Directory, 3 Symlink, 4 Special).
     pub fn from_wire(v: u8) -> Kind {
         match v {
             1 => Kind::File,
@@ -46,7 +43,6 @@ bitflags::bitflags! {
         const SYSTEM = 0x4;
         const NAME_NOT_UTF8 = 0x8;
         const TARGET_UNKNOWN = 0x10;
-        /// Local symlink pointing outside the sandbox (BRW-10).
         const NOT_ACCESSIBLE = 0x100;
     }
 }
@@ -55,7 +51,6 @@ bitflags::bitflags! {
 pub struct Entry {
     pub name: Vec<u8>,
     pub kind: Kind,
-    /// For symlinks the kind of the target when known, otherwise equal to `kind`.
     pub target_kind: Kind,
     pub size: Option<u64>,
     pub modified: Option<SystemTime>,
@@ -65,7 +60,6 @@ pub struct Entry {
     pub group: Option<String>,
     pub flags: EntryFlags,
     pub etag: Option<Vec<u8>>,
-    /// MIME type if the provider knows it (bridge `contentType`).
     pub content_type: Option<String>,
 }
 
@@ -87,7 +81,6 @@ impl Entry {
         }
     }
 
-    /// Directory, following a symlink's target kind when known (BRW-1 isDir).
     pub fn is_dir(&self) -> bool {
         self.kind == Kind::Dir || (self.kind == Kind::Symlink && self.target_kind == Kind::Dir)
     }
@@ -128,9 +121,6 @@ pub fn ms_to_system_time(ms: i64) -> SystemTime {
     }
 }
 
-/// Capability flags. Local capabilities depend on the filesystem type
-/// (`statfs`); remote ones come from the bridge (`Capabilities(loc)`), whose
-/// flag strings are kept verbatim in [`Capabilities::raw`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Capabilities {
     pub raw: BTreeSet<String>,
@@ -138,7 +128,6 @@ pub struct Capabilities {
     pub max_name_bytes: Option<u64>,
 }
 
-/// Well-known capability names (netvfs flag strings where they exist).
 pub mod cap {
     pub const WRITE: &str = "Write";
     pub const SYMLINKS: &str = "Symlinks";
@@ -153,12 +142,13 @@ pub mod cap {
     pub const CHECKSUMS: &str = "Checksums";
     pub const SPACE_INFO: &str = "SpaceInfo";
     pub const ATOMIC_RENAME_NOREPLACE: &str = "RenameNoReplace";
-    /// Local-only: deletes go to the Trash.
     pub const TRASH: &str = "Trash";
-    /// Archives and offline caches.
     pub const READ_ONLY: &str = "ReadOnly";
-    /// vfat/exFAT/SMB name rules (OPS-7).
     pub const RESTRICTED_NAMES: &str = "RestrictedNames";
+    pub const NO_CHANGE: &str = "NoChange";
+    pub const NO_READ: &str = "NoRead";
+    pub const DEEP_ETAGS: &str = "DeepETags";
+    pub const SEARCH: &str = "Search";
 }
 
 impl Capabilities {
@@ -175,6 +165,14 @@ impl Capabilities {
 
     pub fn writable(&self) -> bool {
         self.has(cap::WRITE) && !self.has(cap::READ_ONLY)
+    }
+
+    pub fn changeable(&self) -> bool {
+        self.writable() && !self.has(cap::NO_CHANGE)
+    }
+
+    pub fn readable(&self) -> bool {
+        !self.has(cap::NO_READ)
     }
 }
 
@@ -222,7 +220,13 @@ mod tests {
         assert!(c.writable());
         assert!(c.has(cap::SYMLINKS));
         assert!(!c.has(cap::PERMISSIONS));
+        assert!(c.changeable() && c.readable());
         let c = Capabilities::with(&[cap::WRITE, cap::READ_ONLY]);
         assert!(!c.writable());
+        assert!(!c.changeable() && c.readable());
+        let c = Capabilities::with(&[cap::WRITE, cap::NO_CHANGE]);
+        assert!(c.writable() && !c.changeable() && c.readable());
+        let c = Capabilities::with(&[cap::WRITE, cap::NO_CHANGE, cap::NO_READ]);
+        assert!(c.writable() && !c.changeable() && !c.readable());
     }
 }

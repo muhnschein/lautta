@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One conflict (OPS-2): what is copied, what is already there, and the
-// resolution. The default is never Replace. A conflict before the run belongs
-// to a plan (planId, answered through Operations); one during the run belongs
-// to a transfer (transferId, answered through Transfers).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,24 +10,22 @@ Dialog {
 
     property int planId: -1
     property int transferId: -1
-    // Index of the item in the plan or transfer.
     property int item: 0
-    // The Conflict of the core, as object or JSON text.
     property var conflict
-    property string name
-    // Where it already exists (breadcrumb text).
-    property string folder
-    // "copy", "move", …: only changes the wording of the first section.
-    property string kind: "copy"
-    // Engineering name of the preselected choice; empty = first safe one.
-    property string defaultChoice
-    // "3 of 12": position among the conflicts shown now.
-    property int position: 1
-    property int total: 1
-
     readonly property var c: Json.value(conflict, {})
+    property string name: c.name || ""
+    property string kind: c.kind || "copy"
+    property var sourceLook: c.source_look || {}
+    property var destinationLook: c.destination_look || {}
+    property string sourceUri: c.source || ""
+    property string destinationUri: c.destination || ""
+    property string defaultChoice
+    property int position: 1
+    property int total: c.open || 1
+
     readonly property var choices: c.choices || []
     readonly property bool isDir: c.src_is_dir === true || c.dst_is_dir === true
+    readonly property int remaining: total - position
     property string choice: initialChoice()
 
     function initialChoice() {
@@ -43,16 +37,21 @@ Dialog {
         return ""
     }
 
-    function details(size, mtime) {
-        var parts = []
-        if (size !== undefined && size !== null && !isDir)
-            parts.push(Format.formatFileSize(size))
+    function captions(size, mtime, dir) {
+        var lines = []
+        if (size !== undefined && size !== null && !dir)
+            lines.push(Format.formatFileSize(size))
         if (mtime !== undefined && mtime !== null && mtime >= 0)
-            parts.push(Format.formatDate(new Date(mtime), Formatter.TimepointRelative))
-        return parts.join(" · ")
+            lines.push(Format.formatDate(new Date(mtime), Formatter.TimepointRelative))
+        return lines
     }
 
-    // The resolution rows in display order; Merge only for folders (OPS-2).
+    function newer(mine, theirs) {
+        var known = typeof mine === "number" && typeof theirs === "number"
+        //% "Newer"
+        return known && mine > theirs ? qsTrId("lautta-conflict-newer") : ""
+    }
+
     function rows() {
         var list = []
         if (offered("Merge"))
@@ -68,13 +67,13 @@ Dialog {
         list.push({ "id": "Skip", "title": qsTrId("lautta-conflict-skip"), "hint": "" })
         //% "Replace"
         list.push({ "id": "Replace", "title": qsTrId("lautta-conflict-replace"), "hint": "" })
-        var newer = c.src_mtime_ms > c.dst_mtime_ms
-                    //% "Copying is newer"
-                    ? qsTrId("lautta-conflict-src-newer")
-                    //% "The existing item is newer"
-                    : qsTrId("lautta-conflict-dst-newer")
+        var incomingNewer = c.src_mtime_ms > c.dst_mtime_ms
+                            //% "The incoming item is newer"
+                            ? qsTrId("lautta-conflict-src-newer")
+                            //% "The existing item is newer"
+                            : qsTrId("lautta-conflict-dst-newer")
         //% "Replace if newer"
-        list.push({ "id": "ReplaceIfNewer", "title": qsTrId("lautta-conflict-replace-newer"), "hint": newer })
+        list.push({ "id": "ReplaceIfNewer", "title": qsTrId("lautta-conflict-replace-newer"), "hint": incomingNewer })
         //% "Resume"
         list.push({ "id": "Resume", "title": qsTrId("lautta-conflict-resume"),
                     //% "Only for unfinished copies"
@@ -97,88 +96,64 @@ Dialog {
 
     SilicaFlickable {
         anchors.fill: parent
-        contentHeight: column.height
+        contentHeight: column.height + Theme.paddingLarge
 
         Column {
             id: column
+
             width: parent.width
 
             DialogHeader {
                 //% "Apply"
                 acceptText: qsTrId("lautta-conflict-apply")
             }
-            DialogSubtitle {
-                visible: dialog.total > 1
-                //% "%n conflicts · %1 of %2"
-                text: qsTrId("lautta-conflict-progress", dialog.total).arg(dialog.position).arg(dialog.total)
-            }
 
             SectionHeader {
-                text: dialog.kind === "move"
-                      //% "Moving"
-                      ? qsTrId("lautta-conflict-moving")
-                      //% "Copying"
-                      : qsTrId("lautta-conflict-copying")
+                objectName: "conflictPosition"
+                text: dialog.total > 1
+                      //% "Conflict %1 of %2"
+                      ? qsTrId("lautta-conflict-position").arg(dialog.position).arg(dialog.total)
+                      //% "Conflict"
+                      : qsTrId("lautta-conflict-one")
             }
+
             Row {
+                id: sides
+
+                readonly property real columnWidth: (width - spacing) / 2
+
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
-                height: Theme.itemSizeMedium
-                spacing: Theme.paddingMedium
+                spacing: Theme.paddingLarge
 
-                OpIcon {
-                    anchors.verticalCenter: parent.verticalCenter
+                ItemTile {
+                    objectName: "incomingTile"
+                    width: sides.columnWidth
+                    tileSize: Math.min(width, Screen.width * 0.4)
+                    label: dialog.kind === "move"
+                           //% "Moving"
+                           ? qsTrId("lautta-conflict-moving")
+                           //% "Copying"
+                           : qsTrId("lautta-conflict-copying")
+                    name: dialog.name
                     isDir: dialog.c.src_is_dir === true
-                    category: App.categoryOf(dialog.name)
+                    uri: dialog.sourceUri
+                    look: dialog.sourceLook
+                    captions: dialog.captions(dialog.c.src_size, dialog.c.src_mtime_ms, isDir)
+                    note: dialog.newer(dialog.c.src_mtime_ms, dialog.c.dst_mtime_ms)
                 }
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - Theme.iconSizeMedium - Theme.paddingMedium
-                    Label {
-                        width: parent.width
-                        text: dialog.name
-                        truncationMode: TruncationMode.Fade
-                    }
-                    Label {
-                        width: parent.width
-                        text: dialog.details(dialog.c.src_size, dialog.c.src_mtime_ms)
-                        color: Theme.secondaryColor
-                        font.pixelSize: Theme.fontSizeSmall
-                        truncationMode: TruncationMode.Fade
-                    }
-                }
-            }
-
-            SectionHeader {
-                //% "Already in %1"
-                text: qsTrId("lautta-conflict-already-in").arg(dialog.folder)
-            }
-            Row {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                height: Theme.itemSizeMedium
-                spacing: Theme.paddingMedium
-
-                OpIcon {
-                    anchors.verticalCenter: parent.verticalCenter
+                ItemTile {
+                    objectName: "existingTile"
+                    width: sides.columnWidth
+                    tileSize: Math.min(width, Screen.width * 0.4)
+                    //% "Already there"
+                    label: qsTrId("lautta-conflict-already-there")
+                    name: dialog.name
                     isDir: dialog.c.dst_is_dir === true
-                    category: App.categoryOf(dialog.name)
-                }
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - Theme.iconSizeMedium - Theme.paddingMedium
-                    Label {
-                        width: parent.width
-                        text: dialog.name
-                        truncationMode: TruncationMode.Fade
-                    }
-                    Label {
-                        width: parent.width
-                        text: dialog.details(dialog.c.dst_size, dialog.c.dst_mtime_ms)
-                        color: Theme.secondaryColor
-                        font.pixelSize: Theme.fontSizeSmall
-                        truncationMode: TruncationMode.Fade
-                    }
+                    uri: dialog.destinationUri
+                    look: dialog.destinationLook
+                    captions: dialog.captions(dialog.c.dst_size, dialog.c.dst_mtime_ms, isDir)
+                    note: dialog.newer(dialog.c.dst_mtime_ms, dialog.c.src_mtime_ms)
                 }
             }
 
@@ -189,32 +164,44 @@ Dialog {
             Repeater {
                 model: dialog.rows()
 
-                ChoiceRow {
-                    width: column.width
-                    choiceName: modelData.id
-                    title: modelData.title
-                    hint: modelData.hint
-                    selected: dialog.choice
-                    offeredChoices: dialog.choices
-                    onChosen: dialog.choice = name
+                TextSwitch {
+                    objectName: "choice" + modelData.id
+                    automaticCheck: false
+                    checked: dialog.choice === modelData.id
+                    enabled: dialog.offered(modelData.id)
+                    opacity: enabled ? 1.0 : Theme.opacityLow
+                    text: modelData.title
+                    description: modelData.hint
+                    onClicked: dialog.choice = modelData.id
                 }
             }
             Label {
-                visible: !dialog.isDir
+                visible: !dialog.isDir || dialog.c.add_only === true
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 horizontalAlignment: Text.AlignRight
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                //% "Merge is offered for folders."
-                text: qsTrId("lautta-conflict-merge-folders")
+                text: dialog.c.add_only === true
+                      //% "Lautta may only add files here."
+                      ? qsTrId("lautta-conflict-add-only")
+                      //% "Merge is only offered for folders."
+                      : qsTrId("lautta-conflict-merge-folders")
+            }
+
+            SectionHeader {
+                visible: applyAll.visible
+                //% "Further conflicts"
+                text: qsTrId("lautta-conflict-further")
             }
             TextSwitch {
                 id: applyAll
-                visible: dialog.total - dialog.position > 0
+
+                objectName: "applyAll"
+                visible: dialog.remaining > 0
                 //% "Do this for the remaining %n conflicts"
-                text: qsTrId("lautta-conflict-apply-all", dialog.total - dialog.position)
+                text: qsTrId("lautta-conflict-apply-all", dialog.remaining)
             }
         }
         VerticalScrollDecorator { }

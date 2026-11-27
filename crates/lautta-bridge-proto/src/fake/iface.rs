@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `org.netvfs.Bridge1` interface of the fake. Checks happen in the order
-//! of the real bridge (netvfs `session.cpp`): argument validation
-//! (`InvalidArgs`, `InvalidName`), then `Hello` first, then consent, then the
-//! scripted latency and failures, then the operation.
 
 use super::args::{self, Dict};
 use super::fail::Fail;
-use super::state::{CancelOutcome, Consent, FakeDrive, InfoValue, RecordedAnswer, Session, Shared};
+use super::state::{CancelOutcome, Consent, FakeDrive, Session, Shared, State};
 use super::transfer::{self, Env};
 use super::tree::Tree;
 use super::{tree::TreeError, DEFAULT_CAPS};
+use crate::access::{self, After, Level, Op, Verdict};
 use crate::wire::{
-    feature, location_state, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
-    INTERFACE, OBJECT_PATH,
+    feature, location_state, WireCapabilities, WireCheckItem, WireCheckResult, WireDrive, WireEntry,
+    WireLocation, WireNearby, WireWalkItem, INTERFACE, OBJECT_PATH,
 };
 use sha2::Digest;
 use std::collections::HashMap;
@@ -25,11 +22,8 @@ use zbus::ObjectServer;
 
 const MAX_HANDLES: usize = 16;
 
-/// The contract: input signatures of every method, read from the XML that the
-/// real bridge serves.
 const CONTRACT_XML: &str = include_str!("../../../../tests/bridge-contract/org.netvfs.Bridge1.xml");
 
-/// Method name -> input signature, from the `Bridge1` interface of the contract.
 pub(super) fn contract_methods() -> &'static HashMap<String, String> {
     static TABLE: OnceLock<HashMap<String, String>> = OnceLock::new();
     TABLE.get_or_init(|| parse_methods(CONTRACT_XML))
@@ -42,7 +36,6 @@ fn attr<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     Some(&line[start..start + len])
 }
 
-/// One element per line, as in the contract file.
 fn parse_methods(xml: &str) -> HashMap<String, String> {
     let mut table = HashMap::new();
     let mut current: Option<String> = None;
@@ -68,9 +61,6 @@ fn parse_methods(xml: &str) -> HashMap<String, String> {
     table
 }
 
-/// Wraps the generated interface: a call whose signature differs from the
-/// contract fails with `InvalidArgs`, as in the real bridge (zbus alone would
-/// answer with its own error name).
 pub(super) struct Checked(Iface);
 
 impl Checked {
@@ -109,6 +99,7 @@ impl Interface for Checked {
         msg: &'call zbus::Message,
         name: MemberName<'call>,
     ) -> DispatchResult<'call> {
+        self.0.session.attach(connection);
         let wanted = contract_methods().get(name.as_str());
         let body = msg.body();
         let given = body.signature();
@@ -152,10 +143,10 @@ impl Iface {
         if method != "Hello" && !self.session.with(|s| s.hello) {
             return Err(Fail::net("ProtocolError", "Hello must be the first call"));
         }
-        if needs_consent && self.shared.with(|s| s.consent) != Consent::Granted {
+        if needs_consent && self.shared.with(|s| s.consent) == Consent::Unknown {
             return Err(Fail::net(
                 "PermissionDenied",
-                "The user has not allowed this app to use network locations",
+                "The user has not decided yet what this app may do",
             ));
         }
         let (latency, failure) = self.shared.with(|s| (s.latency, s.due_failure(method)));
@@ -168,9 +159,6 @@ impl Iface {
         }
     }
 
-    /// What a bridge without the drive methods answers (XB-20). The call is
-    /// recorded all the same, so that tests see what an older bridge was
-    /// asked.
     fn require_drives(&self, method: &str) -> Result<(), Fail> {
         if self.shared.with(|s| s.offers_drives()) {
             Ok(())
@@ -180,9 +168,6 @@ impl Iface {
         }
     }
 
-    /// `Mount` or `Unmount`: where the drive is mounted then. A change is
-    /// told to every client (`DrivesChanged`); with a mount root the folder
-    /// comes and goes as udisks makes and removes it.
     async fn mount_or_unmount(&self, method: &str, drive: &str, mount: bool) -> Result<Vec<u8>, Fail> {
         self.require_drives(method)?;
         let drive = args::drive(drive)?;
@@ -206,24 +191,56 @@ impl Iface {
         Ok(after)
     }
 
-    fn require_location(&self, loc: &str) -> Result<(), Fail> {
-        if self.shared.with(|s| s.locations.contains_key(loc)) {
-            Ok(())
-        } else {
-            Err(Fail::net("NotFound", "No such location"))
+    fn require_location(&self, loc: &str) -> Result<Level, Fail> {
+        self.shared.with(|s| {
+            if !s.locations.contains_key(loc) {
+                return Err(Fail::net("NotFound", "No such location"));
+            }
+            s.level(loc).ok_or_else(|| {
+                Fail::net(
+                    "PermissionDenied",
+                    "The user has not allowed this app to use this account",
+                )
+                .with_detail(Some("denied".to_owned()), None)
+            })
+        })
+    }
+
+    fn admit(&self, loc: &str, path: &[u8], op: Op) -> Result<Verdict, Fail> {
+        let level = self.require_location(loc)?;
+        let own = self.shared.with(|s| s.own(loc, path));
+        match access::check(level, op, own) {
+            Verdict::Deny => Err(refused(level)),
+            verdict => Ok(verdict),
         }
     }
 
-    /// A call that needs a connection of `loc`'s pool: the location is
-    /// connected from now on (netvfs XB-12), until `Disconnect`; a change is
-    /// told.
+    fn after<T>(&self, loc: &str, path: &[u8], call: After, result: &Result<T, Fail>) {
+        self.shared
+            .with(|s| s.after_call(loc, path, call, result.as_ref().err().map(Fail::bare)));
+    }
+
+    fn remove(
+        &self,
+        loc: &str,
+        path: &[u8],
+        f: impl FnOnce(&mut Tree) -> Result<(), TreeError>,
+    ) -> Result<(), Fail> {
+        if self.admit(loc, path, Op::Remove)? == Verdict::DenyUnlessMissing {
+            self.tree(loc, |t| t.stat(path, false))?;
+            return Err(refused(self.require_location(loc)?));
+        }
+        let result = self.tree(loc, f);
+        self.after(loc, path, After::Gone, &result);
+        result
+    }
+
     fn reach(&self, loc: &str) -> Result<(), Fail> {
         self.require_location(loc)?;
         self.set_state(loc, location_state::CONNECTED);
         Ok(())
     }
 
-    /// Sets `loc`'s state, and tells every client if it changed.
     fn set_state(&self, loc: &str, state: &str) {
         if self.shared.with(|s| s.set_state(loc, state, None)) {
             let shared = Arc::clone(&self.shared);
@@ -253,13 +270,11 @@ impl Iface {
             s.auto_consent
         });
         if let Some(answer) = auto {
-            self.shared.with(|s| s.consent = answer);
             let shared = self.shared.clone();
-            tokio::spawn(async move { shared.broadcast_consent(answer).await });
+            tokio::spawn(async move { shared.decide(|s| s.consent = answer).await });
         }
     }
 
-    /// Starts a job: validates the location, takes the id and runs `work`.
     fn start_job<F, Fut>(&self, ctxt: &SignalContext<'_>, work: F) -> u32
     where
         F: FnOnce(Env, u32, Arc<std::sync::atomic::AtomicBool>) -> Fut,
@@ -271,40 +286,30 @@ impl Iface {
         tokio::spawn(work(env, job, cancel));
         job
     }
+}
 
-    async fn ask_in(
-        &self,
-        ctxt: &SignalContext<'_>,
-        kind: &str,
-        details: &[(String, InfoValue)],
-    ) -> Option<RecordedAnswer> {
-        let env = self.env(ctxt);
-        env.ask(kind, details).await
-    }
+fn refused(level: Level) -> Fail {
+    let what = match level {
+        Level::Full => "do this",
+        Level::ReadAdd => "read and add",
+        Level::Read => "read",
+        Level::Add => "add",
+    };
+    Fail::net(
+        "PermissionDenied",
+        &format!("This app may only {what} in this account"),
+    )
+    .with_detail(Some(level.as_str().to_owned()), None)
+}
 
-    async fn adhoc_questions(&self, ctxt: &SignalContext<'_>) -> Result<(), Fail> {
-        let questions = self.shared.with(|s| s.adhoc_questions.clone());
-        for q in questions {
-            match self.ask_in(ctxt, &q.kind, &q.details).await {
-                Some(a) if a.accept => {}
-                Some(_) => return Err(declined(&q.kind)),
-                None => return Err(Fail::net("Canceled", "The question was not answered")),
-            }
-        }
-        Ok(())
+fn copy_op(replace: bool) -> Op {
+    if replace {
+        Op::Unrestricted
+    } else {
+        Op::Create
     }
 }
 
-fn declined(kind: &str) -> Fail {
-    match kind {
-        "identity-unknown" => Fail::net("ServerIdentityUnknown", "The server identity was not accepted"),
-        "keyboard-interactive" => Fail::net("AuthFailed", "The sign-in was cancelled"),
-        _ => Fail::net("SecurityPolicy", "The insecure connection was declined"),
-    }
-}
-
-/// Makes the folder of a mounted drive, or removes the one of an unmounted
-/// drive.
 fn mount_folder(before: &[u8], after: &[u8]) -> std::io::Result<()> {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
@@ -315,91 +320,8 @@ fn mount_folder(before: &[u8], after: &[u8]) -> std::io::Result<()> {
     }
 }
 
-struct AdHocUrl {
-    provider: &'static str,
-    host: String,
-    port: Option<i32>,
-    user: Option<String>,
-    path: Vec<u8>,
-}
-
-fn parse_adhoc(url: &str, opts: &args::AdHocOpts) -> Result<AdHocUrl, Fail> {
-    let (scheme, rest) = url
-        .split_once("://")
-        .ok_or_else(|| Fail::args("Not a valid URL"))?;
-    let provider = match scheme {
-        "sftp" | "ssh" => "sftp",
-        "smb" => "smb",
-        "fake" => "fake",
-        "dav" | "davs" | "ftp" | "ftps" => {
-            return Err(Fail::net(
-                "Unsupported",
-                &format!("{scheme} URLs are no longer supported"),
-            ));
-        }
-        "file" | "local" => {
-            return Err(Fail::net(
-                "PermissionDenied",
-                "The bridge never accesses local files",
-            ));
-        }
-        _ => {
-            return Err(Fail::net(
-                "Unsupported",
-                "No backend for this scheme is installed",
-            ))
-        }
-    };
-    let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
-    let (userinfo, hostport) = authority
-        .rsplit_once('@')
-        .map_or((None, authority), |(u, h)| (Some(u), h));
-    if userinfo.is_some_and(|u| u.contains(':')) {
-        return Err(Fail::net("SecurityPolicy", "A password in the URL is refused"));
-    }
-    let (host, port) = match hostport.rsplit_once(':') {
-        Some((h, p)) => (h, Some(p.parse::<i32>().map_err(|_| Fail::args("Invalid port"))?)),
-        None => (hostport, None),
-    };
-    if host.is_empty() {
-        return Err(Fail::args("A URL needs a host"));
-    }
-    if opts.security_profile.is_some() && provider != "smb" {
-        return Err(Fail::args("security_profile applies to SMB only"));
-    }
-    Ok(AdHocUrl {
-        provider,
-        host: host.to_owned(),
-        port,
-        user: opts.user.clone().or_else(|| userinfo.map(str::to_owned)),
-        path: args::path(path.as_bytes())?,
-    })
-}
-
-fn adhoc_info(p: &AdHocUrl) -> Vec<(String, InfoValue)> {
-    // The bridge lists an ad-hoc location once it has connected (XB-12).
-    let mut info = vec![
-        ("kind".to_owned(), InfoValue::Str("adhoc".into())),
-        ("host".to_owned(), InfoValue::Str(p.host.clone())),
-        ("path".to_owned(), InfoValue::Bytes(p.path.clone())),
-        (
-            location_state::KEY.to_owned(),
-            InfoValue::Str(location_state::CONNECTED.into()),
-        ),
-    ];
-    if let Some(port) = p.port {
-        info.push(("port".to_owned(), InfoValue::Int(port)));
-    }
-    if let Some(user) = &p.user {
-        info.push(("user".to_owned(), InfoValue::Str(user.clone())));
-    }
-    info
-}
-
 #[zbus::interface(name = "org.netvfs.Bridge1")]
 impl Iface {
-    // ---- Session ---------------------------------------------------------
-
     async fn hello(&self, client: String) -> Result<String, Fail> {
         if client.len() > 256 {
             return Err(Fail::args("Argument 1 is too long"));
@@ -414,12 +336,12 @@ impl Iface {
 
     async fn get_consent(&self) -> Result<String, Fail> {
         self.begin("GetConsent", "interactive", "", false).await?;
-        Ok(self.shared.with(|s| s.consent).as_str().to_owned())
+        Ok(self.shared.with(|s| s.consent).wire().to_owned())
     }
 
     async fn request_consent(&self) -> Result<(), Fail> {
         self.begin("RequestConsent", "interactive", "", false).await?;
-        if self.shared.with(|s| s.consent) != Consent::Granted {
+        if self.shared.with(|s| s.consent) == Consent::Unknown {
             self.ask_consent();
         }
         Ok(())
@@ -433,20 +355,13 @@ impl Iface {
         Ok(features)
     }
 
-    // ---- Locations -------------------------------------------------------
-
     async fn list_locations(&self) -> Result<Vec<WireLocation>, Fail> {
+        let list = self.shared.with(|s| s.wire_locations());
         self.begin("ListLocations", "interactive", "", false).await?;
-        Ok(self.shared.with(|s| {
-            if s.consent == Consent::Granted {
-                s.wire_locations()
-            } else {
-                Vec::new()
-            }
-        }))
+        self.shared.with(|s| s.location_replies += 1);
+        Ok(list)
     }
 
-    // A one-element tuple keeps the reply a single struct argument on the wire.
     async fn capabilities(&self, loc: String) -> Result<(WireCapabilities,), Fail> {
         let loc = args::location(&loc)?;
         self.begin("Capabilities", "interactive", &loc, true).await?;
@@ -468,63 +383,18 @@ impl Iface {
         Ok(())
     }
 
-    // ---- Ad-hoc locations --------------------------------------------------
-
-    async fn connect_ad_hoc(
-        &self,
-        url: String,
-        secret: Vec<u8>,
-        opts: Dict,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
-    ) -> Result<String, Fail> {
-        args::url(&url)?;
-        args::secret(&secret)?;
-        let opts = args::adhoc_opts(&opts)?;
-        self.begin("ConnectAdHoc", "interactive", &url, true).await?;
-        let parsed = parse_adhoc(&url, &opts)?;
-        self.shared.with(|s| s.received_secrets.push(secret));
-        self.adhoc_questions(&ctxt).await?;
-        let id = self.shared.with(|s| {
-            let id = format!("adhoc:{}", s.next_adhoc);
-            s.next_adhoc += 1;
-            s.add_location(&id, parsed.provider, &parsed.host, adhoc_info(&parsed));
-            id
-        });
-        self.shared.broadcast_locations().await;
-        Ok(id)
-    }
-
-    async fn forget_ad_hoc(&self, loc: String) -> Result<(), Fail> {
-        let loc = args::location(&loc)?;
-        self.begin("ForgetAdHoc", "interactive", &loc, true).await?;
-        if !loc.starts_with("adhoc:") || !self.shared.with(|s| s.locations.contains_key(&loc)) {
-            return Err(Fail::net("NotFound", "No such ad-hoc location"));
-        }
-        self.shared.with(|s| s.remove_location(&loc));
-        self.shared.broadcast_locations().await;
-        Ok(())
-    }
-
-    // ---- Discovery -------------------------------------------------------
-
     async fn discover(&self, on: bool, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> Result<(), Fail> {
         self.begin("Discover", "interactive", "", true).await?;
         self.env(&ctxt);
         self.session.with(|s| s.discovering = on);
         if on {
-            // As netvfs' NearbyService: a start signals what is known right
-            // away, after the reply, also when that is nothing yet.
             let shared = self.shared.clone();
             tokio::spawn(async move { shared.broadcast_nearby().await });
         } else if !self.shared.any_discovering() {
-            // netvfs halts the discovery when its last client stops and
-            // forgets what it found (Discovery::Private::halt).
             self.shared.with(|s| s.nearby.clear());
         }
         Ok(())
     }
-
-    // ---- Listing -----------------------------------------------------------
 
     async fn list(
         &self,
@@ -539,14 +409,16 @@ impl Iface {
         let lane = args::lane(&lane, "interactive")?;
         let batch = args::list_batch(batch)?;
         self.begin("List", lane, &loc, true).await?;
+        let folders_only = self.admit(&loc, &dir, Op::Browse)? == Verdict::FoldersOnly;
         self.reach(&loc)?;
-        let listing = self.tree(&loc, |t| t.list(&dir));
+        let listing = self.tree(&loc, |t| t.list(&dir)).map(|mut entries| {
+            entries.retain(|e| !folders_only || access::is_folder(e.kind, e.target_kind));
+            entries
+        });
         Ok(self.start_job(&ctxt, move |env, req, cancel| {
             transfer::run_list(env, req, listing, batch, cancel)
         }))
     }
-
-    // ---- Metadata ----------------------------------------------------------
 
     async fn stat(
         &self,
@@ -559,13 +431,19 @@ impl Iface {
         let path = args::path(&path)?;
         let lane = args::lane(&lane, "interactive")?;
         self.begin("Stat", lane, &loc, true).await?;
-        self.tree(&loc, |t| t.stat(&path, follow)).map(|e| (e,))
+        let verdict = self.admit(&loc, &path, Op::Look)?;
+        let entry = self.tree(&loc, |t| t.stat(&path, follow))?;
+        if verdict == Verdict::IfFolder && !access::is_folder(entry.kind, entry.target_kind) {
+            return Err(refused(self.require_location(&loc)?));
+        }
+        Ok((entry,))
     }
 
     async fn read_link(&self, loc: String, path: Vec<u8>) -> Result<Vec<u8>, Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("ReadLink", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::ReadLink)?;
         self.tree(&loc, |t| t.read_link(&path))
     }
 
@@ -587,6 +465,7 @@ impl Iface {
         let path = args::path(&path)?;
         let algo = args::token(&algo, 32)?;
         self.begin("Checksum", "bulk", &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         if algo != "sha256" {
             return Err(Fail::net("Unsupported", "Unknown checksum algorithm"));
         }
@@ -595,12 +474,11 @@ impl Iface {
         })
     }
 
-    // ---- Namespace ---------------------------------------------------------
-
     async fn make_dir(&self, loc: String, path: Vec<u8>, exclusive: bool) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("MakeDir", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::MakeDir)?;
         self.tree(&loc, |t| t.make_dir(&path, exclusive))
     }
 
@@ -608,14 +486,14 @@ impl Iface {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveFile", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.remove_file(&path))
+        self.remove(&loc, &path, |t| t.remove_file(&path))
     }
 
     async fn remove_dir(&self, loc: String, path: Vec<u8>) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveDir", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.remove_dir(&path))
+        self.remove(&loc, &path, |t| t.remove_dir(&path))
     }
 
     async fn rename(&self, loc: String, from: Vec<u8>, to: Vec<u8>, replace: bool) -> Result<(), Fail> {
@@ -623,7 +501,10 @@ impl Iface {
         let from = args::path(&from)?;
         let to = args::path(&to)?;
         self.begin("Rename", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.rename(&from, &to, replace))
+        self.admit(&loc, &from, if replace { Op::Unrestricted } else { Op::Rename })?;
+        let result = self.tree(&loc, |t| t.rename(&from, &to, replace));
+        self.after(&loc, &from, After::Gone, &result);
+        result
     }
 
     async fn set_attributes(&self, loc: String, path: Vec<u8>, changes: Dict) -> Result<(), Fail> {
@@ -631,6 +512,7 @@ impl Iface {
         let path = args::path(&path)?;
         let changes = args::attributes(&changes)?;
         self.begin("SetAttributes", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::SetAttributes)?;
         if changes.is_empty() {
             return Ok(());
         }
@@ -644,6 +526,7 @@ impl Iface {
         }
         let link = args::path(&link_path)?;
         self.begin("MakeSymlink", "interactive", &loc, true).await?;
+        self.admit(&loc, &link, Op::Unrestricted)?;
         self.tree(&loc, |t| t.make_symlink(&target, &link))
     }
 
@@ -652,6 +535,7 @@ impl Iface {
         let existing = args::path(&existing)?;
         let new_path = args::path(&new_path)?;
         self.begin("MakeHardlink", "interactive", &loc, true).await?;
+        self.admit(&loc, &new_path, Op::Unrestricted)?;
         self.tree(&loc, |t| t.make_hardlink(&existing, &new_path))
     }
 
@@ -661,16 +545,21 @@ impl Iface {
         let to = args::path(&to)?;
         let opts = args::copy_opts(&opts)?;
         self.begin("ServerCopy", "bulk", &loc, true).await?;
-        self.tree(&loc, |t| t.server_copy(&from, &to, opts.recursive, opts.replace))
+        self.admit(&loc, &from, Op::Read)?;
+        self.admit(&loc, &to, copy_op(opts.replace))?;
+        let result = self.tree(&loc, |t| t.server_copy(&from, &to, opts.recursive, opts.replace));
+        if !opts.recursive {
+            self.after(&loc, &to, After::Created, &result);
+        }
+        result
     }
-
-    // ---- Handles -----------------------------------------------------------
 
     async fn open_read(&self, loc: String, path: Vec<u8>, lane: String) -> Result<(u32, i64), Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         let lane = args::lane(&lane, "stream")?;
         self.begin("OpenRead", lane, &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         let size = self.tree(&loc, |t| {
             t.file_data(&path)
                 .map(|d| i64::try_from(d.len()).unwrap_or(i64::MAX))
@@ -712,8 +601,6 @@ impl Iface {
         }
     }
 
-    // ---- Jobs --------------------------------------------------------------
-
     async fn upload(
         &self,
         loc: String,
@@ -726,10 +613,15 @@ impl Iface {
         let path = args::path(&path)?;
         let opts = args::transfer_opts(&opts, true)?;
         self.begin("Upload", opts.lane, &loc, true).await?;
+        let (op, call) = match opts.disposition {
+            args::Disposition::Create => (Op::Create, After::Created),
+            args::Disposition::Truncate | args::Disposition::Resume => (Op::Rewrite, After::Rewritten),
+        };
+        self.admit(&loc, &path, op)?;
         let file = transfer::Source::new(std::fs::File::from(std::os::fd::OwnedFd::from(fd)))?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
-            transfer::run_upload(env, job, cancel, loc, path, file, opts)
+            transfer::run_upload(env, job, cancel, (loc, path, call), file, opts)
         }))
     }
 
@@ -745,6 +637,7 @@ impl Iface {
         let path = args::path(&path)?;
         let opts = args::transfer_opts(&opts, false)?;
         self.begin("Download", opts.lane, &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         let file = transfer::Source::new(std::fs::File::from(std::os::fd::OwnedFd::from(fd)))?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
@@ -767,9 +660,8 @@ impl Iface {
         let dst = args::path(&dst)?;
         let opts = args::copy_opts(&opts)?;
         self.begin("CopyAcross", "bulk", &src_loc, true).await?;
-        // Copy jobs connect outside the pools: no state changes (XB-12).
-        self.require_location(&src_loc)?;
-        self.require_location(&dst_loc)?;
+        self.admit(&src_loc, &src, Op::Read)?;
+        self.admit(&dst_loc, &dst, copy_op(opts.replace))?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
             transfer::run_copy_across(env, job, cancel, (src_loc, src), (dst_loc, dst), opts)
         }))
@@ -784,6 +676,7 @@ impl Iface {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveTree", "bulk", &loc, true).await?;
+        self.admit(&loc, &path, Op::Unrestricted)?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
             transfer::run_remove_tree(env, job, cancel, loc, path)
@@ -801,42 +694,88 @@ impl Iface {
         let root = args::path(&root)?;
         let opts = args::walk_opts(&opts)?;
         self.begin("Walk", "bulk", &loc, true).await?;
+        let folders_only = self.admit(&loc, &root, Op::Browse)? == Verdict::FoldersOnly;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
-            transfer::run_walk(env, job, cancel, loc, root, opts)
+            transfer::run_walk(env, job, cancel, (loc, root, folders_only), opts)
         }))
     }
+
+    async fn check(
+        &self,
+        loc: String,
+        items: Vec<WireCheckItem>,
+        lane: String,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> Result<u32, Fail> {
+        let loc = args::location(&loc)?;
+        let items = args::check_items(items)?;
+        let lane = args::lane(&lane, "bulk")?;
+        self.begin("Check", lane, &loc, true).await?;
+        let mut folders_only = Vec::with_capacity(items.len());
+        for item in &items {
+            folders_only.push(self.admit(&loc, &item.path, Op::Browse)? == Verdict::FoldersOnly);
+        }
+        self.reach(&loc)?;
+        Ok(self.start_job(&ctxt, move |env, job, cancel| {
+            transfer::run_check(env, job, cancel, loc, (items, folders_only))
+        }))
+    }
+
+    async fn search(
+        &self,
+        loc: String,
+        root: Vec<u8>,
+        text: String,
+        opts: Dict,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> Result<u32, Fail> {
+        let loc = args::location(&loc)?;
+        let root = args::path(&root)?;
+        args::search_text(&text)?;
+        let limit = args::search_limit(&opts)?;
+        self.begin("Search", "bulk", &loc, true).await?;
+        let folders_only = self.admit(&loc, &root, Op::Browse)? == Verdict::FoldersOnly;
+        self.reach(&loc)?;
+        let offered = self.shared.with(|s| {
+            s.caps
+                .get(&loc)
+                .is_none_or(|c| c.flags.iter().any(|f| f == "Search"))
+        });
+        if !offered {
+            return Err(Fail::net("Unsupported", "Search is not supported"));
+        }
+        Ok(self.start_job(&ctxt, move |env, job, cancel| {
+            transfer::run_search(env, job, cancel, (loc, root, folders_only), (text, limit))
+        }))
+    }
+
+    async fn get_network(&self) -> Result<String, Fail> {
+        self.begin("GetNetwork", "interactive", "", false).await?;
+        Ok(self.shared.with(|s| s.network.clone()))
+    }
+
+    #[zbus(signal)]
+    pub async fn network_changed(ctxt: &SignalContext<'_>, network: String) -> zbus::Result<()>;
+    #[zbus(signal)]
+    pub async fn check_batch(
+        ctxt: &SignalContext<'_>,
+        job: u32,
+        results: Vec<WireCheckResult>,
+    ) -> zbus::Result<()>;
 
     async fn cancel(&self, id: u32) -> Result<(), Fail> {
         self.begin("Cancel", "interactive", &id.to_string(), false)
             .await?;
         match self.session.cancel(id) {
             CancelOutcome::Unknown => Err(Fail::net("NotFound", "No such request or job")),
-            CancelOutcome::Canceled | CancelOutcome::Finished => Ok(()),
+            CancelOutcome::Canceled => {
+                self.shared.with(|s| s.jobs_canceled += 1);
+                Ok(())
+            }
+            CancelOutcome::Finished => Ok(()),
         }
     }
-
-    // ---- Questions ---------------------------------------------------------
-
-    async fn answer(&self, id: String, answer: Dict) -> Result<(), Fail> {
-        let id = args::location(&id)?;
-        let answer = args::answer_opts(&answer)?;
-        self.begin("Answer", "interactive", &id, false).await?;
-        let Some(tx) = self.session.take_question(&id) else {
-            return Err(Fail::net("NotFound", "No such question"));
-        };
-        let recorded = RecordedAnswer {
-            id,
-            accept: answer.accept,
-            answers: answer.answers,
-        };
-        self.shared.with(|s| s.answers.push(recorded.clone()));
-        // The asker may have given up; the answer is still recorded.
-        let _ = tx.send(recorded);
-        Ok(())
-    }
-
-    // ---- Handoff -----------------------------------------------------------
 
     async fn open_account_settings(&self, loc: String) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
@@ -870,8 +809,6 @@ impl Iface {
         Ok(())
     }
 
-    // ---- Drives (XB-20) ----------------------------------------------------
-
     async fn list_drives(&self) -> Result<Vec<WireDrive>, Fail> {
         self.require_drives("ListDrives")?;
         self.begin("ListDrives", "interactive", "", false).await?;
@@ -887,8 +824,6 @@ impl Iface {
     async fn unmount(&self, drive: String) -> Result<(), Fail> {
         self.mount_or_unmount("Unmount", &drive, false).await.map(drop)
     }
-
-    // ---- Signals -----------------------------------------------------------
 
     #[zbus(signal)]
     pub async fn drives_changed(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
@@ -923,13 +858,6 @@ impl Iface {
         message: String,
         extra: HashMap<String, OwnedValue>,
     ) -> zbus::Result<()>;
-    #[zbus(signal)]
-    pub async fn question(
-        ctxt: &SignalContext<'_>,
-        id: String,
-        kind: String,
-        details: HashMap<String, OwnedValue>,
-    ) -> zbus::Result<()>;
 }
 
 impl Iface {
@@ -940,19 +868,49 @@ impl Iface {
     }
 }
 
-/// Signal context of a session, if its connection is up.
 pub(super) fn context(session: &Session) -> Option<SignalContext<'static>> {
     let conn = session.conn()?;
     SignalContext::new(&conn, OBJECT_PATH).ok()
 }
 
 impl Shared {
-    pub async fn broadcast_consent(&self, consent: Consent) {
-        for session in self.sessions_snapshot() {
-            if let Some(ctx) = context(&session) {
-                // A closed client simply misses the signal.
-                let _ = Iface::consent_changed(&ctx, consent.as_str().to_owned()).await;
+    pub async fn decide(&self, change: impl FnOnce(&mut State)) {
+        let (before, after, narrowed) = self.with(|s| {
+            let ids: Vec<String> = s.locations.keys().cloned().collect();
+            let old: Vec<Option<Level>> = ids.iter().map(|id| s.level(id)).collect();
+            let before = s.consent.wire();
+            change(s);
+            let narrowed = ids.iter().zip(old).any(|(id, old)| match (old, s.level(id)) {
+                (Some(old), Some(new)) => !new.covers(old),
+                (Some(_), None) => true,
+                (None, _) => false,
+            });
+            if s.consent == Consent::Unknown {
+                s.own.clear();
             }
+            (before, s.consent.wire(), narrowed)
+        });
+        if before != after {
+            for session in self.sessions_snapshot() {
+                if let Some(ctx) = context(&session) {
+                    let _ = Iface::consent_changed(&ctx, after.to_owned()).await;
+                }
+            }
+        }
+        if narrowed {
+            let stall = self.with(|s| s.narrowing_stall);
+            if !stall.is_zero() {
+                self.broadcast_locations().await;
+                tokio::time::sleep(stall).await;
+            }
+            for session in self.take_sessions() {
+                session.shut();
+                if let Some(conn) = session.take_conn() {
+                    let _ = conn.close().await;
+                }
+            }
+        } else {
+            self.broadcast_locations().await;
         }
     }
 
@@ -964,10 +922,18 @@ impl Shared {
         }
     }
 
+    pub async fn broadcast_network(&self) {
+        let network = self.with(|s| s.network.clone());
+        for session in self.sessions_snapshot() {
+            if let Some(ctx) = context(&session) {
+                let _ = Iface::network_changed(&ctx, network.clone()).await;
+            }
+        }
+    }
+
     pub async fn broadcast_drives(&self) {
         for session in self.sessions_snapshot() {
             if let Some(ctx) = context(&session) {
-                // A closed client misses the signal.
                 let _ = Iface::drives_changed(&ctx).await;
             }
         }
@@ -984,46 +950,11 @@ impl Shared {
             }
         }
     }
-
-    /// A question to the newest client.
-    pub async fn ask(&self, kind: &str, details: &[(String, InfoValue)]) -> Option<RecordedAnswer> {
-        let session = self.sessions_snapshot().pop()?;
-        let ctx = context(&session)?;
-        ask_question(self, &session, &ctx, kind, details).await
-    }
-}
-
-/// Sends a `Question` signal and waits for the matching `Answer`. `None` when
-/// the asker is gone before an answer arrives.
-pub(super) async fn ask_question(
-    shared: &Shared,
-    session: &Session,
-    ctx: &SignalContext<'_>,
-    kind: &str,
-    details: &[(String, InfoValue)],
-) -> Option<RecordedAnswer> {
-    let id = shared.with(|s| {
-        let id = format!("q{}", s.next_question);
-        s.next_question += 1;
-        id
-    });
-    let rx = session.add_question(&id);
-    let details: HashMap<String, OwnedValue> = details
-        .iter()
-        .map(|(k, v)| (k.clone(), v.to_owned_value()))
-        .collect();
-    Iface::question(ctx, id, kind.to_owned(), details).await.ok()?;
-    rx.await.ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fake::args::AdHocOpts;
-
-    fn plain() -> AdHocOpts {
-        AdHocOpts::default()
-    }
 
     #[test]
     fn the_contract_gives_every_input_signature() {
@@ -1032,7 +963,6 @@ mod tests {
         assert_eq!(m["Hello"], "s");
         assert_eq!(m["GetConsent"], "");
         assert_eq!(m["Stat"], "saybs");
-        assert_eq!(m["ConnectAdHoc"], "saya{sv}");
         assert_eq!(m["Upload"], "sayha{sv}");
         assert_eq!(m["CopyAcross"], "saysaya{sv}");
         assert!(!m.contains_key("ListBatch"), "signals are not methods");
@@ -1057,65 +987,5 @@ mod tests {
         assert_eq!(m.len(), 2);
         assert_eq!(m["A"], "say");
         assert_eq!(m["B"], "");
-    }
-
-    #[test]
-    fn ad_hoc_urls_are_taken_apart() {
-        let opts = AdHocOpts {
-            user: Some("me".into()),
-            security_profile: None,
-        };
-        let p = parse_adhoc("sftp://other@host.example:2222/a//b/", &opts).unwrap();
-        assert_eq!(
-            (p.provider, p.host.as_str(), p.port),
-            ("sftp", "host.example", Some(2222))
-        );
-        assert_eq!(p.user.as_deref(), Some("me"), "the option wins over the URL");
-        assert_eq!(p.path, b"a/b");
-        let p = parse_adhoc("sftp://other@host/", &plain()).unwrap();
-        assert_eq!(p.user.as_deref(), Some("other"));
-        let info = adhoc_info(&p);
-        assert!(info.contains(&("kind".to_owned(), InfoValue::Str("adhoc".into()))));
-        assert!(info.contains(&("user".to_owned(), InfoValue::Str("other".into()))));
-        assert!(!info.iter().any(|(k, _)| k == "port"));
-        assert_eq!(parse_adhoc("smb://h/", &plain()).unwrap().provider, "smb");
-        assert_eq!(parse_adhoc("fake://h/", &plain()).unwrap().provider, "fake");
-    }
-
-    #[test]
-    fn ad_hoc_urls_are_refused_as_the_bridge_refuses_them() {
-        let bare = |url: &str, opts: &AdHocOpts| parse_adhoc(url, opts).err().map(|f| f.bare().to_owned());
-        assert_eq!(
-            bare("sftp://u:pw@h/", &plain()).as_deref(),
-            Some("SecurityPolicy")
-        );
-        assert_eq!(bare("file:///x", &plain()).as_deref(), Some("PermissionDenied"));
-        assert_eq!(bare("gopher://h/", &plain()).as_deref(), Some("Unsupported"));
-        for url in ["dav://h/", "davs://h/", "ftp://h/", "ftps://h/", "https://h/"] {
-            assert_eq!(bare(url, &plain()).as_deref(), Some("Unsupported"), "{url}");
-        }
-        let removed = parse_adhoc("davs://h/", &plain()).err();
-        assert_eq!(
-            removed.as_ref().map(Fail::message),
-            Some("davs URLs are no longer supported")
-        );
-        let legacy = AdHocOpts {
-            user: None,
-            security_profile: Some("legacy".into()),
-        };
-        assert!(bare("sftp://h/", &legacy).is_some_and(|n| n.contains("InvalidArgs")));
-        assert!(bare("smb://h/", &legacy).is_none());
-        assert!(bare("nonsense", &plain()).is_some());
-        assert!(bare("sftp:///x", &plain()).is_some());
-        assert!(bare("sftp://h:notaport/", &plain()).is_some());
-        assert!(bare("sftp://h/a/../b", &plain()).is_some());
-    }
-
-    #[test]
-    fn declining_maps_to_the_error_of_the_question() {
-        assert_eq!(declined("identity-unknown").bare(), "ServerIdentityUnknown");
-        assert_eq!(declined("keyboard-interactive").bare(), "AuthFailed");
-        assert_eq!(declined("insecure-consent").bare(), "SecurityPolicy");
-        assert_eq!(declined("anything-else").bare(), "SecurityPolicy");
     }
 }

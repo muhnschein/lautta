@@ -1,28 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// PDF thumbnails on the target (PRV-1, PRV-14). In a folder of this device a
-// PDF asks the system thumbnailer for its first page at the icon's size, with
-// the PDF type, without which it draws no PDF, in the grid and the list. In an
-// archive (it stands in for a server: neither is on this device) the app
-// draws the first page, and an encrypted PDF keeps its icon. With Show
-// thumbnails off no PDF has one (the name under the tile stays either way,
-// tst_directory_grid_captions.qml). Fails when a local PDF asks without its
-// type, a readable archive PDF shows no thumbnail, an unreadable one is not
-// marked as failed, or the switch changes nothing. Here the system
-// thumbnailer draws nothing (no scene graph: a `Thumbnail` stays `Null`, a
-// JPEG's too): only a phone shows a local PDF's page, or its icon when the
-// page cannot be drawn.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import Nemo.Thumbnailer 1.0
+import "../../qml/components"
 import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/PdfThumbnails/"
     property string archiveRoot
 
     ViewerTools { id: tools }
+
+    Component { id: twinIcon; FileIcon {} }
 
     DirectoryModel {
         id: documents
@@ -31,7 +24,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -41,7 +34,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Items are reached both as children and as a content item: each once.
     function findAll(item, pred, out) {
         if (!item || out.indexOf(item) >= 0)
             return out
@@ -55,15 +47,12 @@ ApplicationWindow {
         return out
     }
 
-    // Headless, no render loop polishes the view: lays out the delegates.
     function layOut(view) {
         var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < flicks.length; ++i)
             flicks[i].forceLayout()
     }
 
-    // The icon of the row `name`: the one whose thumbnail is that file's, or
-    // for a row without one, the only icon of its category left over.
     function iconOf(view, category, name) {
         layOut(view)
         var icons = findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === category }, [])
@@ -71,12 +60,10 @@ ApplicationWindow {
         return own.length === 1 ? own[0] : null
     }
 
-    // The system thumbnail inside `icon`, undefined while it has none.
     function systemThumbnailOf(icon) {
         return findAll(icon, function (x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
     }
 
-    // Lets the event loop run until `done()` holds, for at most 10 s.
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -85,12 +72,11 @@ ApplicationWindow {
 
     function push(uri) {
         pageStack.push(pageComponent, { "folderUri": uri }, PageStackAction.Immediate)
-        tools.pump(500)
+        expect(until(function () { var v = pageStack.currentPage.view; return v && !v.model.loading && v.model.count > 0 }),
+               "the folder lists " + uri)
         return pageStack.currentPage.view
     }
 
-    // Each local PDF asks the system thumbnailer for its own file, as a PDF,
-    // at the icon's size.
     function checkLocal(view) {
         until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
         var names = ["readable.pdf", "secret.pdf"]
@@ -104,16 +90,79 @@ ApplicationWindow {
                 continue
             expect(String(system.source) === icon.thumbnailSource && system.mimeType === "application/pdf",
                    "for that file, with the PDF type: " + system.source + " " + system.mimeType)
+            expect(system.fillMode === Thumbnail.PreserveAspectFit, "the whole page, not Nemo's middle crop")
             expect(system.sourceSize.width > 0 && Math.abs(system.sourceSize.width - icon.width) < 1
-                   && system.sourceSize.height === system.sourceSize.width,
-                   "at the icon's size: " + system.sourceSize + ", icon " + icon.width)
+                   && system.sourceSize.height === 2 * system.sourceSize.width,
+                   "as wide as the icon, up to twice as tall: " + system.sourceSize + ", icon " + icon.width)
+            checkPageFrame(icon, system)
         }
     }
 
-    // In an archive the app draws the first page; an encrypted PDF fails.
+    function checkPhoto(view) {
+        until(function () { return iconOf(view, "image", "photo.jpg") })
+        var icon = iconOf(view, "image", "photo.jpg")
+        var system = icon ? systemThumbnailOf(icon) : null
+        if (expect(system, "a photo asks the system thumbnailer"))
+            expect(system.fillMode === Thumbnail.PreserveAspectCrop && system.sourceSize.height === system.sourceSize.width
+                   && Math.abs(system.height - icon.height) < 1 && system.y === 0 && !system.parent.clip,
+                   "a photo stays cropped to the tile: " + system.sourceSize + " " + system.height)
+    }
+
+    function near(a, b) {
+        return Math.abs(a - b) < 1
+    }
+
+    function framed(system, x, y, width, height) {
+        return system.x === x && system.y === y && near(system.width, width) && near(system.height, height)
+    }
+
+    function checkPageFrame(icon, system) {
+        var w = Math.round(icon.width)
+        var frame = system.parent
+        system.implicitWidth = w
+        system.implicitHeight = Math.round(w * 842 / 595)
+        expect(frame.clip && near(frame.width, icon.width) && near(frame.height, icon.height),
+               "the tile cuts the page: " + frame.width + "x" + frame.height)
+        expect(framed(system, 0, 0, w, system.implicitHeight),
+               "a portrait page shows from its top, unscaled: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
+        system.implicitHeight = Math.round(w / 2)
+        expect(framed(system, 0, 0, 2 * w, w),
+               "a landscape page shows from its left, as tall as the tile: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
+        system.implicitWidth = Math.round(w / 2)
+        system.implicitHeight = 2 * w
+        expect(framed(system, 0, 0, w, 4 * w),
+               "a page over twice as tall as wide shows from its top, as wide as the tile: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
+        system.implicitWidth = 0
+        system.implicitHeight = 0
+        expect(framed(system, 0, 0, w, 4 * w),
+               "a page told no size keeps the size seen: " + system.width + "x" + system.height)
+        var twin = twinIcon.createObject(window.contentItem, { "width": icon.width, "height": icon.height, "size": icon.size,
+                                                               "category": "pdf", "mimeType": "application/pdf",
+                                                               "thumbnailSource": icon.thumbnailSource })
+        var joined = systemThumbnailOf(twin)
+        expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too")
+        if (joined && joined !== system) {
+            expect(joined.implicitWidth === 0 && framed(joined, 0, 0, w, 4 * w),
+                   "and shows the page at the size the first saw: " + joined.width + "x" + joined.height)
+            twin.width = icon.width + 3
+            twin.height = icon.height + 3
+            joined.implicitWidth = 1
+            expect(joined.width === 0 && joined.height === 0,
+                   "resized, it drops the size seen at the old size: " + joined.width + "x" + joined.height)
+        }
+        twin.destroy()
+        var other = twinIcon.createObject(window.contentItem, { "width": icon.width + 8, "height": icon.height + 8, "size": icon.size + 8,
+                                                                "category": "pdf", "mimeType": "application/pdf",
+                                                                "thumbnailSource": icon.thumbnailSource })
+        var fresh = systemThumbnailOf(other)
+        if (expect(fresh, "an icon of another size asks the system thumbnailer"))
+            expect(fresh.width === 0 && fresh.height === 0, "and takes no size from the first: " + fresh.width + "x" + fresh.height)
+        other.destroy()
+    }
+
     function checkArchive() {
         Operations.compress(JSON.stringify([base + "readable.pdf", base + "secret.pdf"]), "lautta://user-documents/",
-                            "pdf-thumbnails", "zip")
+                            "pdf-thumbnails", "zip", "")
         if (!expect(until(function () { return window.archiveRoot.length > 0 }), "the archive opens"))
             return
         var view = push(window.archiveRoot)
@@ -130,16 +179,17 @@ ApplicationWindow {
 
     Component.onCompleted: {
         documents.createFolder("PdfThumbnails")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf")
+        expect(until(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }), "the folder is made")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "photo.jpg"), "fixtures installed")
         App.setSetting("view_mode", JSON.stringify("grid"))
         App.setSetting("thumbnails_remote", JSON.stringify(true))
         var view = push(base)
         expect(view.gridMode, "a grid")
 
         checkLocal(view)
-        // The list's rows ask the same way.
+        checkPhoto(view)
         App.setSetting("view_mode", JSON.stringify("list"))
         expect(until(function () { return !view.gridMode }), "a list")
         checkLocal(view)
@@ -148,12 +198,12 @@ ApplicationWindow {
         checkArchive()
 
         App.setSetting("thumbnails_local", JSON.stringify(false))
-        tools.pump(300)
-        expect(findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0,
+        expect(until(function () { return findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0 }),
                "without thumbnails no PDF asks for one")
 
         App.setSetting("thumbnails_local", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

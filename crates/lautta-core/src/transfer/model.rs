@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The transfer model (XFR-1): states with an explicit transition table,
-//! items, and the options that travel with a transfer.
 
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
@@ -10,14 +8,11 @@ use serde::{Deserialize, Serialize};
 
 pub type TransferId = i64;
 
-/// Why a transfer is waiting (XFR-1, XFR-7, NVB-12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WaitReason {
     Bridge,
     Network,
-    /// A conflict needs an answer (OPS-2).
     Question,
-    /// A removable volume vanished: "Insert the card to continue".
     Volume,
 }
 
@@ -50,15 +45,12 @@ pub enum TransferState {
     Running,
     Paused,
     Waiting(WaitReason),
-    /// Ended with at least one failed item or a fatal error. "Completed with
-    /// N failures" is this state with `items_done > 0` (XFR-9).
     Failed,
     Completed,
     Canceled,
 }
 
 impl TransferState {
-    /// Every state, for exhaustive tests.
     pub const ALL: [TransferState; 11] = [
         TransferState::Queued,
         TransferState::Scanning,
@@ -73,7 +65,6 @@ impl TransferState {
         TransferState::Canceled,
     ];
 
-    /// Completed, failed or canceled: the transfer is history.
     pub fn is_finished(self) -> bool {
         matches!(
             self,
@@ -85,7 +76,6 @@ impl TransferState {
         matches!(self, TransferState::Waiting(_))
     }
 
-    /// Eligible for the scheduler to start items.
     pub fn is_runnable(self) -> bool {
         matches!(
             self,
@@ -93,8 +83,6 @@ impl TransferState {
         )
     }
 
-    /// The transition table. `Failed` may only go back to `Queued` (retry);
-    /// `Completed` and `Canceled` are terminal.
     pub fn can_transition(self, to: TransferState) -> bool {
         use TransferState::*;
         match (self, to) {
@@ -109,7 +97,6 @@ impl TransferState {
         }
     }
 
-    /// Database encoding: state name and waiting reason.
     pub fn to_db(self) -> (&'static str, Option<&'static str>) {
         match self {
             TransferState::Queued => ("queued", None),
@@ -154,7 +141,6 @@ pub enum ItemState {
     Done,
     Skipped,
     Failed,
-    /// A conflict needs an answer.
     NeedsAnswer,
 }
 
@@ -184,25 +170,18 @@ impl ItemState {
         .unwrap_or(ItemState::Pending)
     }
 
-    /// Needs no more work.
     pub fn is_settled(self) -> bool {
         matches!(self, ItemState::Done | ItemState::Skipped | ItemState::Failed)
     }
 }
 
-/// Options that travel with a transfer (stored in the `options` column).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TransferOptions {
-    /// "Verify with checksums" (XFR-4); always on for moves between locations.
     pub verify_checksums: bool,
-    /// OPS-5: default on.
     pub preserve_mtime: bool,
-    /// OPS-5: only when both sides support modes.
     pub preserve_mode: bool,
-    /// "Apply to all remaining" answer (OPS-2).
     pub resolve_all: Option<ConflictChoice>,
-    /// Deletes go through the caller's [`super::Trasher`] (OPS-8).
     pub trash: bool,
 }
 
@@ -218,8 +197,6 @@ impl Default for TransferOptions {
     }
 }
 
-/// Per-item data that has no column of its own; stored as JSON in
-/// `transfer_items.conflict`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemExtra {
     pub mtime_ms: Option<i64>,
@@ -235,7 +212,6 @@ pub struct TransferItem {
     pub seq: u32,
     pub plan: PlanItem,
     pub state: ItemState,
-    /// Bytes known to be at the destination temp file (XFR-12).
     pub committed: u64,
     pub temp_name: Option<Vec<u8>>,
     pub attempts: u32,
@@ -298,7 +274,6 @@ pub fn operation_from_name(s: &str) -> OperationKind {
     .unwrap_or(OperationKind::Copy)
 }
 
-/// What the UI lists: a transfer without its items (INT-2, INT-3, §15.4).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransferSummary {
     pub id: TransferId,
@@ -339,9 +314,6 @@ pub struct Transfer {
 }
 
 impl Transfer {
-    /// Builds a queued transfer from a plan (XFR-1: one plan, executed).
-    /// Deletes are ordered children-first unless they go to the trash, where
-    /// the roots go first and take their subtrees with them (OPS-8).
     pub fn from_plan(
         id: TransferId,
         plan: Plan,
@@ -399,7 +371,6 @@ impl Transfer {
         t
     }
 
-    /// Moves to `to` if the table allows it.
     pub fn transition(&mut self, to: TransferState) -> Result<()> {
         if !self.state.can_transition(to) {
             return Err(Error::new(
@@ -411,8 +382,6 @@ impl Transfer {
         Ok(())
     }
 
-    /// Recomputes counters from the items. Skipped items leave the byte total
-    /// so progress still reaches 100 %.
     pub fn recount(&mut self) {
         self.items_total = self.items.len() as u64;
         self.items_done = self
@@ -435,8 +404,6 @@ impl Transfer {
             .sum();
     }
 
-    /// Changes one item's state and keeps the counters in step without a
-    /// full recount (plans can hold 100 000 items).
     pub fn set_item_state(&mut self, seq: u32, to: ItemState) {
         let Some(item) = self.items.get_mut(seq as usize) else {
             return;
@@ -483,9 +450,21 @@ impl Transfer {
         &self.dest.location
     }
 
-    /// Items waiting for a user decision.
     pub fn questions(&self) -> impl Iterator<Item = &TransferItem> {
         self.items.iter().filter(|i| i.state == ItemState::NeedsAnswer)
+    }
+
+    pub fn landed(&self) -> Vec<Uri> {
+        let mut out: Vec<Uri> = self
+            .items
+            .iter()
+            .filter(|i| i.state == ItemState::Done && i.plan.dst.parent().as_ref() == Some(&self.dest))
+            .map(|i| i.plan.dst.clone())
+            .collect();
+        if self.kind == OperationKind::Extract {
+            out.push(self.dest.clone());
+        }
+        out
     }
 }
 
@@ -509,7 +488,6 @@ mod tests {
     use super::*;
     use crate::transfer::testutil::{plan, plan_item};
 
-    /// The complete expected table, written independently of the code.
     fn allowed(from: TransferState, to: TransferState) -> bool {
         use TransferState::*;
         let waiting = |s: TransferState| matches!(s, Waiting(_));
@@ -525,6 +503,39 @@ mod tests {
             Failed => to == Queued,
             Completed | Canceled => false,
         }
+    }
+
+    #[test]
+    fn landed_lists_done_items_straight_in_the_destination() {
+        let made = |kind: OperationKind| {
+            let items = vec![
+                plan_item("/a", "/new.txt", Kind::File, 1),
+                plan_item("/b", "/Sub", Kind::Dir, 0),
+                plan_item("/b/c", "/Sub/inner.txt", Kind::File, 1),
+                plan_item("/d", "/skipped.txt", Kind::File, 1),
+                plan_item("/e", "/failed.txt", Kind::File, 1),
+                plan_item("/f", "/pending.txt", Kind::File, 1),
+            ];
+            let mut t = Transfer::from_plan(1, plan(kind, items), "t", TransferOptions::default(), 0);
+            for (seq, state) in [(0, ItemState::Done), (1, ItemState::Done), (2, ItemState::Done)] {
+                t.set_item_state(seq, state);
+            }
+            t.set_item_state(3, ItemState::Skipped);
+            t.set_item_state(4, ItemState::Failed);
+            t.landed().iter().map(Uri::to_string).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            made(OperationKind::Copy),
+            ["lautta://b/new.txt", "lautta://b/Sub"]
+        );
+        assert_eq!(
+            made(OperationKind::Move),
+            ["lautta://b/new.txt", "lautta://b/Sub"]
+        );
+        assert_eq!(
+            made(OperationKind::Extract),
+            ["lautta://b/new.txt", "lautta://b/Sub", "lautta://b/"]
+        );
     }
 
     #[test]
@@ -674,7 +685,6 @@ mod tests {
             (1, ItemState::Pending),
             (1, ItemState::Failed),
         ];
-        // (items_done, items_failed, bytes_total, bytes_done) after each step.
         let expected = [
             (0, 0, 60, 0),
             (1, 0, 60, 10),

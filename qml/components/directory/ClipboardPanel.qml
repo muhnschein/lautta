@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The docked paste bar (SPEC OPS-10, board DirectoryPulley): what is on the
-// clipboard, where it comes from, paste here and clear. Opaque (UI-10).
-// `owner` is the DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,7 +8,6 @@ DockedPanel {
     id: panel
 
     property var owner
-    // "NAS › photos" for the first item on the clipboard.
     readonly property string fromText: {
         var count = App.clipboardCount
         if (count === 0)
@@ -29,7 +25,7 @@ DockedPanel {
     dock: Dock.Bottom
     width: parent ? parent.width : 0
     height: Theme.itemSizeLarge
-    open: owner ? App.clipboardCount > 0 && !owner.selecting : false
+    open: owner ? App.clipboardCount > 0 && !owner.selecting && !owner.picking : false
     background: BarBackground { }
 
     Row {
@@ -64,7 +60,7 @@ DockedPanel {
         DockButton {
             id: pasteButton
 
-            visible: owner ? owner.model.writable && App.canPasteInto(owner.uri) : false
+            visible: owner ? owner.canPaste : false
             width: visible ? Theme.itemSizeMedium : 0
             icon: "image://theme/icon-m-clipboard"
             accent: true

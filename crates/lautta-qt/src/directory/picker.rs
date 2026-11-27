@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `PickerRootsModel`: the locations the folder picker starts from (OPS-10).
-//! A plain list of `core.locations.locations()`; Browse has its own richer
-//! model.
 
+use crate::home::{watch_sources, Guard};
 use crate::runtime::core;
 use cpp::cpp;
+use lautta_core::app::Core;
 use lautta_core::locations::{Location, LocationKind, LocationStatus};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::QByteArray;
-use std::cell::RefCell;
+use qmetaobject::{QByteArray, QPointer};
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 cpp! {{
@@ -25,26 +24,29 @@ const ROLE_KIND: i32 = 0x0102;
 const ROLE_STATUS: i32 = 0x0103;
 const ROLE_ATTENTION: i32 = 0x0104;
 const ROLE_SELECTABLE: i32 = 0x0105;
+const ROLE_WRITABLE: i32 = 0x0106;
+const ROLE_ICON: i32 = 0x0107;
 
 #[derive(Clone)]
 struct Root {
     uri: String,
     name: String,
     kind: &'static str,
+    icon: &'static str,
     status: &'static str,
     attention: String,
+    writable: bool,
 }
 
 #[derive(QObject, Default)]
 pub struct PickerRootsModel {
     base: qt_base_class!(trait QAbstractListModel),
     refresh: qt_method!(fn(&mut self)),
-    /// True when a server location exists (Upload/Download actions, UI-8).
     hasRemote: qt_method!(fn(&self) -> bool),
-    /// Test aid: runs the Qt event loop for `ms` milliseconds so queued
-    /// results of async actions arrive inside a synchronous QML test.
     pump: qt_method!(fn(&self, ms: i32)),
     rows: RefCell<Option<Vec<Root>>>,
+    watching: Cell<bool>,
+    guard: Guard,
 }
 
 fn kind_name(kind: &LocationKind) -> &'static str {
@@ -52,7 +54,7 @@ fn kind_name(kind: &LocationKind) -> &'static str {
         LocationKind::UserFolder => "folder",
         LocationKind::Android => "android",
         LocationKind::Volume => "volume",
-        LocationKind::Server { .. } | LocationKind::AdHoc => "server",
+        LocationKind::Server { .. } => "server",
         LocationKind::Archive => "archive",
     }
 }
@@ -66,10 +68,13 @@ fn status_name(s: LocationStatus) -> &'static str {
     }
 }
 
-fn to_root(l: Location) -> Root {
+fn to_root(core: &Core, l: Location) -> Root {
+    let level = core.bridge.as_ref().and_then(|b| b.access(&l.id));
     Root {
+        writable: level.is_none_or(|level| level.adds()),
         uri: Uri::root(l.id.clone()).to_string(),
         kind: kind_name(&l.kind),
+        icon: core.location_icon(&l),
         status: status_name(l.status),
         attention: l.attention.unwrap_or_default(),
         name: l.name,
@@ -83,13 +88,21 @@ impl PickerRootsModel {
                 c.picker_locations()
                     .into_iter()
                     .filter(|l| l.kind != LocationKind::Archive)
-                    .map(to_root)
+                    .map(|l| to_root(&c, l))
                     .collect()
             })
             .unwrap_or_default()
     }
 
+    fn watch(&self) {
+        let Some(core) = core() else { return };
+        if !self.watching.replace(true) {
+            watch_sources(QPointer::from(self), &core, &self.guard, Self::refresh);
+        }
+    }
+
     fn with_rows<T>(&self, f: impl FnOnce(&[Root]) -> T) -> T {
+        self.watch();
         let mut rows = self.rows.borrow_mut();
         f(rows.get_or_insert_with(Self::load))
     }
@@ -101,7 +114,6 @@ impl PickerRootsModel {
     }
 
     fn pump(&self, ms: i32) {
-        // SAFETY: plain Qt calls on the GUI thread without Rust pointers.
         unsafe {
             cpp!([ms as "int"] {
                 QElapsedTimer timer;
@@ -136,6 +148,8 @@ impl QAbstractListModel for PickerRootsModel {
             ROLE_STATUS => QString::from(root.status).into(),
             ROLE_ATTENTION => QString::from(root.attention.as_str()).into(),
             ROLE_SELECTABLE => (root.status == "ready").into(),
+            ROLE_WRITABLE => root.writable.into(),
+            ROLE_ICON => QString::from(root.icon).into(),
             _ => QVariant::default(),
         }
     }
@@ -148,6 +162,8 @@ impl QAbstractListModel for PickerRootsModel {
             (ROLE_STATUS, "status".into()),
             (ROLE_ATTENTION, "attention".into()),
             (ROLE_SELECTABLE, "selectable".into()),
+            (ROLE_WRITABLE, "writable".into()),
+            (ROLE_ICON, "icon".into()),
         ])
     }
 }

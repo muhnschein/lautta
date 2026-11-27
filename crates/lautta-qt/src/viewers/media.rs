@@ -1,18 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `MediaSource` (PRV-8, PRV-9): plays a (remote) media file with
-//! QtMultimedia without downloading it first.
-//!
-//! QML's `MediaPlayer` cannot take a `QIODevice`, so this type owns a
-//! `QMediaPlayer` and exposes it as the `mediaObject` property, which is what
-//! `VideoOutput { source: mediaSource }` looks for. The player reads through
-//! a `QIODevice` subclass whose `readData` calls back into Rust, where a
-//! [`ReadAhead`] keeps a 2 MiB window over the bridge read handle.
-//!
-//! PRV-9: when the device's GStreamer backend cannot play from a `QIODevice`
-//! (or cannot seek in it), the player reports a resource or format error.
-//! `MediaSource` then falls back to download-then-play with progress
-//! (`downloading`, `downloadProgress`), also selectable up front with
-//! `preferDownload`. `mode` tells which path is in use.
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
@@ -31,21 +17,27 @@ pub fn register() {
     qml_register_type::<MediaSource>(&crate::qml_uri(), 1, 0, &crate::cstr("MediaSource"));
 }
 
-/// How often the player's position and state are read.
 const POLL: Duration = Duration::from_millis(250);
 
 cpp! {{
     #include <QtMultimedia/QMediaPlayer>
     #include <QtMultimedia/QMediaContent>
+    #include <QtMultimedia/QMediaService>
+    #include <QtCore/QCoreApplication>
+    #include <QtCore/QEvent>
     #include <QtCore/QIODevice>
+    #include <QtCore/QMetaProperty>
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
+    #include <QtQml/QQmlEngine>
+    #include <QtQuick/QQuickItem>
 
-    // Random-access device over a Rust `ReadAhead` (PRV-8). Reads block the
-    // calling (player) thread until the provider answers.
     class LauttaMediaDevice : public QIODevice {
     public:
-        LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size) { open(QIODevice::ReadOnly); }
+        LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size)
+        {
+            open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+        }
         ~LauttaMediaDevice() override
         {
             void *ctx = m_ctx;
@@ -53,10 +45,34 @@ cpp! {{
         }
         bool isSequential() const override { return false; }
         qint64 size() const override { return m_size; }
+        bool seek(qint64 pos) override
+        {
+            m_held = false;
+            return QIODevice::seek(pos);
+        }
+        void hold() { m_held = true; }
+        void releaseLater() { QCoreApplication::postEvent(this, new QEvent(releaseEvent())); }
+        bool held() const { return m_held; }
+
+        static QEvent::Type releaseEvent()
+        {
+            static const int type = QEvent::registerEventType();
+            return static_cast<QEvent::Type>(type);
+        }
 
     protected:
+        bool event(QEvent *e) override
+        {
+            if (e->type() != releaseEvent())
+                return QIODevice::event(e);
+            m_held = false;
+            return true;
+        }
+
         qint64 readData(char *data, qint64 maxlen) override
         {
+            if (m_held)
+                return 0;
             const qint64 off = pos();
             if (off >= m_size)
                 return 0;
@@ -71,6 +87,7 @@ cpp! {{
     private:
         void *m_ctx;
         qint64 m_size;
+        bool m_held = false;
     };
 
     struct LauttaMedia {
@@ -108,30 +125,84 @@ cpp! {{
         m->player->setMedia(QMediaContent(QUrl::fromLocalFile(path)));
     }
 
+    static void lauttaMediaSeek(LauttaMedia *m, qint64 ms)
+    {
+        if (!m->device) {
+            m->player->setPosition(ms);
+            return;
+        }
+        if (QMediaService *service = m->player->service()) {
+            for (QObject *o : service->findChildren<QObject *>()) {
+                if (qstrcmp(o->metaObject()->className(), "QGstAppSrc") == 0)
+                    QCoreApplication::sendPostedEvents(o, QEvent::MetaCall);
+            }
+        }
+        m->device->hold();
+        m->player->setPosition(ms);
+        m->device->releaseLater();
+    }
+
+    static int lauttaEnumValue(const QVariant &v)
+    {
+        if (QMetaType::typeFlags(v.userType()) & QMetaType::IsEnumeration)
+            return *static_cast<const int *>(v.constData());
+        return v.toInt();
+    }
+
+    static bool lauttaKeepWhileLoading(QObject *source, QObject *obj)
+    {
+        if (!source || !obj)
+            return false;
+        const QMetaObject *meta = source->metaObject();
+        int index = meta->indexOfProperty("mediaStatus");
+        if (index < 0)
+            index = meta->indexOfProperty("status");
+        if (index < 0)
+            return false;
+        const QMetaProperty status = meta->property(index);
+        if (lauttaEnumValue(status.read(source)) != QMediaPlayer::LoadingMedia)
+            return false;
+        QQmlEngine::setObjectOwnership(obj, QQmlEngine::CppOwnership);
+        if (QQuickItem *item = qobject_cast<QQuickItem *>(obj))
+            item->setParentItem(nullptr);
+        obj->setParent(nullptr);
+        const QMetaMethod drop = obj->metaObject()->method(obj->metaObject()->indexOfSlot("deleteLater()"));
+        QObject::connect(source, status.notifySignal(), obj, drop);
+        if (source != obj)
+            QObject::connect(source, &QObject::destroyed, obj, &QObject::deleteLater);
+        return true;
+    }
+
     static void lauttaMediaFree(LauttaMedia *m)
     {
         m->player->stop();
-        m->player->setMedia(QMediaContent());
-        delete m->player;
-        delete m->device;
+        if (lauttaKeepWhileLoading(m->player, m->player)) {
+            if (m->device)
+                m->device->setParent(m->player);
+        } else {
+            m->player->setMedia(QMediaContent());
+            delete m->player;
+            delete m->device;
+        }
         delete m;
     }
 }}
 
-/// The `Arc<ReadAhead>` handed to the device, as a raw pointer.
+pub(crate) fn keep_while_loading(source: &QVariant, obj: &QVariant) -> bool {
+    cpp!(unsafe [source as "const QVariant*", obj as "const QVariant*"] -> bool as "bool" {
+        return lauttaKeepWhileLoading(qvariant_cast<QObject *>(*source), qvariant_cast<QObject *>(*obj));
+    })
+}
+
 fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
     Arc::into_raw(r) as *mut c_void
 }
 
 fn release_reader(ctx: *mut c_void) {
-    // SAFETY: `ctx` came from `reader_ptr` and the device releases it once.
     drop(unsafe { Arc::from_raw(ctx as *const ReadAhead) });
 }
 
-/// Called on the player's thread: fills `buf` with up to `want` bytes at
-/// `off`; -1 on a read error.
 fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
-    // SAFETY: the device keeps the reader alive while it can call us.
     let reader = unsafe { &*(ctx as *const ReadAhead) };
     let (Ok(off), Ok(want)) = (u64::try_from(off), usize::try_from(want)) else {
         return -1;
@@ -139,7 +210,6 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     match handle().block_on(reader.read(off, want)) {
         Ok(data) => {
             let n = data.len().min(want);
-            // SAFETY: Qt gives a buffer of at least `want` bytes.
             unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), buf, n) };
             i64::try_from(n).unwrap_or(-1)
         }
@@ -150,18 +220,16 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     }
 }
 
-/// QMediaPlayer::Error to the app's error kinds.
 pub fn error_kind(code: i32) -> &'static str {
     match code {
         0 => "",
-        1 | 2 | 5 => "Unsupported",
+        1 | 2 | 5 => "NotPlayable",
         3 => "ConnectionLost",
         4 => "PermissionDenied",
         _ => "Internal",
     }
 }
 
-/// QMediaPlayer::State to the engineering names.
 pub fn state_name(code: i32) -> &'static str {
     match code {
         1 => "playing",
@@ -170,7 +238,6 @@ pub fn state_name(code: i32) -> &'static str {
     }
 }
 
-/// QMediaPlayer errors a download can cure: the device source did not work.
 fn fallback_applies(code: i32) -> bool {
     matches!(code, 1 | 2)
 }
@@ -186,23 +253,16 @@ pub struct MediaSource {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; WRITE setUri NOTIFY uriChanged),
     uriChanged: qt_signal!(),
-    /// The `QMediaPlayer`, for `VideoOutput { source: … }`.
     mediaObject: qt_property!(QVariant; READ getMediaObject NOTIFY mediaObjectChanged),
     mediaObjectChanged: qt_signal!(),
-    /// `stopped`, `playing` or `paused`.
     state: qt_property!(QString; NOTIFY changed),
     playing: qt_property!(bool; NOTIFY changed),
-    /// Milliseconds.
     position: qt_property!(f64; NOTIFY changed),
     duration: qt_property!(f64; NOTIFY changed),
-    /// The source is being opened (stat, first read).
     loading: qt_property!(bool; NOTIFY changed),
-    /// `stream` (QIODevice, PRV-8) or `download` (PRV-9 fallback).
     mode: qt_property!(QString; NOTIFY changed),
-    /// Plays after a full download instead of streaming (PRV-9).
     preferDownload: qt_property!(bool; WRITE setPreferDownload NOTIFY changed),
     downloading: qt_property!(bool; NOTIFY changed),
-    /// 0..1 while downloading, -1 when the size is unknown.
     downloadProgress: qt_property!(f64; NOTIFY changed),
     errorKind: qt_property!(QString; NOTIFY changed),
     errorMessage: qt_property!(QString; NOTIFY changed),
@@ -212,6 +272,7 @@ pub struct MediaSource {
     pause: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     seek: qt_method!(fn(&mut self, ms: f64)),
+    playerErrorKind: qt_method!(fn(&self, code: i32) -> QString),
 
     media: usize,
     want_play: bool,
@@ -276,7 +337,6 @@ impl MediaSource {
         });
     }
 
-    /// Reads the player's state into the properties; signals only changes.
     fn poll(&mut self) {
         if self.media == 0 {
             return;
@@ -291,7 +351,7 @@ impl MediaSource {
         self.duration = duration;
         self.state = qstr(state);
         self.playing = state == "playing";
-        if code != 0 {
+        if code != 0 && self.opened {
             changed |= self.player_failed(code);
         }
         if self.downloading {
@@ -315,8 +375,6 @@ impl MediaSource {
         changed
     }
 
-    /// The player reported an error: fall back to a download (PRV-9) or
-    /// publish it.
     fn player_failed(&mut self, code: i32) -> bool {
         if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(code) {
             self.fell_back = true;
@@ -330,6 +388,10 @@ impl MediaSource {
         self.errorKind = kind;
         self.errorMessage = self.player_error_text();
         true
+    }
+
+    fn playerErrorKind(&self, code: i32) -> QString {
+        qstr(error_kind(code))
     }
 
     fn setUri(&mut self, value: QString) {
@@ -414,7 +476,6 @@ impl MediaSource {
         }
     }
 
-    /// PRV-9: copy the file into the private cache, then play that.
     fn start_download(&mut self) {
         let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
             return;
@@ -494,7 +555,7 @@ impl MediaSource {
         if self.media != 0 {
             let m = self.player_ptr();
             let ms = ms.max(0.0) as i64;
-            cpp!(unsafe [m as "LauttaMedia*", ms as "qint64"] { m->player->setPosition(ms); });
+            cpp!(unsafe [m as "LauttaMedia*", ms as "qint64"] { lauttaMediaSeek(m, ms); });
         }
     }
 }
@@ -503,7 +564,6 @@ impl Drop for MediaSource {
     fn drop(&mut self) {
         if self.media != 0 {
             let m = self.player_ptr();
-            // The device (and with it the reader) goes with the player.
             cpp!(unsafe [m as "LauttaMedia*"] { lauttaMediaFree(m); });
         }
     }
@@ -516,11 +576,11 @@ mod tests {
     #[test]
     fn errors_map_to_app_kinds() {
         assert_eq!(error_kind(0), "");
-        assert_eq!(error_kind(1), "Unsupported");
-        assert_eq!(error_kind(2), "Unsupported");
+        assert_eq!(error_kind(1), "NotPlayable");
+        assert_eq!(error_kind(2), "NotPlayable");
         assert_eq!(error_kind(3), "ConnectionLost");
         assert_eq!(error_kind(4), "PermissionDenied");
-        assert_eq!(error_kind(5), "Unsupported");
+        assert_eq!(error_kind(5), "NotPlayable");
         assert_eq!(error_kind(9), "Internal");
     }
 
@@ -559,5 +619,49 @@ mod tests {
         assert_eq!(read_into(ctx, 10_000, buf.as_mut_ptr(), 100), 0);
         assert_eq!(read_into(ctx, -1, buf.as_mut_ptr(), 100), -1);
         release_reader(ctx);
+    }
+
+    #[test]
+    fn a_held_device_reads_nothing_until_a_seek_or_the_release() {
+        use lautta_core::provider::memory::MemoryProvider;
+        use lautta_core::provider::{Lane, Provider};
+        let rt = crate::runtime::handle();
+        let mem = MemoryProvider::default();
+        mem.add_file("a.bin", &(0..=255u8).cycle().take(100_000).collect::<Vec<_>>(), 0);
+        let path = lautta_core::vpath::VPath::parse(b"a.bin").unwrap();
+        let reader = rt.block_on(async {
+            let h = mem.open_read(&path, Lane::Interactive).await.unwrap();
+            ReadAhead::new(Arc::from(h)).unwrap()
+        });
+        let ctx = reader_ptr(Arc::new(reader));
+        let got = cpp!(unsafe [ctx as "void*"] -> QString as "QString" {
+            static int argc = 1;
+            static char name[] = "test";
+            static char *argv[] = {name, nullptr};
+            static QCoreApplication *app = QCoreApplication::instance() ? nullptr : new QCoreApplication(argc, argv);
+            Q_UNUSED(app);
+            LauttaMediaDevice device(ctx, 100000);
+            QStringList steps;
+            auto step = [&]() {
+                QByteArray b = device.read(100);
+                steps << QStringLiteral("%1@%2").arg(b.size()).arg(b.isEmpty() ? -1 : int(uchar(b.at(0))));
+            };
+            step();
+            device.hold();
+            step();
+            device.releaseLater();
+            step();
+            QCoreApplication::sendPostedEvents(&device, 0);
+            step();
+            device.hold();
+            device.seek(300);
+            step();
+            return steps.join(QLatin1Char(' '));
+        });
+        assert_eq!(
+            got.to_string(),
+            "100@0 0@-1 0@-1 100@100 100@44",
+            "read, held, held until the release is handled, released, seek releases"
+        );
     }
 }

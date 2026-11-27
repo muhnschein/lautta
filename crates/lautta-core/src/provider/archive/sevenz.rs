@@ -1,25 +1,40 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! 7z (PRV-10): indexed and extracted from the downloaded cache file.
 
 use super::blocks::from_io;
 use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
-use sevenz_rust2::{ArchiveReader, Password};
+use crate::password::Password;
+use sevenz_rust2::{Archive, ArchiveReader, BlockDecoder, EncoderMethod};
 use std::fs::File;
 use std::io::{self, Write};
 use std::time::SystemTime;
 
-/// 7z stores unix mode bits in the high half of the attributes when bit 15
-/// (`FILE_ATTRIBUTE_UNIX_EXTENSION`) is set.
 const UNIX_EXTENSION: u32 = 0x8000;
 
-fn open(file: File) -> Result<ArchiveReader<File>> {
-    ArchiveReader::new(file, Password::empty()).map_err(map_err)
+fn key(password: Option<&Password>) -> sevenz_rust2::Password {
+    password.map_or_else(sevenz_rust2::Password::empty, |p| p.as_str().into())
+}
+
+fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> {
+    ArchiveReader::new(file, key(password)).map_err(map_err)
 }
 
 fn map_err(err: sevenz_rust2::Error) -> Error {
-    Error::new(ErrorKind::ProtocolError, format!("7z: {err}"))
+    match err {
+        sevenz_rust2::Error::PasswordRequired => Error::kind(ErrorKind::PasswordRequired),
+        sevenz_rust2::Error::MaybeBadPassword(_) => Error::kind(ErrorKind::WrongPassword),
+        other => Error::new(ErrorKind::ProtocolError, format!("7z: {other}")),
+    }
+}
+
+fn locked(reader: &ArchiveReader<File>) -> bool {
+    let aes = EncoderMethod::AES256_SHA256.id();
+    reader
+        .archive()
+        .blocks
+        .iter()
+        .any(|b| b.coders.iter().any(|c| c.encoder_method_id() == aes))
 }
 
 fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
@@ -45,9 +60,39 @@ fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
     }
 }
 
-/// Lists the archive.
-pub fn index(file: File) -> Result<Vec<RawEntry>> {
-    let reader = open(file)?;
+fn check_password(reader: &mut ArchiveReader<File>) -> Result<()> {
+    let mut failed = false;
+    let res = reader.for_each_entries(|entry, data| {
+        if !entry.has_stream() {
+            return Ok(true);
+        }
+        let mut buf = [0u8; 4096];
+        let want = buf.len().min(usize::try_from(entry.size()).unwrap_or(usize::MAX));
+        let mut got = 0;
+        while got < want {
+            match data.read(&mut buf[got..want]) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => got += n,
+            }
+        }
+        failed = got < want;
+        Ok(false)
+    });
+    if failed || res.is_err() {
+        return Err(Error::kind(ErrorKind::WrongPassword));
+    }
+    Ok(())
+}
+
+pub fn index(file: File, password: Option<&Password>) -> Result<(Vec<RawEntry>, bool)> {
+    let mut reader = open(file, password)?;
+    let locked = locked(&reader);
+    if locked {
+        if password.is_none() {
+            return Err(Error::kind(ErrorKind::PasswordRequired));
+        }
+        check_password(&mut reader)?;
+    }
     let mut out = Vec::new();
     for e in &reader.archive().files {
         if e.is_anti_item() {
@@ -68,34 +113,49 @@ pub fn index(file: File) -> Result<Vec<RawEntry>> {
             loc: Loc::SevenZ(e.name().to_owned()),
         });
     }
-    Ok(out)
+    Ok((out, locked))
 }
 
-/// Streams the entry called `name` into `out`. Solid archives decode the
-/// preceding entries of the block as well; that is inherent to 7z.
-pub fn copy_entry(file: File, name: &str, out: &mut dyn Write) -> Result<()> {
-    let mut reader = open(file)?;
-    let mut found = false;
+pub fn copy_entry(
+    mut file: File,
+    name: &str,
+    out: &mut dyn Write,
+    password: Option<&Password>,
+) -> Result<()> {
+    let key = key(password);
+    let archive = Archive::read(&mut file, &key).map_err(map_err)?;
+    let index = archive
+        .files
+        .iter()
+        .position(|e| e.name() == name)
+        .ok_or_else(|| Error::new(ErrorKind::NotFound, "entry vanished from archive"))?;
+    let Some(block) = archive.stream_map.file_block_index[index] else {
+        return Ok(());
+    };
+    let wanted = &archive.files[index];
+    let threads = std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(1));
     let mut failure: Option<io::Error> = None;
-    let res = reader.for_each_entries(|entry, data| {
-        if entry.name() != name {
-            return Ok(true);
-        }
-        found = true;
-        if let Err(e) = io::copy(data, out) {
-            failure = Some(e);
-        }
-        Ok(false)
-    });
+    let res =
+        BlockDecoder::new(threads, block, &archive, &key, &mut file).for_each_entries(&mut |entry, data| {
+            let target = std::ptr::eq(entry, wanted);
+            let copied = if target {
+                io::copy(data, out)
+            } else {
+                io::copy(data, &mut io::sink())
+            };
+            if let Err(e) = copied {
+                failure = Some(e);
+                return Ok(false);
+            }
+            Ok(!target)
+        });
     if let Some(e) = failure {
+        if password.is_some() && e.kind() == io::ErrorKind::InvalidData {
+            return Err(Error::kind(ErrorKind::WrongPassword));
+        }
         return Err(from_io(e));
     }
-    res.map_err(map_err)?;
-    if found {
-        Ok(())
-    } else {
-        Err(Error::new(ErrorKind::NotFound, "entry vanished from archive"))
-    }
+    res.map_err(map_err).map(drop)
 }
 
 #[cfg(test)]
@@ -110,5 +170,59 @@ mod tests {
         assert_eq!(classify(Some(reg), false), (Kind::File, Some(0o600)));
         assert_eq!(classify(Some(0x10), true), (Kind::Dir, None));
         assert_eq!(classify(None, false), (Kind::File, None));
+    }
+
+    fn archive(dir: &std::path::Path, password: Option<&str>) -> File {
+        let path = dir.join("a.7z");
+        let mut w = sevenz_rust2::ArchiveWriter::new(File::create(&path).unwrap()).unwrap();
+        let lzma = sevenz_rust2::encoder_options::Lzma2Options::from_level(1);
+        w.set_content_methods(match password {
+            Some(p) => vec![
+                sevenz_rust2::encoder_options::AesEncoderOptions::new(p.into()).into(),
+                lzma.into(),
+            ],
+            None => vec![lzma.into()],
+        });
+        w.push_archive_entry(sevenz_rust2::ArchiveEntry::new_file("a.txt"), Some(&b"alpha"[..]))
+            .unwrap();
+        w.finish().unwrap();
+        File::open(path).unwrap()
+    }
+
+    struct Failing(io::ErrorKind);
+
+    impl Write for Failing {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(self.0.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn only_data_failing_under_a_password_reads_as_a_wrong_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let pw = Password::new("pw");
+        let kind = |password: Option<&str>, err: io::ErrorKind| {
+            let file = archive(dir.path(), password);
+            let given = password.and(pw.as_ref());
+            copy_entry(file, "a.txt", &mut Failing(err), given)
+                .err()
+                .map(|e| e.kind)
+        };
+        let itself = |err: io::ErrorKind| Some(from_io(err.into()).kind);
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::InvalidData),
+            Some(ErrorKind::WrongPassword)
+        );
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::BrokenPipe),
+            itself(io::ErrorKind::BrokenPipe)
+        );
+        assert_eq!(
+            kind(None, io::ErrorKind::InvalidData),
+            itself(io::ErrorKind::InvalidData)
+        );
     }
 }

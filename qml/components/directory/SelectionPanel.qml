@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Actions on the selected items (board DirectorySelect): a docked panel,
-// open for as long as selection mode is, of icons spread evenly over its
-// width in the long-press menu's order, then More actions, which opens the
-// rest on a page of its own (MoreActionsPage.qml), and the button that leaves
-// selection, on a highlight key (Selection.panelButtons). The same buttons for
-// one item or several (SPEC §15.3). Opaque (UI-10). `owner` is the
-// DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../"
@@ -15,18 +8,14 @@ DockedPanel {
     id: panel
 
     property var owner
-    readonly property bool writable: owner ? owner.model.writable : false
+    readonly property var ctx: Selection.context(owner ? owner.model : {})
     readonly property int count: owner ? owner.model.selectedCount : 0
     readonly property bool waiting: owner ? owner.selectionWaiting : false
-    // Buttons of the selection as it last was. Ending selection zeroes `count`
-    // while the panel still fades out: no switch to the no-selection set (just
-    // Stop selecting) on the way. They change only with an item selected or
-    // waiting for the first.
-    property var buttons: Selection.panelButtons(0, false)
+    property var buttons: Selection.panelButtons(0, {})
 
     function refreshButtons() {
         if (count > 0 || waiting)
-            buttons = Selection.panelButtons(count, writable)
+            buttons = Selection.panelButtons(count, ctx)
     }
 
     function run(id) {
@@ -45,7 +34,7 @@ DockedPanel {
     height: Theme.itemSizeLarge
     open: owner ? owner.selecting : false
     onCountChanged: refreshButtons()
-    onWritableChanged: refreshButtons()
+    onCtxChanged: refreshButtons()
     onWaitingChanged: refreshButtons()
     background: BarBackground { }
 

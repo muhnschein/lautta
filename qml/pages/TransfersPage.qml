@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Activity (SPEC §15.4): what has not ended under In progress, in queue
-// order, then what ended by the day it ended (Today … Older, newest first),
-// with the prompt for transfers that stopped when the app closed
-// (XFR-11, board TransfersRestored).
 import QtQuick 2.6
+import QtQml.Models 2.2
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/transfers"
@@ -13,13 +10,11 @@ import "../components/transfers/TransferText.js" as TransferText
 Page {
     id: page
 
-    // The rows; tests give the page a ListModel.
     property var listModel: transfers
 
     objectName: "transfersPage"
     allowedOrientations: Orientation.All
 
-    // What ended is on screen now: the activity bar lets go of it (XFR-13).
     onStatusChanged: if (status === PageStatus.Active) Transfers.barSeen()
 
     function headerDescription() {
@@ -37,7 +32,6 @@ Page {
         return ""
     }
 
-    // What a tap on a row does: the unanswered conflict, or details.
     function activate(row) {
         if (row.questions > 0) {
             var asked = JSON.parse(Transfers.questionsJson(row.transferId))
@@ -53,14 +47,55 @@ Page {
 
     TransfersModel { id: transfers }
 
-    SilicaListView {
-        id: list
+    DelegateModel {
+        id: rowsOf
 
-        anchors.fill: parent
         model: page.listModel
+        delegate: Item { }
+    }
 
-        header: Column {
-            width: list.width
+    SilicaFlickable {
+        id: pulleyHost
+
+        objectName: "transfersPulleyHost"
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: height
+
+        PullDownMenu {
+            visible: list.count > 0
+
+            MenuItem {
+                //% "Clear activity history"
+                text: qsTrId("lautta-xfr-menu-clear-activity")
+                visible: list.count > 0
+                onClicked: Remorse.popupAction(
+                    page,
+                    //% "Clearing activity history"
+                    qsTrId("lautta-xfr-remorse-clear-activity"),
+                    function() { Transfers.clearHistory() },
+                    App.setting("remorse_seconds") * 1000)
+            }
+            MenuItem {
+                //% "Resume all"
+                text: qsTrId("lautta-xfr-menu-resume-all")
+                visible: Transfers.pausedCount > 0
+                onClicked: Transfers.resumeAll()
+            }
+            MenuItem {
+                //% "Pause all"
+                text: qsTrId("lautta-xfr-menu-pause-all")
+                visible: Transfers.activeCount > 0 || Transfers.waitingCount > 0
+                onClicked: Transfers.pauseAll()
+            }
+        }
+
+        Column {
+            id: top
+
+            objectName: "transfersHeader"
+            z: 1
+            width: parent.width
 
             PageHeader {
                 //% "Activity"
@@ -114,72 +149,68 @@ Page {
             }
         }
 
-        section {
-            property: "dateGroup"
-            delegate: DateSectionHeader {
-                group: section
+        SilicaListView {
+            id: list
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            clip: true
+            quickScroll: false
+            model: page.listModel
+
+            section {
+                property: "dateGroup"
+                delegate: DateSectionHeader {
+                    group: section
+                }
+            }
+
+            delegate: TransferDelegate {
+                row: model
+                restored: Transfers.pendingAtStart > 0
+                onClicked: page.activate({ "transferId": transferId, "questions": questions })
+            }
+
+            footer: Column {
+                width: list.width
+
+                Label {
+                    visible: Transfers.pendingAtStart > 0
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    height: visible ? implicitHeight + Theme.paddingLarge : 0
+                    //% "Nothing was lost. Finished files stay where they are."
+                    text: qsTrId("lautta-xfr-restored-hint")
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryColor
+                }
+            }
+
+            ViewPlaceholder {
+                enabled: list.count === 0
+                //% "No activity"
+                text: qsTrId("lautta-xfr-empty")
+                //% "Copies, moves, deletes and extracts you start show up here."
+                hintText: qsTrId("lautta-xfr-empty-hint")
             }
         }
 
-        delegate: TransferDelegate {
-            row: model
-            restored: Transfers.pendingAtStart > 0
-            onClicked: page.activate({ "transferId": transferId, "questions": questions })
-        }
-
-        footer: Column {
-            width: list.width
-
-            Label {
-                visible: Transfers.pendingAtStart > 0
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                height: visible ? implicitHeight + Theme.paddingLarge : 0
-                //% "Nothing was lost. Finished files stay where they are."
-                text: qsTrId("lautta-xfr-restored-hint")
-                wrapMode: Text.WordWrap
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.secondaryColor
+        ScrollDateBar {
+            flickable: list
+            rowDate: function (index) {
+                if (index >= rowsOf.items.count)
+                    return null
+                var row = rowsOf.items.get(index).model
+                return {
+                    "inProgress": row.dateGroup === "inProgress",
+                    "at": row.finishedMs >= 0 ? row.finishedMs : row.createdMs
+                }
             }
         }
-
-        // Every entry needs a task in the list.
-        PullDownMenu {
-            visible: list.count > 0
-
-            MenuItem {
-                //% "Clear activity history"
-                text: qsTrId("lautta-xfr-menu-clear-activity")
-                visible: list.count > 0
-                onClicked: Remorse.popupAction(
-                    page,
-                    //% "Clearing activity history"
-                    qsTrId("lautta-xfr-remorse-clear-activity"),
-                    function() { Transfers.clearHistory() },
-                    App.setting("remorse_seconds") * 1000)
-            }
-            MenuItem {
-                //% "Resume all"
-                text: qsTrId("lautta-xfr-menu-resume-all")
-                visible: Transfers.pausedCount > 0
-                onClicked: Transfers.resumeAll()
-            }
-            MenuItem {
-                //% "Pause all"
-                text: qsTrId("lautta-xfr-menu-pause-all")
-                visible: Transfers.activeCount > 0 || Transfers.waitingCount > 0
-                onClicked: Transfers.pauseAll()
-            }
-        }
-
-        ViewPlaceholder {
-            enabled: list.count === 0
-            //% "No activity"
-            text: qsTrId("lautta-xfr-empty")
-            //% "Copies, moves, deletes and archives you start show up here."
-            hintText: qsTrId("lautta-xfr-empty-hint")
-        }
-
-        VerticalScrollDecorator { }
     }
 }

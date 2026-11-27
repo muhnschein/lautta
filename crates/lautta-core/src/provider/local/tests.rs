@@ -2,6 +2,7 @@
 use super::*;
 use crate::entry::{EntryFlags, Kind};
 use crate::provider::{list_all, no_progress};
+use std::io::Write;
 use std::os::unix::fs::symlink;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
@@ -54,8 +55,6 @@ fn read_only_provider(root: &Path) -> LocalProvider {
     LocalProvider::new(root.to_path_buf()).with_capabilities(caps)
 }
 
-// ---- capabilities -------------------------------------------------------
-
 #[test]
 fn capabilities_come_from_the_filesystem() {
     let (_d, p) = setup();
@@ -84,12 +83,9 @@ fn real_path_stays_under_root() {
     let (d, p) = setup();
     assert_eq!(p.real_path(&VPath::root()), d.path());
     assert_eq!(p.real_path(&vp("a/b")), d.path().join("a/b"));
-    // `..` never survives VPath parsing, so there is no way to build an escape
     assert!(VPath::parse(b"../etc/passwd").is_err());
     assert_eq!(p.real_path(&vp("a/./b//c")), d.path().join("a/b/c"));
 }
-
-// ---- listing ------------------------------------------------------------
 
 #[tokio::test]
 async fn listing_is_batched_to_256() {
@@ -193,7 +189,7 @@ async fn listing_stops_when_the_consumer_goes_away() {
 async fn permission_denied_is_reported_when_not_root() {
     use std::os::unix::fs::PermissionsExt;
     if sys::effective_ids().0 == 0 {
-        return; // root ignores permission bits; nothing to observe
+        return;
     }
     let (d, p) = setup();
     let locked = d.path().join("locked");
@@ -222,7 +218,6 @@ async fn listing_waits_for_a_shared_permit() {
         .unwrap();
     assert_eq!(batch.unwrap().len(), 1);
     task.await.unwrap().unwrap();
-    // the permit is returned when the listing is done
     assert_eq!(sem.available_permits(), IO_PERMITS);
 }
 
@@ -264,8 +259,6 @@ async fn owner_names_come_from_the_injected_tables() {
     assert_eq!(e.group.as_deref(), Some("testers"));
 }
 
-// ---- stat ---------------------------------------------------------------
-
 #[tokio::test]
 async fn stat_follow_and_nofollow() {
     let (d, p) = setup();
@@ -300,8 +293,6 @@ async fn read_link_returns_raw_bytes() {
         ErrorKind::NotFound
     );
 }
-
-// ---- create and remove --------------------------------------------------
 
 #[tokio::test]
 async fn make_dir_exclusive_and_idempotent() {
@@ -408,17 +399,17 @@ async fn read_only_provider_refuses_every_write() {
         no_progress(),
     )
     .await);
-    ro(p.server_copy(&vp("f"), &vp("c"), CopyOptions::default()).await);
+    ro(
+        p.server_copy(&vp("f"), &vp("c"), CopyOptions::default(), no_progress())
+            .await,
+    );
     assert!(d.path().join("f").exists());
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
-    // reading is still fine
     assert_eq!(
         p.stat(&vp("f"), false, Lane::Interactive).await.unwrap().size,
         Some(1)
     );
 }
-
-// ---- rename -------------------------------------------------------------
 
 #[tokio::test]
 async fn rename_no_replace_refuses_collision_and_keeps_both() {
@@ -491,7 +482,7 @@ fn ci_provider(root: &Path) -> LocalProvider {
 }
 
 #[tokio::test]
-async fn case_only_rename_uses_an_intermediate_name() {
+async fn case_only_rename_on_a_fat_provider_leaves_no_temporary_name() {
     let d = tempfile::tempdir().unwrap();
     std::fs::write(d.path().join("photo.jpg"), "data").unwrap();
     let p = ci_provider(d.path());
@@ -563,7 +554,6 @@ fn case_rename_restores_the_name_when_the_second_step_fails() {
     let d = tempfile::tempdir().unwrap();
     let from = d.path().join("a.txt");
     std::fs::write(&from, "x").unwrap();
-    // A destination in a folder that does not exist makes step two fail.
     let to = d.path().join("missing/A.TXT");
     let r = rename_case_only(&from, &to, RenameMode::NoReplace);
     assert!(r.is_err());
@@ -584,7 +574,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
     rename_noreplace_fallback(&a, &c).unwrap();
     assert!(!a.exists());
     assert_eq!(std::fs::read(&c).unwrap(), b"A");
-    // directories take the exists-check route
     let (x, y) = (d.path().join("x"), d.path().join("y"));
     std::fs::create_dir(&x).unwrap();
     std::fs::create_dir(&y).unwrap();
@@ -595,7 +584,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
     let z = d.path().join("z");
     rename_noreplace_fallback(&x, &z).unwrap();
     assert!(z.is_dir() && !x.exists());
-    // symlinks are moved as links
     symlink("target", d.path().join("l")).unwrap();
     rename_noreplace_fallback(&d.path().join("l"), &d.path().join("l2")).unwrap();
     assert_eq!(
@@ -609,8 +597,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
         ErrorKind::NotFound
     );
 }
-
-// ---- attributes and links -----------------------------------------------
 
 #[tokio::test]
 async fn set_attributes_changes_mode_and_mtime() {
@@ -737,8 +723,6 @@ async fn fat_has_no_links() {
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
 }
 
-// ---- reading ------------------------------------------------------------
-
 #[tokio::test]
 async fn open_read_gives_random_access() {
     let (d, p) = setup();
@@ -769,8 +753,6 @@ async fn open_read_errors() {
         ErrorKind::NotFound
     );
 }
-
-// ---- upload / download --------------------------------------------------
 
 fn big(len: usize) -> Vec<u8> {
     (0..len).map(|i| (i % 249) as u8).collect()
@@ -855,7 +837,6 @@ async fn upload_resume_appends_after_the_partial_prefix() {
     let (d, p) = setup();
     let data = big(10_000);
     std::fs::write(d.path().join("src"), &data).unwrap();
-    // the partial file has a prefix plus junk after the resume point
     let mut partial = data[..4000].to_vec();
     partial.extend_from_slice(b"JUNKJUNK");
     std::fs::write(d.path().join("dst"), &partial).unwrap();
@@ -955,9 +936,10 @@ async fn download_errors() {
 
 #[tokio::test]
 async fn download_into_a_full_device_reports_no_space() {
-    let Ok(full) = OpenOptions::new().write(true).open("/dev/full") else {
-        return; // no /dev/full on this host
-    };
+    let full = OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("host tests need /dev/full");
     let (d, p) = setup();
     std::fs::write(d.path().join("remote"), big(100_000)).unwrap();
     let e = p
@@ -971,8 +953,6 @@ async fn download_into_a_full_device_reports_no_space() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::NoSpace);
 }
-
-// ---- server copy --------------------------------------------------------
 
 #[tokio::test]
 async fn server_copy_copies_content_mode_and_mtime() {
@@ -996,6 +976,7 @@ async fn server_copy_copies_content_mode_and_mtime() {
             replace: false,
             preserve_mtime: true,
         },
+        no_progress(),
     )
     .await
     .unwrap();
@@ -1004,7 +985,7 @@ async fn server_copy_copies_content_mode_and_mtime() {
     let e = p.stat(&vp("b"), false, Lane::Interactive).await.unwrap();
     assert_eq!(e.modified, Some(when));
     assert_eq!(e.mode.map(|m| m & 0o750), Some(0o640 & 0o750));
-    p.server_copy(&vp("a"), &vp("c"), CopyOptions::default())
+    p.server_copy(&vp("a"), &vp("c"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     let c = p.stat(&vp("c"), false, Lane::Interactive).await.unwrap();
@@ -1017,7 +998,7 @@ async fn server_copy_collisions_and_replace() {
     std::fs::write(d.path().join("a"), "A").unwrap();
     std::fs::write(d.path().join("b"), "B").unwrap();
     let e = p
-        .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+        .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::AlreadyExists);
@@ -1029,6 +1010,7 @@ async fn server_copy_collisions_and_replace() {
             replace: true,
             preserve_mtime: false,
         },
+        no_progress(),
     )
     .await
     .unwrap();
@@ -1044,21 +1026,31 @@ async fn server_copy_errors_leave_nothing_behind() {
     std::fs::write(d.path().join("f"), "x").unwrap();
     let k = |r: Result<()>| r.unwrap_err().kind;
     assert_eq!(
-        k(p.server_copy(&vp("dir"), &vp("d2"), CopyOptions::default()).await),
+        k(
+            p.server_copy(&vp("dir"), &vp("d2"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::IsADirectory
     );
     assert_eq!(
-        k(p.server_copy(&vp("none"), &vp("n2"), CopyOptions::default())
-            .await),
+        k(
+            p.server_copy(&vp("none"), &vp("n2"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::NotFound
     );
     assert_eq!(
-        k(p.server_copy(&vp("f"), &vp("nodir/f"), CopyOptions::default())
-            .await),
+        k(
+            p.server_copy(&vp("f"), &vp("nodir/f"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::NotFound
     );
     assert_eq!(
-        k(p.server_copy(&vp("f"), &vp("f"), CopyOptions::default()).await),
+        k(
+            p.server_copy(&vp("f"), &vp("f"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::InvalidArgument
     );
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 2);
@@ -1068,7 +1060,7 @@ async fn server_copy_errors_leave_nothing_behind() {
 async fn server_copy_of_a_symlink_makes_a_symlink() {
     let (d, p) = setup();
     symlink("target", d.path().join("l")).unwrap();
-    p.server_copy(&vp("l"), &vp("l2"), CopyOptions::default())
+    p.server_copy(&vp("l"), &vp("l2"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     assert_eq!(
@@ -1090,13 +1082,153 @@ async fn server_copy_refuses_special_files() {
     )
     .unwrap();
     let e = p
-        .server_copy(&vp("fifo"), &vp("copy"), CopyOptions::default())
+        .server_copy(&vp("fifo"), &vp("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::Unsupported);
 }
 
-// ---- checksum and space -------------------------------------------------
+struct Gate {
+    sink: ProgressSink,
+    reached: tokio::sync::oneshot::Receiver<()>,
+    release: std::sync::mpsc::Sender<()>,
+    later: Arc<AtomicU64>,
+}
+
+fn gate() -> Gate {
+    let (reached_tx, reached) = tokio::sync::oneshot::channel();
+    let (release, release_rx) = std::sync::mpsc::channel::<()>();
+    let first = Mutex::new(Some((reached_tx, release_rx)));
+    let later = Arc::new(AtomicU64::new(0));
+    let count = later.clone();
+    let sink: ProgressSink = Arc::new(move |_, _| {
+        let parked = first.lock().unwrap().take();
+        match parked {
+            Some((tx, rx)) => {
+                let _ = tx.send(());
+                let _ = rx.recv();
+            }
+            None => {
+                count.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+    Gate {
+        sink,
+        reached,
+        release,
+        later,
+    }
+}
+
+async fn drop_while_parked<F>(sem: &Semaphore, call: F, g: Gate) -> Arc<AtomicU64>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send,
+{
+    let task = tokio::spawn(call);
+    let reached = tokio::time::timeout(Duration::from_secs(10), g.reached).await;
+    reached.expect("copy reported progress").unwrap();
+    task.abort();
+    assert!(task.await.is_err_and(|e| e.is_cancelled()));
+    g.release.send(()).unwrap();
+    let all = sem.acquire_many(IO_PERMITS as u32);
+    drop(tokio::time::timeout(Duration::from_secs(10), all).await.unwrap());
+    g.later
+}
+
+fn names_in(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    v.sort();
+    v
+}
+
+#[tokio::test]
+async fn a_dropped_server_copy_stops_and_leaves_no_file() {
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move {
+        p.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), sink)
+            .await
+    };
+    let later = drop_while_parked(&sem, call, g).await;
+    assert_eq!(names_in(d.path()), ["a"], "no copy, no temporary");
+    assert_eq!(later.load(Ordering::SeqCst), 0, "copying ended at the stop");
+}
+
+#[tokio::test]
+async fn a_dropped_upload_stops_reading_and_writing() {
+    const SENT: u64 = 16 << 20;
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    let (r, w) = rustix::pipe::pipe().unwrap();
+    let writer = std::thread::spawn(move || {
+        let mut f = File::from(w);
+        let chunk = vec![1u8; 1 << 20];
+        let mut sent = 0u64;
+        while sent < SENT && f.write_all(&chunk).is_ok() {
+            sent += chunk.len() as u64;
+        }
+    });
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move { p.upload_from(r, &vp("u"), WriteOptions::default(), sink).await };
+    let later = drop_while_parked(&sem, call, g).await;
+    writer.join().unwrap();
+    let len = std::fs::metadata(d.path().join("u")).unwrap().len();
+    assert!(len < SENT, "upload ran on to {len} bytes");
+    assert_eq!(later.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_dropped_download_stops_writing() {
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let (r, w) = rustix::pipe::pipe().unwrap();
+    let reader = std::thread::spawn(move || std::io::copy(&mut File::from(r), &mut std::io::sink()).unwrap());
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move { p.download_into(&vp("a"), w, ReadOptions::default(), sink).await };
+    let later = drop_while_parked(&sem, call, g).await;
+    assert!(reader.join().unwrap() < 9 << 20, "download ran to the end");
+    assert_eq!(later.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn server_copy_reports_progress_to_the_end() {
+    let (d, p) = setup();
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let l2 = log.clone();
+    let sink: ProgressSink = Arc::new(move |done, total| l2.lock().unwrap().push((done, total)));
+    p.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), sink)
+        .await
+        .unwrap();
+    let log = log.lock().unwrap();
+    assert_eq!(log.last(), Some(&(9 << 20, Some(9 << 20))));
+    assert!(log.windows(2).all(|w| w[0].0 <= w[1].0));
+}
+
+#[test]
+fn a_stopped_checksum_ends() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("a"), "abc").unwrap();
+    let stop = Arc::new(Stop::default());
+    assert!(hash_file(&d.path().join("a"), "sha256", &stop).is_ok());
+    drop(StopOnDrop(stop.clone()));
+    let e = hash_file(&d.path().join("a"), "sha256", &stop).unwrap_err();
+    assert_eq!(e.kind, ErrorKind::Canceled);
+}
 
 #[tokio::test]
 async fn checksums_match_known_vectors() {
@@ -1165,9 +1297,6 @@ async fn space_reports_free_and_total() {
 
 #[tokio::test]
 async fn caller_file_offsets_are_ignored() {
-    // netvfs XB-11: regular files are read and written at explicit offsets,
-    // so an fd left at its end (as after a download into it) still uploads
-    // the whole file, and a download fills a reused fd from the start.
     use std::io::{Read, Seek, SeekFrom, Write};
     let (d, p) = setup();
     let mut scratch = tempfile::tempfile().unwrap();

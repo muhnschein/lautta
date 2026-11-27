@@ -1,22 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Images (PRV-2, PRV-3, PRV-4, PRV-14): `ImageListModel` (the folder's
-//! images, for swiping) and the two QML image providers for remote files,
-//! `image://lautta-thumb/<uri>?size=N` and `image://lautta-file/<uri>`.
-//!
-//! Local images, videos and PDFs never come here for thumbnails (PRV-1:
-//! `Nemo.Thumbnailer`). The full-image provider
-//! serves any location, which is what the viewer uses for remote files. The providers are asynchronous
-//! (`QQuickAsyncImageProvider`): the request returns at once, the tokio
-//! runtime fetches, a worker decodes, and the response is finished from
-//! there.
-//!
-//! The engine must be given the providers once: see
-//! [`register_image_providers`].
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use cpp::cpp;
-use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, ImageItem};
+use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, viewer_decode_size, ImageItem, PreviewKind};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::collections::HashMap;
@@ -31,7 +18,6 @@ const ROLE_URI: i32 = 0x100;
 const ROLE_NAME: i32 = 0x101;
 const ROLE_SIZE: i32 = 0x102;
 
-/// The images of a folder in the folder's own sort order.
 #[derive(QObject, Default)]
 pub struct ImageListModel {
     base: qt_base_class!(trait QAbstractListModel),
@@ -42,12 +28,18 @@ pub struct ImageListModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
-    /// Row of an image URI, -1 when the folder has no such image.
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
-    /// Looks at the folder again (after a delete).
     reload: qt_method!(fn(&mut self)),
     items: Vec<ImageItem>,
     generation: u64,
+}
+
+impl Drop for ImageListModel {
+    fn drop(&mut self) {
+        if let Some(core) = core() {
+            core.forget_shown_images();
+        }
+    }
 }
 
 impl ImageListModel {
@@ -134,8 +126,6 @@ impl QAbstractListModel for ImageListModel {
     }
 }
 
-// --- image providers ---------------------------------------------------
-
 cpp! {{
     #include <QtQuick/QQuickImageProvider>
     #include <QtQuick/QQuickTextureFactory>
@@ -148,7 +138,6 @@ cpp! {{
     #include <QtCore/QMetaObject>
     #include <memory>
 
-    // State shared by the response (GUI/reader thread) and the Rust job.
     struct LauttaImageState {
         QMutex mutex;
         QImage image;
@@ -187,10 +176,9 @@ cpp! {{
         }
     };
 
-    // Called by the Rust job: decodes `data` (or records `err`) and finishes
-    // the response unless it was cancelled. Takes over `handle`.
     static void lauttaImageDone(void *handle, const char *data, size_t len, int w, int h,
-                                int orientation, bool transform, const char *err, size_t errLen)
+                                int orientation, bool transform, bool exact, const char *err,
+                                size_t errLen)
     {
         std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
             static_cast<std::shared_ptr<LauttaImageState> *>(handle));
@@ -206,9 +194,10 @@ cpp! {{
             QImageReader reader(&buffer);
             reader.setAutoTransform(transform);
             QSize size = reader.size();
-            if (size.isValid() && (w > 0 || h > 0)) {
-                // The request is for the displayed (rotated) size; decode
-                // scaled down, never up, keeping the aspect ratio.
+            if (exact) {
+                if (w > 0 && h > 0)
+                    reader.setScaledSize(QSize(w, h));
+            } else if (size.isValid() && (w > 0 || h > 0)) {
                 QSize shown = (transform && orientation >= 5) ? size.transposed() : size;
                 qreal rw = w > 0 ? qreal(w) / shown.width() : 1e9;
                 qreal rh = h > 0 ? qreal(h) / shown.height() : 1e9;
@@ -229,8 +218,6 @@ cpp! {{
             QMetaObject::invokeMethod(s->response, "finished", Qt::QueuedConnection);
     }
 
-    // Called by the Rust job with a rendered PDF page: premultiplied RGBA,
-    // `w` x `h`, copied before the call returns. Takes over `handle`.
     static void lauttaImageDoneRgba(void *handle, const uchar *data, int w, int h)
     {
         std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
@@ -279,20 +266,17 @@ cpp! {{
         rust!(Lautta_image_cancel [id: u64 as "quint64"] { cancel(id); });
     }
 
-    // The one call the shell makes per QQmlEngine (viewers area, PRV-2).
     static void lauttaRegisterImageProviders(QQmlEngine *engine)
     {
         engine->addImageProvider(QStringLiteral("lautta-thumb"), new LauttaImageProvider(0));
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
         engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
+        engine->addImageProvider(QStringLiteral("lautta-cover"), new LauttaImageProvider(3));
+        engine->addImageProvider(QStringLiteral("lautta-pdf-thumb"), new LauttaImageProvider(4));
+        engine->addImageProvider(QStringLiteral("lautta-icon"), new LauttaIconProvider());
     }
 }}
 
-/// Adds `image://lautta-thumb/`, `image://lautta-file/` and
-/// `image://lautta-pdf/` (PRV-12, see [`super::pdf`]) to a
-/// `QQmlEngine` (the engine takes ownership). Call once per engine, e.g.
-/// `viewers::images::register_image_providers(view->engine())`.
-///
 /// # Safety
 /// `engine` must point to a live `QQmlEngine`.
 pub unsafe fn register_image_providers(engine: *mut c_void) {
@@ -301,8 +285,9 @@ pub unsafe fn register_image_providers(engine: *mut c_void) {
 
 const KIND_THUMB: i32 = 0;
 const KIND_PDF: i32 = 2;
+const KIND_COVER: i32 = 3;
+const KIND_PDF_THUMB: i32 = 4;
 
-/// What cancels a request: the thumbnail ticket or the fetch task.
 pub(crate) type Canceller = Box<dyn FnOnce() + Send>;
 
 static CANCELLERS: Mutex<Option<HashMap<u64, Canceller>>> = Mutex::new(None);
@@ -313,28 +298,23 @@ fn cancellers() -> std::sync::MutexGuard<'static, Option<HashMap<u64, Canceller>
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// The C++ side's shared state of one request; finishing it hands it back.
 pub(crate) struct Reply(*mut c_void);
 
-// SAFETY: the pointer is an owning handle only used to call
-// `lauttaImageDone` once, which locks internally.
 unsafe impl Send for Reply {}
 
 impl Reply {
-    fn done(self, bytes: &[u8], w: i32, h: i32, orientation: u8, transform: bool) {
+    fn done(self, bytes: &[u8], (w, h): (i32, i32), orientation: u8, transform: bool, exact: bool) {
         let handle = self.take();
         let (data, len) = (bytes.as_ptr(), bytes.len());
         let orientation = i32::from(orientation);
-        // SAFETY: `handle` came from `requestImageResponse` and is consumed here.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t", w as "int", h as "int",
-                  orientation as "int", transform as "bool"] {
-                lauttaImageDone(handle, data, len, w, h, orientation, transform, nullptr, 0);
+                  orientation as "int", transform as "bool", exact as "bool"] {
+                lauttaImageDone(handle, data, len, w, h, orientation, transform, exact, nullptr, 0);
             })
         }
     }
 
-    /// Hands over a rendered page (premultiplied RGBA, `w * h * 4` bytes).
     pub(crate) fn done_rgba(self, rgba: &[u8], w: u32, h: u32) {
         let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
             return self.fail("page too large");
@@ -344,9 +324,6 @@ impl Reply {
         }
         let handle = self.take();
         let data = rgba.as_ptr();
-        // SAFETY: `handle` came from `requestImageResponse` and is consumed
-        // here; `data` holds `w * h * 4` bytes (checked above), which the
-        // C++ side copies before returning.
         unsafe {
             cpp!([handle as "void*", data as "const uchar*", w as "int", h as "int"] {
                 lauttaImageDoneRgba(handle, data, w, h);
@@ -357,10 +334,9 @@ impl Reply {
     pub(crate) fn fail(self, message: &str) {
         let handle = self.take();
         let (data, len) = (message.as_ptr(), message.len());
-        // SAFETY: as in `done`.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t"] {
-                lauttaImageDone(handle, nullptr, 0, 0, 0, 1, false, data, len);
+                lauttaImageDone(handle, nullptr, 0, 0, 0, 1, false, false, data, len);
             })
         }
     }
@@ -373,20 +349,17 @@ impl Reply {
 }
 
 impl Drop for Reply {
-    /// A job that ended without answering (aborted) still frees the handle.
     fn drop(&mut self) {
         Reply(self.0).fail("canceled");
     }
 }
 
-/// Remembers how to cancel request `id` (the provider's `cancel`).
 pub(crate) fn on_cancel(id: u64, canceller: Canceller) {
     cancellers()
         .get_or_insert_with(HashMap::new)
         .insert(id, canceller);
 }
 
-/// Forgets request `id`'s canceller once it has finished.
 pub(crate) fn finished(id: u64) {
     cancellers().get_or_insert_with(HashMap::new).remove(&id);
 }
@@ -398,33 +371,59 @@ fn finish_error(reply: Reply, id: u64, e: &lautta_core::Error) {
 
 fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u64, handle: *mut c_void) {
     let reply = Reply(handle);
-    // SAFETY: the C++ caller keeps the UTF-8 bytes alive during this call.
     let id = unsafe { std::slice::from_raw_parts(id_data, id_len) };
     let id = String::from_utf8_lossy(id).into_owned();
     let Some(core) = core() else {
         reply.fail("the app is not ready");
         return;
     };
-    if kind == KIND_THUMB {
-        thumb_request(core, &id, req, reply);
+    if kind == KIND_THUMB || kind == KIND_COVER {
+        thumb_request(core, &id, kind, (w, h), req, reply);
     } else if kind == KIND_PDF {
         super::pdf::page_request(core, &id, w, req, reply);
+    } else if kind == KIND_PDF_THUMB {
+        super::pdf::thumb_request(core, &id, w, req, reply);
     } else {
         file_request(core, &id, (w, h), req, reply);
     }
 }
 
-fn thumb_request(core: std::sync::Arc<lautta_core::app::Core>, id: &str, req: u64, reply: Reply) {
-    let Some((uri, size)) = parse_thumb_id(id) else {
+fn thumb_request(
+    core: std::sync::Arc<lautta_core::app::Core>,
+    id: &str,
+    kind: i32,
+    shown: (i32, i32),
+    req: u64,
+    reply: Reply,
+) {
+    let (id, preview) = preview_kind(id, kind);
+    let Some(thumb) = parse_thumb_id(id) else {
         reply.fail("bad thumbnail id");
         return;
     };
     let rt = handle();
+    if thumb.embedded {
+        let task = rt.spawn(async move {
+            let res = core.viewer_preview(&thumb.uri, thumb.size).await;
+            cancellers().get_or_insert_with(HashMap::new).remove(&req);
+            match res {
+                Ok(bytes) => reply.done(&bytes, shown, 1, false, false),
+                Err(e) => reply.fail(&format!("{}: {}", e.kind.name(), e.message)),
+            }
+        });
+        let abort = task.abort_handle();
+        on_cancel(req, Box::new(move || abort.abort()));
+        return;
+    }
     let previews = match core.previews(&rt) {
         Ok(p) => p,
         Err(e) => return finish_error(reply, req, &e),
     };
-    let ticket = previews.request(core, uri, size);
+    let ticket = match preview {
+        PreviewKind::Thumb if thumb.cached => previews.request_cached(core, thumb.uri, thumb.size),
+        PreviewKind::Thumb => previews.request(core, thumb.uri, thumb.size),
+        cover => previews.request_cover(core, thumb.uri, thumb.size, cover),
+    };
     let rx = ticket.rx;
     let cancel = ticket.cancel;
     cancellers()
@@ -434,11 +433,21 @@ fn thumb_request(core: std::sync::Arc<lautta_core::app::Core>, id: &str, req: u6
         let res = rx.await;
         cancellers().get_or_insert_with(HashMap::new).remove(&req);
         match res {
-            Ok(Ok(bytes)) => reply.done(&bytes, 0, 0, 1, false),
+            Ok(Ok(bytes)) => reply.done(&bytes, shown, 1, false, false),
             Ok(Err(e)) => reply.fail(&format!("{}: {}", e.kind.name(), e.message)),
             Err(_) => reply.fail("canceled"),
         }
     });
+}
+
+fn preview_kind(id: &str, kind: i32) -> (&str, PreviewKind) {
+    if kind != KIND_COVER {
+        return (id, PreviewKind::Thumb);
+    }
+    match id.strip_suffix("&glow=1") {
+        Some(rest) => (rest, PreviewKind::Glow),
+        None => (id, PreviewKind::Cover),
+    }
 }
 
 fn file_request(
@@ -457,8 +466,9 @@ fn file_request(
         cancellers().get_or_insert_with(HashMap::new).remove(&req);
         match res {
             Ok(img) => {
-                let _ = tokio::task::spawn_blocking(move || {
-                    reply.done(&img.bytes, size.0, size.1, img.orientation, true)
+                let _ = tokio::task::spawn_blocking(move || match screen_decode_size(&img.bytes, size) {
+                    Some(decode) => reply.done(&img.bytes, decode, img.orientation, true, true),
+                    None => reply.done(&img.bytes, size, img.orientation, true, false),
                 })
                 .await;
             }
@@ -469,6 +479,15 @@ fn file_request(
     cancellers()
         .get_or_insert_with(HashMap::new)
         .insert(req, Box::new(move || abort.abort()));
+}
+
+fn screen_decode_size(bytes: &[u8], (w, h): (i32, i32)) -> Option<(i32, i32)> {
+    let screen = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+    if screen.0 == 0 || screen.1 == 0 {
+        return None;
+    }
+    let side = |v: u32| i32::try_from(v).unwrap_or(0);
+    Some(viewer_decode_size(bytes, screen).map_or((0, 0), |(dw, dh)| (side(dw), side(dh))))
 }
 
 fn cancel(id: u64) {
@@ -490,8 +509,6 @@ mod tests {
         #include <QtCore/QEventLoop>
         #include <QtCore/QTimer>
 
-        // Requests `id` from the named provider of a fresh engine and waits
-        // for the answer; returns the error text ("" when it worked).
         static QString lauttaProbe(const char *provider, const QString &id, int rw, int rh, int *w, int *h)
         {
             static int argc = 1;
@@ -517,14 +534,14 @@ mod tests {
             return error.isEmpty() && size.isEmpty() ? QStringLiteral("timeout") : error;
         }
 
-        static QByteArray lauttaTestJpeg(int w, int h)
+        static QByteArray lauttaTestImage(int w, int h, const char *format)
         {
             QImage img(w, h, QImage::Format_RGB32);
             img.fill(Qt::red);
             QByteArray out;
             QBuffer buffer(&out);
             buffer.open(QIODevice::WriteOnly);
-            img.save(&buffer, "JPEG");
+            img.save(&buffer, format);
             return out;
         }
     }}
@@ -545,19 +562,40 @@ mod tests {
         (err.to_string(), w, h)
     }
 
-    fn test_jpeg(w: i32, h: i32) -> Vec<u8> {
-        let bytes = cpp!(unsafe [w as "int", h as "int"] -> QByteArray as "QByteArray" {
-            return lauttaTestJpeg(w, h);
+    fn test_image(w: i32, h: i32, format: &str) -> Vec<u8> {
+        let format = std::ffi::CString::new(format).unwrap();
+        let f = format.as_ptr();
+        let bytes = cpp!(unsafe [w as "int", h as "int", f as "const char*"] -> QByteArray as "QByteArray" {
+            return lauttaTestImage(w, h, f);
         });
         bytes.to_slice().to_vec()
     }
 
-    /// The JPEG with an EXIF block that has only an orientation.
+    fn test_jpeg(w: i32, h: i32) -> Vec<u8> {
+        test_image(w, h, "JPEG")
+    }
+
     fn with_orientation(jpeg: &[u8], orientation: u16) -> Vec<u8> {
+        with_exif(jpeg, orientation, None)
+    }
+
+    fn with_exif(jpeg: &[u8], orientation: u16, thumb: Option<&[u8]>) -> Vec<u8> {
         let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
         tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
         tiff.extend_from_slice(&orientation.to_le_bytes());
-        tiff.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+        tiff.extend_from_slice(&[0, 0]);
+        match thumb {
+            None => tiff.extend_from_slice(&[0, 0, 0, 0]),
+            Some(t) => {
+                tiff.extend_from_slice(&26u32.to_le_bytes());
+                tiff.extend_from_slice(&[2, 0, 0x01, 0x02, 4, 0, 1, 0, 0, 0]);
+                tiff.extend_from_slice(&56u32.to_le_bytes());
+                tiff.extend_from_slice(&[0x02, 0x02, 4, 0, 1, 0, 0, 0]);
+                tiff.extend_from_slice(&u32::try_from(t.len()).unwrap().to_le_bytes());
+                tiff.extend_from_slice(&[0, 0, 0, 0]);
+                tiff.extend_from_slice(t);
+            }
+        }
         let mut out = vec![0xff, 0xd8, 0xff, 0xe1];
         out.extend_from_slice(&u16::try_from(2 + 6 + tiff.len()).unwrap().to_be_bytes());
         out.extend_from_slice(b"Exif\0\0");
@@ -566,7 +604,6 @@ mod tests {
         out
     }
 
-    /// One test: Qt allows a single application object per process.
     #[test]
     fn providers_serve_remote_images() {
         std::env::set_var("QT_QPA_PLATFORM", "offscreen");
@@ -578,6 +615,11 @@ mod tests {
         nas.add_file("p/rot.jpg", &with_orientation(&test_jpeg(40, 20), 6), 1);
         nas.add_file("p/big.jpg", &test_jpeg(400, 200), 1);
         nas.add_file("p/not.jpg", b"this is not an image", 1);
+        nas.add_file("p/photo.jpg", &test_jpeg(800, 600), 1);
+        nas.add_file("p/photo-rot.jpg", &with_orientation(&test_jpeg(800, 600), 6), 1);
+        nas.add_file("p/photo.png", &test_image(800, 600, "PNG"), 1);
+        let thumb = test_jpeg(40, 30);
+        nas.add_file("p/cam.jpg", &with_exif(&test_jpeg(800, 600), 6, Some(&thumb)), 1);
         let loc = Location::remote(
             "nv-qt-images",
             LocationKind::Server {
@@ -588,12 +630,28 @@ mod tests {
         );
         core.locations.register(loc, Arc::new(nas.clone()));
 
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/a.jpg?size=64&cached=1",
+            (0, 0),
+        );
+        assert_eq!((w, h), (-1, -1), "none cached yet: {e}");
+        assert!(e.starts_with("NotFound"), "{e}");
+
         let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/a.jpg?size=64", (0, 0));
         assert_eq!(
             (e.as_str(), w, h),
-            ("", 64, 32),
-            "thumbnail at the requested edge (PRV-2)"
+            ("", 128, 64),
+            "thumbnail at the size covering the request"
         );
+        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/a.jpg?size=64", (64, 64));
+        assert_eq!((e.as_str(), w, h), ("", 64, 32), "decoded at the item's size");
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/a.jpg?size=1024&cached=1",
+            (0, 0),
+        );
+        assert_eq!((e.as_str(), w, h), ("", 128, 64), "largest cached one");
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/a.jpg", (0, 0));
         assert_eq!((e.as_str(), w, h), ("", 200, 100), "full image");
@@ -610,6 +668,40 @@ mod tests {
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (4000, 4000));
         assert_eq!((e.as_str(), w, h), ("", 400, 200), "never scaled up");
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (100, 0));
+        assert_eq!((e.as_str(), w, h), ("", 100, 50), "width alone: fit to it");
+
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.jpg", (108, 228));
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 200, 150),
+            "JPEG at the quarter step covering it"
+        );
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo-rot.jpg", (108, 228));
+        assert_eq!((e.as_str(), w, h), ("", 150, 200), "step, then turned upright");
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.png", (108, 228));
+        assert_eq!((e.as_str(), w, h), ("", 144, 108), "other formats at the fit");
+
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/cam.jpg?size=1024&embedded=1",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 30, 40),
+            "embedded thumbnail, turned upright"
+        );
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/photo-rot.jpg?size=1024&embedded=1",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 192, 256),
+            "no camera thumbnail: the upright shape"
+        );
 
         let (e, ..) = probe("lautta-file", "lautta://nv-qt-images/p/missing.jpg", (0, 0));
         assert!(e.starts_with("NotFound"), "{e}");
@@ -620,7 +712,6 @@ mod tests {
         let (e, ..) = probe("lautta-file", "garbage", (0, 0));
         assert!(e.contains("bad image id"), "{e}");
 
-        // PDF pages (PRV-12).
         nas.add_file(
             "p/two.pdf",
             &lautta_pdf::sample::build(&[
@@ -646,11 +737,91 @@ mod tests {
         assert!(e.starts_with("NotFound"), "{e}");
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
         assert_eq!(e, "bad page id");
+        let (e, w, h) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=0",
+            (120, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 90, 180),
+            "page thumbnail fits a tile 1.5 times as tall as wide"
+        );
+        let (e, w, h) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=1",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 400, 200),
+            "the thumbnail cap without a request"
+        );
+        let (e, ..) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=2",
+            (50, 0),
+        );
+        assert_eq!(e, "no such page");
+        let (e, ..) = probe("lautta-pdf-thumb", "lautta://nv-qt-images/p/two.pdf", (50, 0));
+        assert_eq!(e, "bad page id");
 
-        // PDF thumbnails (PRV-14): the first page, a square from the top.
-        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/two.pdf?size=64", (0, 0));
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/two.pdf?size=64",
+            (64, 64),
+        );
         assert_eq!((e.as_str(), w, h), ("", 64, 64), "first page as wide as asked");
         let (e, ..) = probe("lautta-thumb", "lautta://nv-qt-images/p/fake.pdf?size=64", (0, 0));
         assert!(e.contains("not a readable PDF"), "{e}");
+
+        nas.add_file("m/song.mp3", &mp3_with_cover(&test_jpeg(300, 300)), 1);
+        let (e, w, h) = probe(
+            "lautta-cover",
+            "lautta://nv-qt-images/m/song.mp3?size=200",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 256, 256),
+            "cover at the size covering the request"
+        );
+        let (e, w, h) = probe(
+            "lautta-cover",
+            "lautta://nv-qt-images/m/song.mp3?size=200&glow=1",
+            (0, 0),
+        );
+        assert_eq!((e.as_str(), w, h), ("", 48, 48), "glow");
+        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/m/song.mp3?size=64", (0, 0));
+        assert_eq!((e.as_str(), w, h), ("", 128, 128), "audio thumbnail");
+        let (e, ..) = probe("lautta-cover", "lautta://nv-qt-images/p/a.jpg?size=64", (0, 0));
+        assert!(e.starts_with("Unsupported"), "covers only for audio: {e}");
+        let (e, ..) = probe("lautta-cover", "lautta://nv-qt-images/m/song.mp3&glow=1", (0, 0));
+        assert!(e.contains("bad thumbnail id"), "{e}");
+    }
+
+    fn mp3_with_cover(jpeg: &[u8]) -> Vec<u8> {
+        let safe = |n: usize| {
+            [
+                (n >> 21) as u8 & 0x7f,
+                (n >> 14) as u8 & 0x7f,
+                (n >> 7) as u8 & 0x7f,
+                n as u8 & 0x7f,
+            ]
+        };
+        let mut body = b"\x03image/jpeg\0\x03\0".to_vec();
+        body.extend_from_slice(jpeg);
+        let mut frame = b"APIC".to_vec();
+        frame.extend_from_slice(&safe(body.len()));
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&body);
+        let mut out = b"ID3\x04\0\0".to_vec();
+        out.extend_from_slice(&safe(frame.len()));
+        out.extend_from_slice(&frame);
+        for _ in 0..8 {
+            out.extend_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+            out.extend(std::iter::repeat_n(0u8, 413));
+        }
+        out
     }
 }

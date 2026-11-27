@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of SearchModel (SRC-2..4): streaming, grouping, filters, recent
-// searches and cancelling, on a temporary HOME tree.
 import QtQuick 2.6
 import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     SearchTestSupport { id: support }
     SearchModel {
@@ -23,6 +22,11 @@ Item {
             property int rowStart: matchStart
             property int rowLength: matchLength
             property string rowCategory: category
+            property string rowGroup: group
+            property string rowPlace: place
+            property string rowMime: mimeType
+            property string rowTypeIcon: typeIcon
+            property int rowGroupIndex: groupIndex
         }
     }
 
@@ -32,10 +36,9 @@ Item {
     }
 
     function waitIdle() {
-        for (var n = 0; n < 200 && !model.running && n < 3; ++n)
+        for (var i = 0; i < 3000 && model.running; ++i)
             support.spin(10)
-        for (var i = 0; i < 400 && model.running; ++i)
-            support.spin(10)
+        check(!model.running, "search finished")
     }
 
     function names() {
@@ -48,7 +51,6 @@ Item {
 
     function run(query, mode, types, size, date, hidden) {
         model.query = query
-        model.matchMode = mode
         model.types = JSON.stringify(types)
         model.sizePreset = size
         model.datePreset = date
@@ -74,15 +76,12 @@ Item {
         check(!model.running, "refused start does not run")
 
         check(run("thesis", "substring", [], "any", "any", false), "substring search starts")
-        check(!model.running, "search finished")
         check(names() === "Thesis,Thesis_notes.md,big_thesis.zip,old_thesis.txt,thesis_draft.odt",
               "substring hits: " + names())
         check(model.hitCount === 5, "hit count " + model.hitCount)
         check(model.folderCount >= 3, "folders searched " + model.folderCount)
         check(model.depthLimit === -1, "local search is unlimited")
 
-        // Grouped by folder: hits of one folder are contiguous and carry its
-        // section label, starting with the root's name.
         var sections = []
         for (var i = 0; i < rows.count; ++i) {
             var s = rows.itemAt(i).rowSection
@@ -108,11 +107,15 @@ Item {
         }
         check(found, "draft found")
 
+        check(JSON.parse(model.recentSearchesJson).length === 0,
+              "a search alone is not remembered: " + model.recentSearchesJson)
+        model.rememberSearch()
         var recent = JSON.parse(model.recentSearchesJson)
         check(recent.length === 1 && recent[0] === "thesis", "recent searches: " + model.recentSearchesJson)
 
         run("*thesis*.md", "glob", [], "any", "any", false)
         check(names() === "Thesis_notes.md", "glob hits: " + names())
+        model.rememberSearch()
         check(JSON.parse(model.recentSearchesJson)[0] === "*thesis*.md", "newest recent first")
 
         run("thesis", "substring", ["document", "archive"], "any", "any", false)
@@ -133,7 +136,6 @@ Item {
         run("thesis", "substring", [], "any", "any", false)
         check(names().indexOf(".thesis_hidden") < 0, "hidden files stay out by default")
 
-        // Cancel: results that would arrive later are dropped.
         model.query = "thesis"
         model.types = "[]"
         check(model.start(), "start for cancel")
@@ -144,13 +146,73 @@ Item {
         check(model.hitCount === before, "no hits after cancel: " + before + " -> " + model.hitCount)
         check(rows.count === before, "no rows after cancel")
 
+        model.query = "thes"
+        model.rememberSearch()
+        model.query = "thesis_dr"
+        model.rememberSearch()
+        check(JSON.stringify(JSON.parse(model.recentSearchesJson)) === JSON.stringify(["thesis_dr", "*thesis*.md", "thesis"]),
+              "a longer search replaces the one it grew from: " + model.recentSearchesJson)
+
         model.clear()
         check(rows.count === 0 && model.hitCount === 0, "clear empties the list")
         model.clearRecent()
         check(JSON.parse(model.recentSearchesJson).length === 0, "recent searches cleared")
 
+        check(model.scope === "", "a new model searches its folder")
+        model.scope = "device"
+        check(JSON.parse(model.recentSearchesJson).length === 0, "the device keeps its own recent searches")
+        run("thesis_draft", "substring", [], "any", "any", false)
+        var groups = JSON.parse(model.groupsJson)
+        check(groups.length === 1 && groups[0].key === "@device" && groups[0].kind === "device",
+              "device scope is one group: " + model.groupsJson)
+        check(groups[0].rows === 1, "the group counts its rows: " + model.groupsJson)
+        check(groups[0].state === "done" && groups[0].hits === 1 && groups[0].folders >= 4,
+              "the group reports its outcome: " + model.groupsJson)
+        check(rows.count === 1, "one hit on the whole device: " + names())
+        var d = rows.itemAt(0)
+        check(d.rowSection === "@device" && d.rowGroup === "@device" && d.rowGroupIndex === 0,
+              "device rows are sectioned by group: " + d.rowSection)
+        check(d.rowPlace === "Documents › srch_t1 › Uni", "place names the device folder: " + d.rowPlace)
+        check(d.rowMime.length > 0 && d.rowTypeIcon.length > 0, "rows carry their look: " + d.rowMime + " " + d.rowTypeIcon)
+        check(JSON.parse(model.recentSearchesJson).length === 0, "nothing remembered before asked")
+        model.rememberSearch()
+        check(JSON.stringify(JSON.parse(model.recentSearchesJson)) === JSON.stringify(["thesis_draft"]),
+              "device recents: " + model.recentSearchesJson)
+        check(!model.hasOtherPlaces(), "no servers or cards here")
+        model.scope = "folder"
+        check(JSON.parse(model.recentSearchesJson).indexOf("thesis_draft") < 0, "folder recents stay apart")
+
+        run("thesis", "substring", [], "any", "any", false)
+        var full = rows.count
+        check(full === 5, "a finished search to narrow: " + names())
+        support.write("Documents/srch_t1/thesis_late.odt", "l", 0)
+        model.types = JSON.stringify(["document"])
+        check(model.start(), "a narrower request starts")
+        check(!model.running, "adding a type filter needs no walk")
+        check(names() === "thesis_draft.odt", "the type filter narrows the finished hits only: " + names())
+        model.types = "[]"
+        model.query = "thesis_d"
+        check(model.start() && !model.running, "a longer text needs no walk either")
+        check(names() === "thesis_draft.odt", "longer text narrows: " + names())
+        model.query = "thesis"
+        check(model.start() && !model.running, "back to the finished request needs no walk")
+        check(rows.count === full, "back to the full finished result: " + names())
+        check(JSON.parse(model.groupsJson)[0].state === "done", "narrowed groups keep their state")
+        model.query = "late"
+        check(model.start() && model.running, "a different text walks again")
+        waitIdle()
+        check(names() === "thesis_late.odt", "a new walk sees new files: " + names())
+        model.query = "thesis"
+        check(model.start(), "start to stop")
+        model.cancel()
+        model.query = "thesis_l"
+        check(model.start() && model.running, "a stopped search is never narrowed")
+        waitIdle()
+        check(names() === "thesis_late.odt", "the new walk finds it: " + names())
+
         model.rootUri = "lautta://user-documents/nonexistent_dir"
         run("x", "substring", [], "any", "any", false)
         check(model.errorKind.length > 0, "a missing root reports an error: " + model.errorKind)
+        reachedEnd = true
     }
 }

@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Delete in the image viewer asks the
-// same as the folder view (OPS-8). To the Trash it is the remorse popup,
-// "Moving to trash", and no dialog. A permanent delete (here with the Trash
-// off; on volumes and servers likewise) opens the Delete permanently? dialog
-// instead, with no remorse: accepting it deletes the image at once, keeps the
-// viewer while other images are left and leaves it with the last one.
-// Before, an SD card's image said "Deleting" although it went for good.
-// (Headless, the slideshow does not follow a reload, so each part starts
-// from the image the viewer opened with.)
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -19,6 +10,7 @@ ApplicationWindow {
     readonly property string first: folder + "one.jpg"
     readonly property string second: folder + "two.jpg"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool removed
@@ -59,7 +51,6 @@ ApplicationWindow {
         finish(what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -131,7 +122,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 3:
-                // To the Trash: the remorse popup, no dialog.
                 if (win.dialogOnTop())
                     return win.fail("a delete to the Trash asks nothing")
                 var popup = win.remorse()
@@ -141,11 +131,11 @@ ApplicationWindow {
                     return win.fail("the remorse says where the image goes: " + popup.text)
                 popup.cancel()
                 App.setSetting("recently_deleted", JSON.stringify(false))
+                App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.next()
                 break
             case 4:
-                // Longer than the remorse timer: the cancelled delete is gone.
-                if (win.waited < 40)
+                if (win.waited < 60)
                     break
                 images.refresh()
                 win.next()
@@ -172,13 +162,13 @@ ApplicationWindow {
                 win.next()
                 break
             case 7:
-                // Deleted at once; another image is left, so the viewer stays.
+                var popup7 = win.remorse()
+                if (popup7 && popup7.pending)
+                    return win.fail("a permanent delete runs no remorse")
                 if (!win.removed || pageStack.busy)
                     break
                 if (pageStack.currentPage !== win.viewer)
                     return win.fail("the viewer stays while images are left")
-                if (win.waited > 20)
-                    return win.fail("deleted only after a delay")
                 images.refresh()
                 win.next()
                 break
@@ -214,7 +204,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 12:
-                // The last image is gone: back past the viewer at once.
                 if (!win.removed || pageStack.currentPage !== win.below || pageStack.busy)
                     break
                 if (pageStack.depth !== 1)
@@ -226,7 +215,6 @@ ApplicationWindow {
                     images.refresh()
                 if (images.loading || images.nameKind("two.jpg") !== "")
                     break
-                // Leave Pictures as it was for the scenarios after this one.
                 win.removed = false
                 Operations.remove(JSON.stringify([win.folder.slice(0, -1)]))
                 win.next()
@@ -239,8 +227,10 @@ ApplicationWindow {
             case 15:
                 if (win.waited % 5 === 0)
                     pictures.refresh()
-                if (pictures.nameKind("DeleteTest") === "")
+                if (pictures.nameKind("DeleteTest") === "") {
+                    win.reachedEnd = true
                     win.finish("")
+                }
                 break
             }
         }

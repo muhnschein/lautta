@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The transfer engine: owns the queue, starts items the scheduler picks,
-//! reacts to their results, persists every change (XFR-11) and publishes
-//! events. All queue state lives behind one `std::sync::Mutex` that is never
-//! held across an `.await`; item tasks are plain tokio tasks that can be
-//! aborted (pause, cancel, waiting) because every state change they make is
-//! one synchronous function (so an abort never lands halfway through).
 
 use super::clock::{Clock, SystemClock};
 use super::exec::{self, ItemEnv, ItemJob, Outcome};
@@ -19,25 +13,22 @@ use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan, PlanItem};
 use crate::provider::{ProgressSink, ProviderResolver};
+use crate::room::Room;
 use crate::uri::Uri;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::AbortHandle;
+use tokio::task::{AbortHandle, JoinHandle};
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// First retry delay; doubled for each further retry (XFR-9: 1 s, 2 s, 4 s).
     pub backoff_base: Duration,
-    /// Retries of a transient error before the item fails or the transfer waits.
     pub max_retries: u32,
-    /// Where anonymous scratch files go (the app's cache folder).
     pub scratch_dir: PathBuf,
-    /// History retention (XFR-10).
+    pub room: Room,
     pub retention_days: u32,
-    /// Minimum spacing of `Progress` events per transfer (NVB-10: 4 Hz).
     pub progress_event_interval_ms: i64,
 }
 
@@ -47,13 +38,13 @@ impl Default for EngineConfig {
             backoff_base: Duration::from_secs(1),
             max_retries: 3,
             scratch_dir: std::env::temp_dir(),
+            room: Room::default(),
             retention_days: DEFAULT_RETENTION_DAYS,
             progress_event_interval_ms: 250,
         }
     }
 }
 
-/// What the engine needs from the rest of the app.
 #[derive(Clone)]
 pub struct EngineDeps {
     pub db: Db,
@@ -75,7 +66,7 @@ impl EngineDeps {
 
 struct Live {
     t: Transfer,
-    running: HashMap<u32, AbortHandle>,
+    running: HashMap<u32, Running>,
     item_bytes: HashMap<u32, u64>,
     rate: RateEstimator,
     last_event_ms: i64,
@@ -102,6 +93,11 @@ impl Live {
         }
     }
 
+    fn is_current(&self, seq: u32) -> bool {
+        let me = tokio::task::try_id();
+        me.is_some() && self.running.get(&seq).map(|r| r.task.id()) == me
+    }
+
     fn live_bytes(&self) -> u64 {
         self.item_bytes.values().sum()
     }
@@ -122,7 +118,11 @@ impl Live {
     }
 }
 
-/// Folders, links and deletes run alone and in order; files run in parallel.
+struct Running {
+    task: JoinHandle<()>,
+    committed: bool,
+}
+
 fn is_barrier(op: OperationKind, kind: Kind) -> bool {
     op == OperationKind::Delete || kind != Kind::File
 }
@@ -150,17 +150,14 @@ struct Inner {
     state: Mutex<State>,
     events: broadcast::Sender<TransferEvent>,
     writer: mpsc::UnboundedSender<Cmd>,
-    /// So engine calls from threads outside the runtime (the Qt side) can spawn.
     rt: tokio::runtime::Handle,
 }
 
-/// The public handle; cheap to clone.
 #[derive(Clone)]
 pub struct Engine {
     inner: Arc<Inner>,
 }
 
-/// What an item task does after a result was recorded.
 enum Next {
     Stop,
     Rerun,
@@ -228,8 +225,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'sta
 }
 
 impl Engine {
-    /// Creates the engine. Must be called inside a tokio runtime. Call
-    /// [`Engine::load`] afterwards to bring back the persisted queue.
     pub fn new(deps: EngineDeps, cfg: EngineConfig) -> Engine {
         let store = Store::new(deps.db.clone());
         let (events, _) = broadcast::channel(1024);
@@ -255,9 +250,6 @@ impl Engine {
         self.inner.events.subscribe()
     }
 
-    /// Loads the persisted queue (XFR-11): unfinished transfers come back
-    /// paused, resumed at once when `auto_resume`. Also purges old history
-    /// (XFR-10). Returns the number of unfinished transfers.
     pub async fn load(&self, auto_resume: bool) -> Result<usize> {
         let store = self.inner.store.clone();
         let (now, days) = (self.inner.deps.clock.now_ms(), self.inner.cfg.retention_days);
@@ -286,7 +278,6 @@ impl Engine {
         Ok(resumable.len())
     }
 
-    /// Queues a plan as a transfer and returns its id (XFR-1).
     pub async fn add(&self, plan: Plan, title: &str, options: TransferOptions) -> Result<TransferId> {
         let mut t = Transfer::from_plan(0, plan, title, options, self.inner.deps.clock.now_ms());
         let store = self.inner.store.clone();
@@ -306,7 +297,6 @@ impl Engine {
         Ok(id)
     }
 
-    /// All transfers in queue order.
     pub fn list(&self) -> Vec<TransferSummary> {
         let st = self.inner.lock();
         let mut all: Vec<TransferSummary> = st.live.values().map(Live::summary).collect();
@@ -326,17 +316,35 @@ impl Engine {
             .ok_or_else(|| not_found(id))
     }
 
-    /// The first item's plan, for the list's direction icon (XFR-8) without
-    /// cloning a 100 000 item plan.
+    pub fn landed(&self, id: TransferId) -> Vec<Uri> {
+        self.inner
+            .lock()
+            .live
+            .get(&id)
+            .map(|l| l.t.landed())
+            .unwrap_or_default()
+    }
+
     pub fn first_item(&self, id: TransferId) -> Option<PlanItem> {
         let st = self.inner.lock();
         st.live.get(&id)?.t.items.first().map(|i| i.plan.clone())
     }
 
-    /// Unanswered conflicts of a transfer: item index and the question.
+    pub fn first_refused(&self, id: TransferId) -> Option<PlanItem> {
+        let st = self.inner.lock();
+        let refused = ErrorKind::PermissionDenied.name();
+        st.live.get(&id)?.t.items.iter().find_map(|i| {
+            let kind = i.error.as_deref()?.split(':').next()?;
+            (kind == refused).then(|| i.plan.clone())
+        })
+    }
+
     pub fn questions(&self, id: TransferId) -> Result<Vec<(u32, Conflict)>> {
         let st = self.inner.lock();
         let live = st.live.get(&id).ok_or_else(|| not_found(id))?;
+        if live.t.state.is_finished() {
+            return Ok(Vec::new());
+        }
         Ok(live
             .t
             .questions()
@@ -344,7 +352,6 @@ impl Engine {
             .collect())
     }
 
-    /// Waits until the transfer's summary satisfies `pred`.
     pub async fn wait_for(
         &self,
         id: TransferId,
@@ -413,7 +420,6 @@ impl Engine {
         self.inner.cancel_locked(&mut st, id)
     }
 
-    /// *Retry failed* (XFR-9): only the failed items run again.
     pub fn retry_failed(&self, id: TransferId) -> Result<()> {
         let mut st = self.inner.lock();
         self.inner.retry_locked(&mut st, id)
@@ -441,8 +447,6 @@ impl Engine {
         true
     }
 
-    /// Answers a conflict (OPS-2). `apply_to_all` also settles the other open
-    /// questions that allow the choice and answers future ones the same way.
     pub fn answer(
         &self,
         id: TransferId,
@@ -454,8 +458,6 @@ impl Engine {
         self.inner.answer_locked(&mut st, id, item, choice, apply_to_all)
     }
 
-    /// The bridge came or went (NVB-12). Transfers on bridge locations wait
-    /// and resume by themselves.
     pub fn bridge_available(&self, up: bool) {
         let mut st = self.inner.lock();
         st.bridge_up = up;
@@ -463,7 +465,6 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// Network reachability as reported by the bridge (XFR-7).
     pub fn network_available(&self, up: bool) {
         let mut st = self.inner.lock();
         st.network_up = up;
@@ -471,8 +472,6 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// A removable volume vanished or came back; affected transfers show
-    /// "Insert the card to continue".
     pub fn volume_present(&self, location: &str, present: bool) {
         let mut st = self.inner.lock();
         if present {
@@ -484,20 +483,16 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// Concurrency of a remote location, 1 to 6 (XFR-2).
     pub fn set_remote_limit(&self, location: &str, limit: usize) {
         let mut st = self.inner.lock();
         st.sched.set_remote_limit(location, limit);
         self.inner.pump(&mut st);
     }
 
-    /// True while any transfer is queued or running: hold `KeepAlive` (XFR-5).
     pub fn is_busy(&self) -> bool {
         self.inner.lock().busy
     }
 
-    /// Transfers still unfinished, for the "will resume when you open Lautta
-    /// again" notification (XFR-6).
     pub fn pending_summary(&self) -> usize {
         self.inner
             .lock()
@@ -507,7 +502,6 @@ impl Engine {
             .count()
     }
 
-    /// Removes a finished transfer from the history.
     pub fn forget(&self, id: TransferId) -> Result<()> {
         let mut st = self.inner.lock();
         let state = st.live.get(&id).ok_or_else(|| not_found(id))?.t.state;
@@ -520,7 +514,6 @@ impl Engine {
         Ok(())
     }
 
-    /// Removes finished transfers older than the retention (XFR-10).
     pub async fn purge_history(&self) -> Result<usize> {
         let store = self.inner.store.clone();
         let (now, days) = (self.inner.deps.clock.now_ms(), self.inner.cfg.retention_days);
@@ -533,7 +526,6 @@ impl Engine {
         Ok(n)
     }
 
-    /// Waits until everything queued so far is written to the database.
     pub async fn flush(&self) {
         let (tx, rx) = oneshot::channel();
         if self.inner.writer.send(Cmd::Flush(tx)).is_ok() {
@@ -541,8 +533,6 @@ impl Engine {
         }
     }
 }
-
-// ------------------------------------------------------------ internals
 
 impl Inner {
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -587,7 +577,6 @@ impl Inner {
         st.live.get_mut(&id).ok_or_else(|| not_found(id))
     }
 
-    /// Registers a freshly inserted transfer.
     fn register(&self, st: &mut State, t: Transfer) {
         let live = Live::new(t);
         let op = live.t.kind;
@@ -596,7 +585,6 @@ impl Inner {
         st.live.insert(live.t.id, live);
     }
 
-    /// Takes a transfer loaded from the database into the queue (XFR-11).
     fn adopt(&self, st: &mut State, mut t: Transfer) {
         let id = t.id;
         if t.state.is_finished() {
@@ -627,7 +615,6 @@ impl Inner {
         self.emit(TransferEvent::Added(id));
     }
 
-    /// Changes state through the transition table and tells everyone.
     fn set_state(&self, st: &mut State, id: TransferId, to: TransferState) -> Result<()> {
         let now = self.deps.clock.now_ms();
         let live = self.live_mut(st, id)?;
@@ -647,15 +634,19 @@ impl Inner {
         Ok(())
     }
 
-    /// Stops the running items of a transfer (their partial files stay for
-    /// resume, XFR-12), puts them back in line and moves to `to`.
     fn suspend(&self, st: &mut State, id: TransferId, to: TransferState) -> Result<()> {
         let live = st.live.get_mut(&id).ok_or_else(|| not_found(id))?;
         let op = live.t.kind;
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, AbortHandle)> = live.running.drain().collect();
+        let mut running: Vec<(u32, AbortHandle)> = Vec::new();
+        live.running.retain(|seq, r| {
+            r.committed || {
+                running.push((*seq, r.task.abort_handle()));
+                false
+            }
+        });
         let mut requeue = Vec::new();
         for (seq, handle) in running {
             handle.abort();
@@ -709,10 +700,13 @@ impl Inner {
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, AbortHandle)> = live.running.drain().collect();
-        for (seq, handle) in running {
-            handle.abort();
+        let running: Vec<(u32, Running)> = live.running.drain().collect();
+        let mut stopped = Vec::with_capacity(running.len());
+        for (seq, r) in running {
+            r.task.abort();
+            stopped.push(r.task);
             live.item_bytes.remove(&seq);
+            live.t.set_item_state(seq, ItemState::Pending);
             st.sched.item_finished(ItemRef { transfer: id, seq });
         }
         let leftovers: Vec<TransferItem> = live
@@ -728,11 +722,19 @@ impl Inner {
         self.pump(st);
         let inner = self.clone();
         self.rt
-            .spawn(async move { inner.remove_leftovers(op, leftovers).await });
+            .spawn(async move { inner.remove_leftovers(op, stopped, leftovers).await });
         Ok(())
     }
 
-    async fn remove_leftovers(&self, op: OperationKind, items: Vec<TransferItem>) {
+    async fn remove_leftovers(
+        &self,
+        op: OperationKind,
+        stopped: Vec<JoinHandle<()>>,
+        items: Vec<TransferItem>,
+    ) {
+        for task in stopped {
+            let _ = task.await;
+        }
         if op == OperationKind::Delete {
             return;
         }
@@ -784,7 +786,6 @@ impl Inner {
         Ok(())
     }
 
-    /// The reason this transfer cannot run right now, if any.
     fn blocked_reason(st: &State, live: &Live) -> Option<WaitReason> {
         let remote = live.locations.iter().any(|l| is_bridge_location(l));
         if remote && !st.bridge_up {
@@ -799,7 +800,6 @@ impl Inner {
             .then_some(WaitReason::Volume)
     }
 
-    /// Puts transfers into or out of the bridge, network and volume waits.
     fn apply_gates(self: &Arc<Self>, st: &mut State) {
         let decisions: Vec<(TransferId, TransferState, Option<WaitReason>)> = st
             .live
@@ -840,7 +840,6 @@ impl Inner {
         }
     }
 
-    /// Starts whatever the scheduler allows.
     fn pump(self: &Arc<Self>, st: &mut State) {
         for pick in st.sched.start_runnable() {
             if st.live.get(&pick.transfer).map(|l| l.t.state) == Some(TransferState::Queued) {
@@ -855,11 +854,16 @@ impl Inner {
             live.t.set_item_state(pick.seq, ItemState::Running);
             self.write_item(live, pick.seq);
             let handle = self.rt.spawn(run_item_task(self.clone(), pick));
-            live.running.insert(pick.seq, handle.abort_handle());
+            live.running.insert(
+                pick.seq,
+                Running {
+                    task: handle,
+                    committed: false,
+                },
+            );
         }
     }
 
-    /// Completes the transfer once every item is settled (XFR-9).
     fn maybe_finish(self: &Arc<Self>, st: &mut State, id: TransferId) {
         let Some(live) = st.live.get_mut(&id) else {
             return;
@@ -897,8 +901,6 @@ impl Inner {
         self.complete(st, id);
     }
 
-    /// OPS-4: after the files are verified and gone, empty source folders go
-    /// too, deepest first. A folder that still holds something stays.
     async fn remove_moved_dirs(&self, mut dirs: Vec<Uri>) {
         dirs.sort_by_key(|d| std::cmp::Reverse(d.path.depth()));
         for dir in dirs {
@@ -923,7 +925,6 @@ impl Inner {
         } else {
             TransferState::Completed
         };
-        // Queued (nothing to do) and Waiting(Question) pass through Running.
         if live.t.state != TransferState::Running {
             if let Err(e) = self.set_state(st, id, TransferState::Running) {
                 log::debug!("complete: {e}");
@@ -937,13 +938,11 @@ impl Inner {
         self.emit(TransferEvent::Finished(id));
     }
 
-    // --------------------------------------------------- item results
-
     fn on_progress(&self, id: TransferId, seq: u32, done: u64) {
         let now = self.deps.clock.now_ms();
         let mut st = self.lock();
         let due = st.throttle.due(id, now);
-        let Some(live) = st.live.get_mut(&id) else {
+        let Some(live) = st.live.get_mut(&id).filter(|l| l.running.contains_key(&seq)) else {
             return;
         };
         live.item_bytes.insert(seq, done);
@@ -965,18 +964,38 @@ impl Inner {
         }
     }
 
-    /// Detaches a finished item from its transfer's running set.
-    fn release(&self, st: &mut State, pick: ItemRef) {
-        if let Some(live) = st.live.get_mut(&pick.transfer) {
-            live.running.remove(&pick.seq);
-            live.item_bytes.remove(&pick.seq);
+    fn release(&self, st: &mut State, pick: ItemRef) -> bool {
+        let Some(live) = st.live.get_mut(&pick.transfer) else {
+            return false;
+        };
+        if !live.is_current(pick.seq) {
+            return false;
         }
+        live.running.remove(&pick.seq);
+        live.item_bytes.remove(&pick.seq);
         st.sched.item_finished(pick);
+        true
+    }
+
+    fn commit(&self, pick: ItemRef, on: bool) -> bool {
+        let mut st = self.lock();
+        let Some(live) = st.live.get_mut(&pick.transfer) else {
+            return false;
+        };
+        if !live.is_current(pick.seq) {
+            return false;
+        }
+        if let Some(r) = live.running.get_mut(&pick.seq) {
+            r.committed = on;
+        }
+        true
     }
 
     fn settle(self: &Arc<Self>, pick: ItemRef, state: ItemState, error: Option<String>) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
         };
@@ -1007,8 +1026,6 @@ impl Inner {
         self.pump(st);
     }
 
-    /// Everything not started below the settled item gets the same state
-    /// (a folder renamed as a whole, trashed, or skipped).
     fn settle_subtree(&self, st: &mut State, pick: ItemRef, to: ItemState) {
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
@@ -1032,7 +1049,9 @@ impl Inner {
 
     fn subtree_done(self: &Arc<Self>, pick: ItemRef) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
         };
@@ -1044,7 +1063,9 @@ impl Inner {
 
     fn ask(self: &Arc<Self>, pick: ItemRef, conflict: Conflict) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let id = pick.transfer;
         let Some(live) = st.live.get_mut(&id) else {
             return;
@@ -1062,10 +1083,10 @@ impl Inner {
         self.pump(&mut st);
     }
 
-    fn rebase(&self, pick: ItemRef, job: &mut ItemJob, new_dst: Uri) {
+    fn rebase(&self, pick: ItemRef, job: &mut ItemJob, new_dst: Uri) -> bool {
         let mut st = self.lock();
-        let Some(live) = st.live.get_mut(&pick.transfer) else {
-            return;
+        let Some(live) = st.live.get_mut(&pick.transfer).filter(|l| l.is_current(pick.seq)) else {
+            return false;
         };
         let old = live.t.items[pick.seq as usize].plan.dst.clone();
         let mut touched = vec![pick.seq];
@@ -1090,9 +1111,9 @@ impl Inner {
         for seq in touched {
             self.write_item(live, seq);
         }
+        true
     }
 
-    /// Decides what an item task does after `run_item` returned.
     fn on_result(
         self: &Arc<Self>,
         pick: ItemRef,
@@ -1106,10 +1127,12 @@ impl Inner {
             Ok(Outcome::Subtree) => self.subtree_done(pick),
             Ok(Outcome::Ask(c)) => self.ask(pick, c),
             Ok(Outcome::KeepBoth(uri)) => {
-                self.rebase(pick, job, uri);
-                return Next::Rerun;
+                if self.rebase(pick, job, uri) {
+                    return Next::Rerun;
+                }
             }
-            Err(e) => return self.on_error(pick, e, attempt),
+            Err(e) if self.commit(pick, false) => return self.on_error(pick, e, attempt),
+            Err(_) => {}
         }
         Next::Stop
     }
@@ -1127,6 +1150,13 @@ impl Inner {
         match wait_reason_for(e.kind) {
             Some(reason) => {
                 let mut st = self.lock();
+                if !st
+                    .live
+                    .get(&pick.transfer)
+                    .is_some_and(|l| l.is_current(pick.seq))
+                {
+                    return Next::Stop;
+                }
                 if let Err(err) = self.suspend(&mut st, pick.transfer, TransferState::Waiting(reason)) {
                     log::debug!("cannot wait: {err}");
                 }
@@ -1156,6 +1186,9 @@ impl Inner {
         apply_to_all: bool,
     ) -> Result<()> {
         let live = self.live_mut(st, id)?;
+        if live.t.state.is_finished() {
+            return Err(bad_state("answer", live.t.state));
+        }
         let item = live
             .t
             .items
@@ -1222,7 +1255,6 @@ impl Inner {
         st.sched.requeue(id, [(seq, barrier)]);
     }
 
-    /// Reads what an item task needs and resolves its providers.
     fn prepare(self: &Arc<Self>, pick: ItemRef) -> Option<Prepared> {
         let (plan, temp_name, op, options) = {
             let mut st = self.lock();
@@ -1255,6 +1287,8 @@ impl Inner {
         let inner = self.clone();
         let progress: ProgressSink =
             Arc::new(move |done, _| inner.on_progress(pick.transfer, pick.seq, done));
+        let inner = self.clone();
+        let commit = Arc::new(move |on| inner.commit(pick, on));
         let env = ItemEnv {
             same_location: plan.src.location == plan.dst.location,
             src,
@@ -1262,8 +1296,10 @@ impl Inner {
             op,
             options,
             scratch_dir: self.cfg.scratch_dir.clone(),
+            room: self.cfg.room.clone(),
             trasher: self.deps.trasher.clone(),
             progress,
+            commit,
         };
         Some(Prepared {
             env,
@@ -1272,13 +1308,10 @@ impl Inner {
     }
 }
 
-/// One item from start to settled: retries transient errors with backoff
-/// (XFR-9), keeps the partial file for resume (XFR-12).
 async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
     let Some(Prepared { env, mut job }) = inner.prepare(pick) else {
         return;
     };
-    // The item decides with them (atomic writes, resume, checksums).
     env.src.known_capabilities().await;
     env.dst.known_capabilities().await;
     let mut attempt = 0;
@@ -1299,5 +1332,123 @@ async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ops::PlanTotals;
+    use crate::provider::memory::MemoryProvider;
+    use crate::provider::StaticResolver;
+    use crate::vpath::VPath;
+
+    fn file_item(src: &str, dst: &str) -> PlanItem {
+        PlanItem {
+            src: Uri::new("a", VPath::parse(src.as_bytes()).unwrap()),
+            dst: Uri::new("b", VPath::parse(dst.as_bytes()).unwrap()),
+            kind: Kind::File,
+            size: Some(1),
+            mtime_ms: None,
+            mode: None,
+            link_target: None,
+            conflict: None,
+            proposed_name: None,
+            resolution: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn landed_reads_the_live_transfer() {
+        let resolver = StaticResolver::default()
+            .with("a", Arc::new(MemoryProvider::default()))
+            .with("b", Arc::new(MemoryProvider::default()));
+        let engine = Engine::new(
+            EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver)),
+            EngineConfig::default(),
+        );
+        engine.volume_present("a", false);
+        let dest = Uri::new("b", VPath::parse(b"/Out").unwrap());
+        let plan = Plan {
+            kind: OperationKind::Extract,
+            destination: dest.clone(),
+            items: vec![file_item("f", "/Out/f")],
+            totals: PlanTotals::default(),
+            needs_summary: false,
+            hold: Default::default(),
+        };
+        let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
+        assert_eq!(engine.landed(id), [dest]);
+        assert!(engine.landed(id + 1).is_empty());
+    }
+
+    #[tokio::test]
+    async fn results_from_a_task_no_longer_running_the_item_are_dropped() {
+        let resolver = StaticResolver::default()
+            .with("a", Arc::new(MemoryProvider::default()))
+            .with("b", Arc::new(MemoryProvider::default()));
+        let engine = Engine::new(
+            EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver)),
+            EngineConfig::default(),
+        );
+        engine.volume_present("a", false);
+        let plan = Plan {
+            kind: OperationKind::Copy,
+            destination: Uri::root("b"),
+            items: vec![file_item("f", "f")],
+            totals: PlanTotals::default(),
+            needs_summary: false,
+            hold: Default::default(),
+        };
+        let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
+        let before = engine.get(id).unwrap().state;
+        assert_eq!(before, TransferState::Waiting(WaitReason::Volume));
+        let mut other = None;
+        let pick = ItemRef { transfer: id, seq: 0 };
+        for registered in [false, true] {
+            if registered {
+                let mut st = engine.inner.lock();
+                let live = st.live.get_mut(&id).unwrap();
+                let task = tokio::spawn(std::future::pending::<()>());
+                other = Some(task.abort_handle());
+                live.running.insert(
+                    0,
+                    Running {
+                        task,
+                        committed: true,
+                    },
+                );
+            }
+            let inner = engine.inner.clone();
+            let mut job = ItemJob {
+                plan: file_item("f", "f"),
+                temp_name: Vec::new(),
+            };
+            tokio::spawn(async move {
+                assert!(!inner.commit(pick, true), "commit");
+                assert!(!inner.rebase(pick, &mut job, Uri::root("b")), "rebase");
+                let err = Error::kind(ErrorKind::ConnectionLost);
+                assert!(matches!(inner.on_error(pick, err, u32::MAX), Next::Stop), "waits");
+                inner.settle(pick, ItemState::Done, None);
+                inner.subtree_done(pick);
+                let conflict = crate::transfer::conflict::build_conflict(
+                    &job.plan,
+                    &crate::entry::Entry::new(b"f", Kind::File),
+                    false,
+                    false,
+                );
+                inner.ask(pick, conflict);
+            })
+            .await
+            .unwrap();
+            let items = engine.items(id).unwrap();
+            assert_eq!(items[0].state, ItemState::Pending);
+            assert!(items[0].plan.conflict.is_none());
+            assert_eq!(engine.get(id).unwrap().state, before);
+            let st = engine.inner.lock();
+            assert_eq!(st.live[&id].running.len(), usize::from(registered));
+            assert!(st.live[&id].running.values().all(|r| r.committed));
+        }
+        other.unwrap().abort();
     }
 }

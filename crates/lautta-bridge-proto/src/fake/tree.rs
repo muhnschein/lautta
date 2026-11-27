@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The fake server's in-memory file tree for one location. Errors use the
-//! netvfs XC-21 names so they travel as `org.netvfs.Error.<Name>`.
 
 use crate::wire::{entry_flags, WireEntry};
 use std::collections::BTreeMap;
 
-/// A tree error: XC-21 name plus message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeError {
     pub name: &'static str,
@@ -38,15 +35,12 @@ impl Node {
     }
 }
 
-/// Counts of a removed tree (`JobFinished.extra`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub files: i64,
     pub dirs: i64,
 }
 
-/// Normalised path (no empty or `.` components) as bytes; `..` is refused
-/// (netvfs `Paths::normalize`).
 pub fn normalize(raw: &[u8]) -> TResult<Vec<u8>> {
     if raw.len() > 4096 {
         return err("InvalidName", "Path too long");
@@ -89,8 +83,8 @@ fn is_under(path: &[u8], dir: &[u8]) -> bool {
 #[derive(Debug, Clone)]
 pub struct Tree {
     nodes: BTreeMap<Vec<u8>, Node>,
-    /// Fixed timestamp so entries are reproducible.
     pub now_ms: i64,
+    pub deep_etags: bool,
 }
 
 impl Default for Tree {
@@ -106,6 +100,7 @@ impl Default for Tree {
         Tree {
             nodes,
             now_ms: 1_700_000_000_000,
+            deep_etags: false,
         }
     }
 }
@@ -125,7 +120,6 @@ impl Tree {
             .sum()
     }
 
-    /// Creates `path` and missing parents (test setup).
     pub fn put_file(&mut self, path: &[u8], data: &[u8]) {
         self.put_dirs(&parent_of(path));
         self.nodes.insert(
@@ -202,6 +196,9 @@ impl Tree {
             Node::Dir { mtime_ms, mode } => {
                 e.mtime_ms = *mtime_ms;
                 e.mode = *mode;
+                if self.deep_etags {
+                    e.etag = self.deep_etag(path);
+                }
             }
             Node::Link { target } => {
                 e.size = i64::try_from(target.len()).unwrap_or(i64::MAX);
@@ -212,6 +209,27 @@ impl Tree {
             }
         }
         e
+    }
+
+    fn deep_etag(&self, dir: &[u8]) -> Vec<u8> {
+        use sha2::Digest;
+        let mut hash = sha2::Sha256::new();
+        for (path, node) in self.nodes.iter().filter(|(p, _)| is_under(p, dir)) {
+            hash.update(path);
+            hash.update([0, node.kind()]);
+            let (size, mtime_ms) = match node {
+                Node::File { data, mtime_ms, .. } => (data.len(), *mtime_ms),
+                Node::Dir { mtime_ms, .. } => (0, *mtime_ms),
+                Node::Link { target } => (target.len(), 0),
+            };
+            hash.update(size.to_le_bytes());
+            hash.update(mtime_ms.to_le_bytes());
+        }
+        hash.finalize()
+            .iter()
+            .take(8)
+            .flat_map(|b| format!("{b:02x}").into_bytes())
+            .collect()
     }
 
     pub fn stat(&self, path: &[u8], follow: bool) -> TResult<WireEntry> {
@@ -450,8 +468,6 @@ impl Tree {
         Ok(())
     }
 
-    /// The nodes below `path` (and `path` itself, relative path empty) for
-    /// copying between locations.
     pub fn export(&self, path: &[u8], recursive: bool) -> TResult<Vec<(Vec<u8>, Node)>> {
         let root = match self.nodes.get(path) {
             Some(n) => n.clone(),
@@ -476,7 +492,6 @@ impl Tree {
         Ok(items)
     }
 
-    /// Places exported nodes at `to`.
     pub fn import(&mut self, to: &[u8], items: Vec<(Vec<u8>, Node)>, replace: bool) -> TResult<()> {
         self.require_parent_dir(to)?;
         if self.nodes.contains_key(to) && !replace {
@@ -493,8 +508,6 @@ impl Tree {
         Ok(())
     }
 
-    /// Entries below `root` in depth-first order (children before their folder
-    /// when `post_order`), as `(full path, entry)`; depth 1 are the children.
     pub fn walk(&self, root: &[u8], max_depth: i64, post_order: bool) -> TResult<Vec<(Vec<u8>, WireEntry)>> {
         match self.nodes.get(root) {
             Some(Node::Dir { .. }) => {}
@@ -531,7 +544,6 @@ impl Tree {
         }
     }
 
-    /// File contents for reading.
     pub fn file_data(&self, path: &[u8]) -> TResult<&[u8]> {
         let real = self.resolve(path)?;
         match self.nodes.get(&real) {
@@ -541,7 +553,6 @@ impl Tree {
         }
     }
 
-    /// Length of an existing destination file, if there is one.
     pub fn file_len(&self, path: &[u8]) -> Option<usize> {
         match self.nodes.get(path) {
             Some(Node::File { data, .. }) => Some(data.len()),
@@ -549,8 +560,6 @@ impl Tree {
         }
     }
 
-    /// Replaces or extends a file (`Upload`). `at` is where `data` starts; the
-    /// file is truncated to `at` first, so resuming rewrites nothing before it.
     pub fn write_file(&mut self, path: &[u8], at: usize, data: &[u8], mtime_ms: Option<i64>) -> TResult<()> {
         self.require_parent_dir(path)?;
         let mtime = mtime_ms.unwrap_or(self.now_ms);

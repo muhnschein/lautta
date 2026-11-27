@@ -1,17 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Read-only archive provider (SPEC PRV-10, LOC-5): zip, tar, tar.gz/bz2/xz/zst
-//! and 7z presented as a location.
-//!
-//! * zip is read through a `Read + Seek` adapter with a 64 KiB block cache
-//!   ([`blocks`]) so a remote zip needs ranged reads only: the central
-//!   directory first, then the blocks of the entries that are opened.
-//! * plain tar is indexed the same way (headers only).
-//! * compressed tar and 7z cannot be indexed without reading everything, so
-//!   they are downloaded once to a cache file and indexed from there.
-//!
-//! Entry names that could leave the archive (`..`, absolute, drive letters,
-//! NUL) are never indexed; their number is reported by
-//! [`ArchiveProvider::skipped_entries`].
 
 mod blocks;
 mod sevenz;
@@ -22,10 +9,12 @@ mod zipdir;
 
 use crate::entry::{cap, Capabilities, Entry, EntryFlags, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
 use crate::provider::{
     AttributeChanges, CopyOptions, Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode,
     SpaceInfo, WriteOptions,
 };
+use crate::room::{Meter, Room};
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use async_trait::async_trait;
@@ -34,23 +23,18 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Entries up to this size are decompressed into memory by `open_read`; larger
-/// ones go to an unlinked temporary file in the cache directory.
 pub const MEMORY_LIMIT: u64 = 16 * 1024 * 1024;
-/// Entries per listing batch.
 const LIST_BATCH: usize = 256;
-/// Symlink hops followed by `stat`/`open_read`.
 const MAX_HOPS: usize = 8;
 
-/// Outer compression of a tar archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
     None,
@@ -60,25 +44,23 @@ pub enum Compression {
     Zstd,
 }
 
-/// What kind of archive a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveFormat {
     Zip,
     Tar(Compression),
+    Single(Compression),
     SevenZ,
 }
 
-/// Where an entry's bytes live; filled by the format readers.
 #[derive(Debug, Clone)]
 enum Loc {
     Implicit,
     Zip(zipdir::ZipLoc),
     TarAt(u64),
-    TarSeq(usize),
+    TarStream(u64),
     SevenZ(String),
 }
 
-/// One entry as a format reader reports it, before sanitising.
 struct RawEntry {
     name: Vec<u8>,
     kind: Kind,
@@ -112,7 +94,6 @@ impl Node {
     }
 }
 
-/// A flattened archive entry for planners (`compress::extract_plan`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveEntry {
     pub path: VPath,
@@ -120,14 +101,11 @@ pub struct ArchiveEntry {
     pub size: u64,
 }
 
-/// `arc-<16 hex>`: the location id of the archive opened from `source_uri`
-/// (the display form of its [`Uri`]).
 pub fn archive_location_id_str(source_uri: &str) -> String {
     let digest = Sha256::digest(source_uri.as_bytes());
     format!("arc-{}", hex::encode(&digest[..8]))
 }
 
-/// [`archive_location_id_str`] for a typed URI.
 pub fn archive_location_id(source_uri: &Uri) -> String {
     archive_location_id_str(&source_uri.to_string())
 }
@@ -169,13 +147,14 @@ fn has_ustar(block: &[u8]) -> bool {
     block.get(257..262) == Some(b"ustar")
 }
 
-/// Recognises an archive from its first bytes (at least 512 are useful) and
-/// its file name: magic numbers first, extension only where the magic cannot
-/// tell (old-style tar, compressed tar).
 pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     if let Some(comp) = compression_magic(head) {
         let is_tar = has_tar_extension(name) || has_ustar(&tarfmt::decompressed_head(comp, head, 512));
-        return is_tar.then_some(ArchiveFormat::Tar(comp));
+        return Some(if is_tar {
+            ArchiveFormat::Tar(comp)
+        } else {
+            ArchiveFormat::Single(comp)
+        });
     }
     if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") {
         return Some(ArchiveFormat::Zip);
@@ -189,15 +168,21 @@ pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     None
 }
 
-/// True when `head`/`name` look like a supported archive (the "open as
-/// archive" menu item).
+fn single_name(archive: &[u8]) -> Vec<u8> {
+    let lower = archive.to_ascii_lowercase();
+    [".gz", ".gzip", ".bz2", ".xz", ".zst", ".zstd"]
+        .iter()
+        .find(|ext| lower.len() > ext.len() && lower.ends_with(ext.as_bytes()))
+        .map_or_else(
+            || archive.to_vec(),
+            |ext| archive[..archive.len() - ext.len()].to_vec(),
+        )
+}
+
 pub fn is_archive(head: &[u8], name: &[u8]) -> bool {
     detect_format(head, name).is_some()
 }
 
-/// An entry name that stays inside the archive, or `None`. Rejected: absolute
-/// paths, `..` components (also behind a backslash, for names written on
-/// Windows), NUL and drive prefixes.
 fn sanitize(raw: &[u8]) -> Option<VPath> {
     if raw.first() == Some(&b'/') || raw.contains(&0) {
         return None;
@@ -215,8 +200,6 @@ fn sanitize(raw: &[u8]) -> Option<VPath> {
     VPath::parse(raw).ok()
 }
 
-/// Resolves a symlink target relative to the link's folder, staying inside
-/// the archive (absolute targets are taken from the archive root).
 fn resolve_link(parent: &VPath, target: &[u8]) -> Option<VPath> {
     let mut parts: Vec<&[u8]> = if target.first() == Some(&b'/') {
         Vec::new()
@@ -235,7 +218,6 @@ fn resolve_link(parent: &VPath, target: &[u8]) -> Option<VPath> {
     VPath::parse(&parts.join(&b'/')).ok()
 }
 
-/// The sanitised, tree-shaped view of an archive.
 struct Index {
     nodes: BTreeMap<VPath, Node>,
     children: HashMap<VPath, Vec<Vec<u8>>>,
@@ -281,8 +263,6 @@ impl Index {
         }
     }
 
-    /// Inserts a node, creating implicit parents. False when an ancestor is
-    /// not a folder or a folder would be replaced by a file.
     fn insert(&mut self, path: VPath, node: Node) -> bool {
         for ancestor in path.ancestors().into_iter().skip(1) {
             match self.nodes.get(&ancestor) {
@@ -310,7 +290,6 @@ impl Index {
     }
 }
 
-/// Removes a cache file when the archive is closed.
 struct CacheFile(PathBuf);
 
 impl Drop for CacheFile {
@@ -321,10 +300,13 @@ impl Drop for CacheFile {
 
 struct Inner {
     format: ArchiveFormat,
+    password: Option<Password>,
     index: Index,
     blocks: Option<Arc<BlockSource>>,
     cache: Option<CacheFile>,
     cache_dir: PathBuf,
+    room: Room,
+    spill: Mutex<Option<tarfmt::Spill>>,
 }
 
 fn join_err(err: tokio::task::JoinError) -> Error {
@@ -362,12 +344,11 @@ impl Inner {
             .ok_or_else(|| Error::new(ErrorKind::Internal, "archive has no block source"))
     }
 
-    /// Streams the bytes of `node` into `out` (blocking).
     fn copy_node(&self, node: &Node, out: &mut dyn Write) -> Result<()> {
         match &node.loc {
             Loc::Implicit => Err(Error::kind(ErrorKind::IsADirectory)),
             Loc::Zip(z) => {
-                let mut r = zipdir::open_entry(self.block_source()?, z)?;
+                let mut r = zipdir::open_entry(self.block_source()?, z, self.password.as_ref())?;
                 io::copy(&mut r, out).map_err(from_io)?;
                 Ok(())
             }
@@ -381,14 +362,35 @@ impl Inner {
                     Err(Error::new(ErrorKind::ProtocolError, "tar entry is truncated"))
                 }
             }
-            Loc::TarSeq(seq) => {
-                let comp = match self.format {
-                    ArchiveFormat::Tar(c) => c,
-                    _ => Compression::None,
+            Loc::TarStream(offset) => {
+                let (file, at) = {
+                    let mut spill = self
+                        .spill
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if spill.is_none() {
+                        let comp = match self.format {
+                            ArchiveFormat::Tar(c) | ArchiveFormat::Single(c) => c,
+                            _ => Compression::None,
+                        };
+                        *spill = Some(tarfmt::Spill::new(
+                            self.cache_file()?,
+                            comp,
+                            &self.cache_dir,
+                            &self.room,
+                        )?);
+                    }
+                    let spill = spill.as_mut().expect("spill just set");
+                    spill.fetch(*offset, node.size, || self.cache_file())?
                 };
-                tarfmt::copy_seq(self.cache_file()?, comp, *seq, out)
+                let copied = io::copy(&mut FileRange::new(file, at, node.size), out).map_err(from_io)?;
+                if copied == node.size {
+                    Ok(())
+                } else {
+                    Err(Error::new(ErrorKind::ProtocolError, "tar entry is truncated"))
+                }
             }
-            Loc::SevenZ(name) => sevenz::copy_entry(self.cache_file()?, name, out),
+            Loc::SevenZ(name) => sevenz::copy_entry(self.cache_file()?, name, out, self.password.as_ref()),
         }
     }
 
@@ -399,7 +401,6 @@ impl Inner {
             .ok_or_else(|| Error::kind(ErrorKind::NotFound))
     }
 
-    /// Follows symlinks that stay inside the archive.
     fn resolve(&self, path: &VPath, follow: bool) -> Result<(VPath, &Node)> {
         let mut cur = path.clone();
         for _ in 0..=MAX_HOPS {
@@ -417,7 +418,6 @@ impl Inner {
         ))
     }
 
-    /// The link target: from the header (tar) or from the entry data.
     fn link_bytes(&self, _path: &VPath, node: &Node) -> Result<Vec<u8>> {
         if let Some(l) = &node.link {
             return Ok(l.clone());
@@ -453,15 +453,18 @@ impl Inner {
     }
 }
 
-/// Read-only provider over one archive file.
 pub struct ArchiveProvider {
     inner: Arc<Inner>,
 }
 
 impl ArchiveProvider {
-    /// Opens `path` of `source` as an archive. `cache_dir` receives the
-    /// downloaded copy of non-zip archives and large extracted entries.
-    pub async fn open(source: Arc<dyn Provider>, path: VPath, cache_dir: PathBuf) -> Result<ArchiveProvider> {
+    pub async fn open(
+        source: Arc<dyn Provider>,
+        path: VPath,
+        cache_dir: PathBuf,
+        room: Room,
+        password: Option<Password>,
+    ) -> Result<ArchiveProvider> {
         let handle: Arc<dyn ReadHandle> = Arc::from(source.open_read(&path, Lane::Interactive).await?);
         let head = read_block(handle.as_ref(), 0, BLOCK as usize).await?;
         let format = detect_format(&head, path.name().unwrap_or_default())
@@ -477,11 +480,12 @@ impl ArchiveProvider {
                         .unwrap_or(0),
                 };
                 let src = BlockSource::new(handle, tokio::runtime::Handle::current(), size, Some(head));
-                index_ranged(format, src, cache_dir).await?
+                index_ranged(format, src, cache_dir, room, password).await?
             }
             _ => {
-                let cache = download_to_cache(source.as_ref(), &path, &cache_dir).await?;
-                index_cached(format, cache, cache_dir).await?
+                let cache = download_to_cache(source.as_ref(), &path, &cache_dir, &room).await?;
+                let name = path.name().unwrap_or_default().to_vec();
+                index_cached(format, cache, cache_dir, room, password, name).await?
             }
         };
         Ok(ArchiveProvider {
@@ -493,19 +497,18 @@ impl ArchiveProvider {
         self.inner.format
     }
 
-    /// Entries refused because their names could escape the archive (or
-    /// collide with a folder); never listed, never extractable.
+    pub fn locked(&self) -> bool {
+        self.inner.password.is_some()
+    }
+
     pub fn skipped_entries(&self) -> usize {
         self.inner.index.skipped
     }
 
-    /// Ranged reads issued to the source so far (zip and plain tar; 0 for
-    /// archives that were downloaded).
     pub fn source_reads(&self) -> u64 {
         self.inner.blocks.as_ref().map_or(0, |b| b.read_count())
     }
 
-    /// Every entry below the root, parents before children.
     pub fn entries(&self) -> Vec<ArchiveEntry> {
         self.inner
             .index
@@ -545,52 +548,97 @@ async fn read_block(handle: &dyn ReadHandle, offset: u64, want: usize) -> Result
     Ok(data)
 }
 
-async fn index_ranged(format: ArchiveFormat, src: Arc<BlockSource>, cache_dir: PathBuf) -> Result<Inner> {
+async fn index_ranged(
+    format: ArchiveFormat,
+    src: Arc<BlockSource>,
+    cache_dir: PathBuf,
+    room: Room,
+    password: Option<Password>,
+) -> Result<Inner> {
     let reader_src = Arc::clone(&src);
-    let raw = tokio::task::spawn_blocking(move || match format {
-        ArchiveFormat::Zip => zipdir::read_entries(&mut reader_src.reader()),
-        _ => tarfmt::index_seek(reader_src.reader()),
-    })
-    .await
-    .map_err(join_err)??;
-    Ok(Inner {
-        format,
-        index: Index::build(raw),
-        blocks: Some(src),
-        cache: None,
-        cache_dir,
-    })
-}
-
-async fn index_cached(format: ArchiveFormat, cache: CacheFile, cache_dir: PathBuf) -> Result<Inner> {
-    let path = cache.0.clone();
-    let raw = tokio::task::spawn_blocking(move || {
-        let file = File::open(&path)?;
+    let (raw, password) = tokio::task::spawn_blocking(move || -> Result<_> {
         match format {
-            ArchiveFormat::Tar(comp) => {
-                tarfmt::index_stream(tarfmt::decoder(comp, io::BufReader::new(file))?)
+            ArchiveFormat::Zip => {
+                let raw = zipdir::read_entries(&mut reader_src.reader())?;
+                let locked = zipdir::check_password(&reader_src, &raw, password.as_ref())?;
+                Ok((raw, password.filter(|_| locked)))
             }
-            _ => sevenz::index(file),
+            _ => Ok((tarfmt::index_seek(reader_src.reader())?, None)),
         }
     })
     .await
     .map_err(join_err)??;
     Ok(Inner {
         format,
+        password,
+        index: Index::build(raw),
+        blocks: Some(src),
+        cache: None,
+        cache_dir,
+        room,
+        spill: Mutex::new(None),
+    })
+}
+
+async fn index_cached(
+    format: ArchiveFormat,
+    cache: CacheFile,
+    cache_dir: PathBuf,
+    room: Room,
+    password: Option<Password>,
+    name: Vec<u8>,
+) -> Result<Inner> {
+    let path = cache.0.clone();
+    let (raw, password) = tokio::task::spawn_blocking(move || -> Result<_> {
+        let file = File::open(&path)?;
+        match format {
+            ArchiveFormat::Tar(comp) => Ok((
+                tarfmt::index_stream(tarfmt::decoder(comp, io::BufReader::new(file))?)?,
+                None,
+            )),
+            ArchiveFormat::Single(comp) => Ok((
+                vec![tarfmt::index_single(
+                    tarfmt::decoder(comp, io::BufReader::new(file))?,
+                    single_name(&name),
+                )?],
+                None,
+            )),
+            _ => {
+                let (raw, locked) = sevenz::index(file, password.as_ref())?;
+                Ok((raw, password.filter(|_| locked)))
+            }
+        }
+    })
+    .await
+    .map_err(join_err)??;
+    Ok(Inner {
+        format,
+        password,
         index: Index::build(raw),
         blocks: None,
         cache: Some(cache),
         cache_dir,
+        room,
+        spill: Mutex::new(None),
     })
 }
 
-/// Sequential download of the whole archive into `dir` (PRV-10).
-async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> Result<CacheFile> {
+async fn download_to_cache(
+    source: &dyn Provider,
+    path: &VPath,
+    dir: &Path,
+    room: &Room,
+) -> Result<CacheFile> {
     tokio::fs::create_dir_all(dir).await?;
     let handle = source.open_read(path, Lane::Bulk).await?;
     let target = dir.join(unique_name("archive"));
     let guard = CacheFile(target.clone());
     let file = Arc::new(tokio::fs::File::create(&target).await?.into_std().await);
+    let need = handle.size().unwrap_or(0);
+    let (f, r) = (Arc::clone(&file), room.clone());
+    let mut meter = tokio::task::spawn_blocking(move || r.ensure(f.as_fd(), need).map(|()| r.meter()))
+        .await
+        .map_err(join_err)??;
     let mut offset = 0u64;
     loop {
         let chunk = handle.read_at(offset, 1 << 20).await?;
@@ -600,14 +648,16 @@ async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> R
         offset += chunk.len() as u64;
         let f = Arc::clone(&file);
         let at = offset - chunk.len() as u64;
-        tokio::task::spawn_blocking(move || f.write_all_at(&chunk, at))
-            .await
-            .map_err(join_err)??;
+        meter = tokio::task::spawn_blocking(move || -> Result<Meter> {
+            meter.before_write(f.as_fd(), chunk.len() as u64)?;
+            f.write_all_at(&chunk, at)?;
+            Ok(meter)
+        })
+        .await
+        .map_err(join_err)??;
     }
 }
 
-/// Forwards bytes to `inner`, dropping the first `skip` of them and reporting
-/// progress every 64 KiB.
 struct SinkWriter<W: Write> {
     inner: W,
     skip: u64,
@@ -657,7 +707,6 @@ impl<W: Write> Write for SinkWriter<W> {
     }
 }
 
-/// Collects up to `cap` bytes; more is an error (a lying size field).
 struct CapWriter {
     buf: Vec<u8>,
     cap: u64,
@@ -708,7 +757,6 @@ impl ReadHandle for MemoryHandle {
     }
 }
 
-/// A large entry extracted to an unlinked temporary file.
 struct TempFileHandle {
     file: Arc<File>,
     size: u64,
@@ -734,6 +782,31 @@ impl ReadHandle for TempFileHandle {
     }
 }
 
+struct FileRange {
+    file: Arc<File>,
+    at: u64,
+    left: u64,
+}
+
+impl FileRange {
+    fn new(file: Arc<File>, at: u64, len: u64) -> FileRange {
+        FileRange { file, at, left: len }
+    }
+}
+
+impl Read for FileRange {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let want = usize::try_from(self.left).unwrap_or(usize::MAX).min(buf.len());
+        if want == 0 {
+            return Ok(0);
+        }
+        let n = self.file.read_at(&mut buf[..want], self.at)?;
+        self.at += n as u64;
+        self.left -= n as u64;
+        Ok(n)
+    }
+}
+
 fn extract_to_temp(inner: &Inner, node: &Node) -> Result<File> {
     std::fs::create_dir_all(&inner.cache_dir)?;
     let path = inner.cache_dir.join(unique_name("entry"));
@@ -742,11 +815,10 @@ fn extract_to_temp(inner: &Inner, node: &Node) -> Result<File> {
         .write(true)
         .create_new(true)
         .open(&path)?;
-    // Unlinked at once: the data lives as long as the handle and cannot leak.
     std::fs::remove_file(&path)?;
-    let mut writer = io::BufWriter::new(&file);
+    let mut writer = io::BufWriter::new(inner.room.guard(&file, node.size)?);
     inner.copy_node(node, &mut writer)?;
-    writer.flush()?;
+    writer.flush().map_err(from_io)?;
     drop(writer);
     Ok(file)
 }
@@ -837,7 +909,7 @@ impl Provider for ArchiveProvider {
         self.run(move |inner| -> Result<Box<dyn ReadHandle>> {
             if node.size > MEMORY_LIMIT {
                 let file = extract_to_temp(inner, &node)?;
-                let size = file.metadata()?.len(); // NOSONAR: runs on the blocking pool
+                let size = file.metadata()?.len(); // NOSONAR
                 return Ok(Box::new(TempFileHandle {
                     file: Arc::new(file),
                     size,
@@ -877,14 +949,21 @@ impl Provider for ArchiveProvider {
         let node = node.clone();
         self.run(move |inner| {
             let total = node.size.saturating_sub(opts.offset);
-            let mut sink = SinkWriter::new(File::from(dst), opts.offset, total, progress);
+            let out = inner.room.guard(File::from(dst), total)?;
+            let mut sink = SinkWriter::new(out, opts.offset, total, progress);
             inner.copy_node(&node, &mut sink)?;
-            sink.finish().map_err(Error::from)
+            sink.finish().map_err(from_io)
         })
         .await
     }
 
-    async fn server_copy(&self, _from: &VPath, _to: &VPath, _opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        _from: &VPath,
+        _to: &VPath,
+        _opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         read_only()
     }
 

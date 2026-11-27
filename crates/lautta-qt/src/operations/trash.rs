@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TrashModel`: the *Trash* (OPS-8): list, restore, delete now, empty.
-//! Call `reload()` when the page opens; it also purges what is past the
-//! retention setting.
 
 use super::error_parts;
 use crate::runtime::{core, spawn_then};
 use lautta_core::app_operations::TrashEntry;
+use lautta_core::date_group::DateGroup;
 use lautta_core::trash::now_secs;
 use lautta_core::{Error, Result};
 use qmetaobject::prelude::*;
@@ -23,13 +21,20 @@ const ROLE_TRASHED_AT: i32 = 0x107;
 const ROLE_DAYS_LEFT: i32 = 0x108;
 const ROLE_MIME_TYPE: i32 = 0x109;
 const ROLE_THUMBNAIL: i32 = 0x10a;
+const ROLE_DATE_GROUP: i32 = 0x10b;
 
-/// Total bytes of the entries (unknown sizes count as zero).
 fn total_size(entries: &[TrashEntry]) -> i64 {
     entries
         .iter()
         .map(|e| i64::try_from(e.size.unwrap_or(0)).unwrap_or(i64::MAX))
         .fold(0i64, i64::saturating_add)
+}
+
+fn date_group(entry: &TrashEntry, now_secs: i64) -> DateGroup {
+    DateGroup::at(
+        entry.trashed_at.saturating_mul(1000),
+        now_secs.saturating_mul(1000),
+    )
 }
 
 #[derive(QObject, Default)]
@@ -51,7 +56,7 @@ pub struct TrashModel {
     emptied: qt_signal!(count: i32),
     failed: qt_signal!(kind: QString, message: QString),
 
-    entries: Vec<TrashEntry>,
+    entries: Vec<(TrashEntry, DateGroup)>,
 }
 
 impl QAbstractListModel for TrashModel {
@@ -60,7 +65,7 @@ impl QAbstractListModel for TrashModel {
     }
 
     fn data(&self, index: QModelIndex, role: i32) -> QVariant {
-        let Some(e) = usize::try_from(index.row())
+        let Some((e, group)) = usize::try_from(index.row())
             .ok()
             .and_then(|i| self.entries.get(i))
         else {
@@ -79,6 +84,7 @@ impl QAbstractListModel for TrashModel {
             ROLE_DAYS_LEFT => e.days_left.into(),
             ROLE_MIME_TYPE => text(&e.mime_type),
             ROLE_THUMBNAIL => text(&e.thumbnail_source),
+            ROLE_DATE_GROUP => text(group.name()),
             _ => QVariant::default(),
         }
     }
@@ -96,6 +102,7 @@ impl QAbstractListModel for TrashModel {
         names.insert(ROLE_DAYS_LEFT, "daysLeft".into());
         names.insert(ROLE_MIME_TYPE, "mimeType".into());
         names.insert(ROLE_THUMBNAIL, "thumbnailSource".into());
+        names.insert(ROLE_DATE_GROUP, "dateGroup".into());
         names
     }
 }
@@ -108,11 +115,10 @@ impl TrashModel {
             async move {
                 let now = now_secs();
                 tokio::task::spawn_blocking(move || {
-                    // What expired while the app was running goes first (OPS-8).
                     if let Err(e) = core.purge_trash(now) {
                         log::warn!("purging the Trash failed: {e}");
                     }
-                    core.trash_entries(now)
+                    core.trash_entries(now).map(|entries| (entries, now))
                 })
                 .await
                 .unwrap_or_else(|e| Err(Error::new(lautta_core::ErrorKind::Internal, e.to_string())))
@@ -120,8 +126,8 @@ impl TrashModel {
             move |res| {
                 let Some(p) = me.as_pinned() else { return };
                 match res {
-                    Ok(entries) => {
-                        p.borrow_mut().replace(entries);
+                    Ok((entries, now)) => {
+                        p.borrow_mut().replace(entries, now);
                         p.borrow().changed();
                     }
                     Err(e) => p.borrow().report(&e),
@@ -130,12 +136,18 @@ impl TrashModel {
         );
     }
 
-    fn replace(&mut self, entries: Vec<TrashEntry>) {
+    fn replace(&mut self, entries: Vec<TrashEntry>, now_secs: i64) {
+        self.totalSize = total_size(&entries);
         self.begin_reset_model();
-        self.entries = entries;
+        self.entries = entries
+            .into_iter()
+            .map(|e| {
+                let group = date_group(&e, now_secs);
+                (e, group)
+            })
+            .collect();
         self.end_reset_model();
         self.count = i32::try_from(self.entries.len()).unwrap_or(i32::MAX);
-        self.totalSize = total_size(&self.entries);
         self.loaded = true;
     }
 
@@ -149,7 +161,6 @@ impl TrashModel {
         self.changed();
     }
 
-    /// Runs `work` off the GUI thread, then tells the page and reloads.
     fn run<T, F>(&mut self, work: F, done: impl FnOnce(&TrashModel, T) + 'static)
     where
         T: Send + 'static,
@@ -193,7 +204,6 @@ impl TrashModel {
         });
     }
 
-    /// "Delete now" for one item (after its remorse).
     fn remove(&mut self, id: i64) {
         self.run(
             move |core| core.trash.delete(id),
@@ -201,7 +211,6 @@ impl TrashModel {
         );
     }
 
-    /// Empties the Trash (after the remorse popup).
     fn empty(&mut self) {
         self.run(
             |core| core.empty_trash(),
@@ -234,5 +243,19 @@ mod tests {
     fn sizes_add_up_and_unknown_counts_as_zero() {
         assert_eq!(total_size(&[]), 0);
         assert_eq!(total_size(&[entry(Some(5)), entry(None), entry(Some(7))]), 12);
+    }
+
+    #[test]
+    fn sections_follow_the_delete_time() {
+        let day = 86_400;
+        let now = 1_790_000_000;
+        let at = |secs_back: i64| TrashEntry {
+            trashed_at: now - secs_back,
+            ..entry(None)
+        };
+        assert_eq!(date_group(&at(0), now), DateGroup::Today);
+        assert_eq!(date_group(&at(3 * day), now), DateGroup::LastSevenDays);
+        assert_eq!(date_group(&at(12 * day), now), DateGroup::LastThirtyDays);
+        assert_eq!(date_group(&at(40 * day), now), DateGroup::Older);
     }
 }

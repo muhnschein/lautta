@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Error presentation (SPEC §20): one table of messages and actions for all
-//! providers (RS-8), plus the humanised sizes, rates and times used across
-//! the UI (§15.4). Messages name the location or item involved, never
-//! secrets (SEC-6).
 
 use crate::error::{Error, ErrorKind};
 
-/// Buttons a message can offer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiAction {
-    /// NVB-5: open the account's sign-in.
     UpdateSignIn,
-    /// NVB-5: review a changed server identity.
     ReviewInSettings,
     AccountSettings,
     ChooseAnotherFolder,
@@ -26,8 +19,6 @@ pub struct UiMessage {
     pub actions: Vec<UiAction>,
 }
 
-/// What the message is about. All parts are optional; wording falls back to
-/// "this location" and "this item".
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MessageContext {
     pub location: Option<String>,
@@ -93,8 +84,6 @@ fn msg(text: String, actions: &[UiAction]) -> UiMessage {
     }
 }
 
-/// The text of a message for `kind`; the first group is the §20 table
-/// verbatim, the rest follows its tone.
 fn text_for(kind: ErrorKind, ctx: &MessageContext) -> String {
     let (loc, it) = (ctx.loc(), ctx.it());
     match kind {
@@ -137,9 +126,10 @@ fn text_for_other(kind: ErrorKind, ctx: &MessageContext) -> String {
         ErrorKind::RateLimited => format!("{loc} asked Lautta to slow down. Trying again shortly."),
         ErrorKind::CrossesDevice => format!("{it} can't be moved to {loc} directly."),
         ErrorKind::LocationGone => format!("{loc} is no longer connected."),
+        ErrorKind::PasswordRequired => format!("{it} is locked. Open it and enter its password."),
+        ErrorKind::WrongPassword => format!("Wrong password for {it}."),
         ErrorKind::Io => format!("Something went wrong while accessing {it}."),
         ErrorKind::Internal => "Something went wrong inside Lautta.".to_owned(),
-        // The §20 group is handled by `text_for`; kept total for safety.
         _ => "Something went wrong.".to_owned(),
     }
 }
@@ -162,13 +152,10 @@ fn actions_for(kind: ErrorKind) -> &'static [UiAction] {
     }
 }
 
-/// The message and actions for `kind` (§20).
 pub fn message_for(kind: ErrorKind, ctx: &MessageContext) -> UiMessage {
     msg(text_for(kind, ctx), actions_for(kind))
 }
 
-/// Like [`message_for`], and adds *Details* whenever the error carries a
-/// protocol detail to show.
 pub fn message_for_error(err: &Error, ctx: &MessageContext) -> UiMessage {
     let mut m = message_for(err.kind, ctx);
     if err.detail.is_some() && !m.actions.contains(&UiAction::Details) {
@@ -179,7 +166,6 @@ pub fn message_for_error(err: &Error, ctx: &MessageContext) -> UiMessage {
 
 const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
 
-/// SI sizes as Sailfish shows them: "512 B", "1.5 kB", "1.2 GB".
 pub fn format_size(bytes: u64) -> String {
     let mut value = bytes as f64;
     let mut unit = 0;
@@ -194,12 +180,10 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
-/// "11.4 MB/s".
 pub fn format_rate(bytes_per_second: u64) -> String {
     format!("{}/s", format_size(bytes_per_second))
 }
 
-/// "12 s", "4 min", "1 h 5 min", "2 d 3 h".
 pub fn format_eta(seconds: u64) -> String {
     const MIN: u64 = 60;
     const HOUR: u64 = 3600;
@@ -228,8 +212,6 @@ pub fn format_eta(seconds: u64) -> String {
     }
 }
 
-/// The progress line of a transfer (§15.4): "1.2 GB of 4.0 GB · 11.4 MB/s ·
-/// 4 min". Unknown totals, rates and estimates are left out.
 pub fn transfer_line(done: u64, total: Option<u64>, rate: Option<u64>, eta_seconds: Option<u64>) -> String {
     let mut parts = vec![match total {
         Some(t) => format!("{} of {}", format_size(done), format_size(t)),

@@ -1,14 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Thumbnails of server PDFs (SPEC PRV-14; local ones are the system
-//! thumbnailer's, PRV-1): the first page, drawn by `lautta-pdf` as wide as
-//! the thumbnail and cut to a square from the top, as JPEG.
-//!
-//! A phone has the CPU for one page at a time: [`PdfThumbs`] lets a render
-//! wait for the one before it, also when the delegate that asked has gone
-//! (a render cannot be stopped). A PDF that cannot be drawn, a render that
-//! panicked included (RS-4), is remembered, so scrolling back to it costs
-//! nothing, and one whose render took the process down (stack overflow,
-//! out of memory) is marked on disk, so the next start does not try it again.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::panics::catch;
@@ -21,7 +11,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::sync::Semaphore;
 
-/// PDFs remembered as not drawable: the oldest are forgotten first.
 const MAX_REFUSED: usize = 256;
 
 fn unsupported(msg: &str) -> Error {
@@ -40,52 +29,34 @@ fn pdf_problem(e: PdfError) -> Error {
     unsupported(&e.to_string())
 }
 
-/// The first page of a PDF as a JPEG thumbnail: `size` pixels wide (less
-/// when the page is very tall, see `lautta_pdf::MAX_EDGE`) and, when the
-/// page is taller than wide, cut to a square from the top. Pure CPU work:
-/// call from a blocking context.
 pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     let doc = PdfDocument::open(bytes).map_err(pdf_problem)?;
-    let page = doc.render(0, size).map_err(pdf_problem)?;
-    let side = page.height.min(page.width);
-    let width = page.width as usize;
-    // Pages are drawn on white, so every pixel is opaque and the alpha
-    // channel can go. `RenderedPage` has 4 bytes per pixel, rows top to
-    // bottom, no padding: the indices stay within `rgba`.
-    let rgb = RgbImage::from_fn(page.width, side, |x, y| {
-        let at = (y as usize * width + x as usize) * 4;
+    let page = doc.render_top_left_square(0, size).map_err(pdf_problem)?;
+    let rgb = RgbImage::from_fn(page.width, page.height, |x, y| {
+        let at = (y as usize * page.width as usize + x as usize) * 4;
         Rgb([page.rgba[at], page.rgba[at + 1], page.rgba[at + 2]])
     });
     encode(&DynamicImage::ImageRgb8(rgb))
 }
 
-/// `draw(bytes, size)`, with a panic in it (a PDF that trips hayro or the
-/// code around it) as a refusal of the PDF, not the end of the app (RS-4).
 fn drawn(draw: Draw, bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     catch(|| draw(bytes, size)).unwrap_or_else(|_| Err(unsupported("drawing the PDF failed")))
 }
 
-/// What draws a thumbnail: [`first_page`]; tests give one that panics.
 type Draw = fn(Vec<u8>, u32) -> Result<Vec<u8>>;
 
-/// Runs `work` between a marker file and its removal. A marker that is
-/// there already means an earlier run did not end, and `work` does not run.
 fn guarded<T>(marker: &Path, work: impl FnOnce() -> Result<T>) -> Result<T> {
     if marker.exists() {
         return Err(unsupported("an earlier try at this PDF did not end"));
     }
     std::fs::write(marker, [])?;
     let made = work();
-    // Stays when the process is gone before this line.
     let _ = std::fs::remove_file(marker);
     made
 }
 
-/// Turns, memory and a record of failures for PDF thumbnails.
 pub struct PdfThumbs {
-    /// The one render at a time.
     gate: Arc<Semaphore>,
-    /// File versions that cannot be drawn, oldest first.
     refused: Mutex<VecDeque<String>>,
 }
 
@@ -99,8 +70,6 @@ impl Default for PdfThumbs {
 }
 
 impl PdfThumbs {
-    /// Whether `version` (a file's URI, mtime and etag, see
-    /// `thumbs::thumb_key` with size 0) was found not drawable.
     pub fn is_refused(&self, version: &str) -> bool {
         self.refused
             .lock()
@@ -109,7 +78,6 @@ impl PdfThumbs {
             .any(|v| v == version)
     }
 
-    /// Remembers `version` as not drawable; true when that is new.
     fn refuse(&self, version: &str) -> bool {
         let mut list = self.refused.lock().unwrap_or_else(PoisonError::into_inner);
         if list.iter().any(|v| v == version) {
@@ -122,10 +90,6 @@ impl PdfThumbs {
         true
     }
 
-    /// The thumbnail of the PDF behind `handle`, `size` pixels wide. A file
-    /// larger than `max_bytes` is not read. `dir` holds the marker files and
-    /// `version` names the file's version (see [`PdfThumbs::is_refused`]);
-    /// a PDF that cannot be drawn is refused from then on.
     pub async fn make(
         &self,
         dir: &Path,
@@ -138,7 +102,6 @@ impl PdfThumbs {
             .await
     }
 
-    /// [`PdfThumbs::make`], drawn by `draw`.
     async fn make_with(
         &self,
         draw: Draw,
@@ -154,8 +117,6 @@ impl PdfThumbs {
         if handle.size().is_some_and(|s| s > max_bytes) {
             return Err(too_large());
         }
-        // A file that grew or lied about its size is cut one byte past the
-        // limit, so nothing larger is held in memory.
         let bytes = read_all(handle, max_bytes.saturating_add(1)).await?;
         if bytes.len() as u64 > max_bytes {
             return Err(too_large());
@@ -173,9 +134,6 @@ impl PdfThumbs {
         made
     }
 
-    /// Runs `work` on the blocking pool when no other render runs. Dropping
-    /// the future before then cancels it; once it runs it goes on to its end
-    /// and holds its turn until then.
     async fn exclusive<T: Send + 'static>(&self, work: impl FnOnce() -> T + Send + 'static) -> Result<T> {
         let turn = Arc::clone(&self.gate).acquire_owned().await.map_err(internal)?;
         tokio::task::spawn_blocking(move || {
@@ -190,11 +148,10 @@ impl PdfThumbs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lautta_pdf::sample::{build, page, LOCKED_AES256, LOCKED_RC4, RED_SQUARE};
+    use lautta_pdf::sample::{build, page, LOCKED_AES256, LOCKED_RC4};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    /// A4 with a red square (50 pt) in the top left corner.
     const RED_TOP_LEFT: &str = "1 0 0 rg 0 792 50 50 re f";
     const BLUE_PAGE: &str = "0 0 1 rg 0 0 595 842 re f";
 
@@ -240,9 +197,15 @@ mod tests {
     }
 
     #[test]
-    fn a_landscape_page_is_whole() {
-        let out = first_page(build(&[page(300, 150, RED_SQUARE)]), 64).unwrap();
-        assert_eq!(pixels(&out).dimensions(), (64, 32));
+    fn a_landscape_page_is_cut_to_a_square_from_the_left() {
+        let content = "1 0 0 rg 0 100 50 50 re f 0 0 1 rg 150 0 150 150 re f";
+        let img = pixels(&first_page(build(&[page(300, 150, content)]), 64).unwrap());
+        assert_eq!(img.dimensions(), (64, 64), "as tall as asked, as wide as tall");
+        assert!(is_red(img.get_pixel(2, 2)), "the top left corner");
+        assert!(
+            is_white(img.get_pixel(60, 2)) && is_white(img.get_pixel(60, 60)),
+            "the blue right half is cut off"
+        );
     }
 
     #[test]
@@ -319,7 +282,6 @@ mod tests {
         assert_eq!(ran.load(Ordering::Relaxed), 0, "nothing renders unmarked");
     }
 
-    /// A handle over `data` that counts reads and may claim another size.
     struct Counting {
         data: Vec<u8>,
         size: Option<u64>,
@@ -495,7 +457,6 @@ mod tests {
         );
     }
 
-    /// A draw that trips over the PDF as hayro might.
     fn boom(_: Vec<u8>, _: u32) -> Result<Vec<u8>> {
         panic!("hayro tripped")
     }
@@ -527,15 +488,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pdfs = Arc::new(PdfThumbs::default());
         let turn = Arc::clone(&pdfs.gate).acquire_owned().await.unwrap();
-        let made = {
+        let mut made = {
             let (pdfs, path) = (Arc::clone(&pdfs), dir.path().to_path_buf());
             tokio::spawn(async move {
                 let h = Counting::new(pdf_bytes());
                 pdfs.make(&path, "v", &h, 32, 1_000_000).await
             })
         };
-        settle().await;
-        assert!(!made.is_finished(), "another render has the turn");
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), &mut made)
+                .await
+                .is_err(),
+            "another render has the turn"
+        );
         drop(turn);
         assert!(made.await.unwrap().is_ok(), "then it is made");
     }
@@ -565,8 +530,6 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    /// Jobs for `exclusive` that count how many run at once and wait for
-    /// `release`.
     struct Probe {
         running: AtomicUsize,
         peak: AtomicUsize,
@@ -587,6 +550,17 @@ mod tests {
         }
     }
 
+    async fn spin_until(cond: impl Fn() -> bool) {
+        let spin = async {
+            while !cond() {
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(30), spin)
+            .await
+            .expect("condition within 30 s");
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn only_one_render_runs_at_a_time() {
         let (release, wait) = std::sync::mpsc::channel();
@@ -603,9 +577,7 @@ mod tests {
                 tokio::spawn(async move { pdfs.exclusive(job).await })
             })
             .collect();
-        while probe.started.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        spin_until(|| probe.started.load(Ordering::SeqCst) > 0).await;
         settle().await;
         assert_eq!(
             probe.started.load(Ordering::SeqCst),
@@ -614,11 +586,11 @@ mod tests {
         );
         for done in 1..=4 {
             release.send(()).unwrap();
-            while probe.started.load(Ordering::SeqCst) < (done + 1).min(4)
-                || probe.running.load(Ordering::SeqCst) > 1
-            {
-                tokio::task::yield_now().await;
-            }
+            spin_until(|| {
+                probe.started.load(Ordering::SeqCst) >= (done + 1).min(4)
+                    && probe.running.load(Ordering::SeqCst) <= 1
+            })
+            .await;
         }
         for j in jobs {
             j.await.unwrap().unwrap();

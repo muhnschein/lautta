@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Executes one plan item: chooses the data path (XFR-3), moves the bytes
-//! through a scratch fd (NVB-9), names temporaries (NVB-11), resumes
-//! (XFR-12), verifies (XFR-4) and finishes moves (OPS-4).
-//!
-//! Nothing here touches queue state; the engine feeds in an [`ItemEnv`] and a
-//! [`ItemJob`] and acts on the [`Outcome`].
 
 use super::conflict::{build_conflict, decide, numbered_name, Decision, WriteMode};
 use super::model::TransferOptions;
@@ -16,19 +10,17 @@ use crate::provider::{
     list_all, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadOptions,
     RenameMode, WriteOptions,
 };
+use crate::room::Room;
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use std::fs::File;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-/// Longest temp name prefix taken from the original name; names are limited
-/// to 255 bytes on most file systems and the suffix needs room.
 const MAX_TEMP_STEM: usize = 200;
 
-/// Everything an item needs from the outside.
 #[derive(Clone)]
 pub struct ItemEnv {
     pub src: Arc<dyn Provider>,
@@ -36,18 +28,16 @@ pub struct ItemEnv {
     pub same_location: bool,
     pub op: OperationKind,
     pub options: TransferOptions,
-    /// Where anonymous scratch files live.
     pub scratch_dir: PathBuf,
+    pub room: Room,
     pub trasher: Option<Arc<dyn Trasher>>,
-    /// Bytes of this item done so far.
     pub progress: ProgressSink,
+    pub commit: Arc<dyn Fn(bool) -> bool + Send + Sync>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ItemJob {
     pub plan: PlanItem,
-    /// Name of the destination temporary (NVB-11), fixed before the first
-    /// attempt so a later run finds the partial file.
     pub temp_name: Vec<u8>,
 }
 
@@ -55,17 +45,11 @@ pub struct ItemJob {
 pub enum Outcome {
     Done,
     Skipped,
-    /// The item and everything below it is finished (renamed folder,
-    /// trashed or recursively deleted subtree).
     Subtree,
-    /// A conflict needs an answer.
     Ask(Conflict),
-    /// *Keep both*: use this destination instead and run again.
     KeepBoth(Uri),
 }
 
-/// `.<name>.lautta-<shortid>.part` (NVB-11). The short id is derived from the
-/// transfer and item so the same item always finds its partial file.
 pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     let t = u32::try_from(transfer & 0xffff_ffff).unwrap_or(0);
     let short = t.wrapping_mul(0x9E37_79B1) ^ seq;
@@ -76,9 +60,6 @@ pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     out
 }
 
-/// The checksum algorithm both sides can compute, if any (XFR-4). A provider
-/// that advertises `Checksums` without listing algorithms is assumed to do
-/// SHA-256.
 pub fn common_algorithm(a: &Capabilities, b: &Capabilities) -> Option<String> {
     const PREFERRED: [&str; 3] = ["sha256", "sha1", "md5"];
     if !a.has(cap::CHECKSUMS) || !b.has(cap::CHECKSUMS) {
@@ -125,6 +106,21 @@ async fn remove_if_exists(p: &dyn Provider, path: &VPath) -> Result<()> {
     }
 }
 
+fn add_only(env: &ItemEnv) -> bool {
+    env.dst.capabilities().has(cap::NO_CHANGE)
+}
+
+fn hidden(env: &ItemEnv, e: &Error) -> bool {
+    e.kind == ErrorKind::PermissionDenied && !env.dst.capabilities().readable()
+}
+
+async fn stat_dst(env: &ItemEnv, path: &VPath) -> std::result::Result<Option<Entry>, Option<Error>> {
+    match stat_opt(&*env.dst, path).await {
+        Err(e) if hidden(env, &e) => Err(None),
+        other => other.map_err(Some),
+    }
+}
+
 fn is_move(env: &ItemEnv) -> bool {
     env.op == OperationKind::Move
 }
@@ -137,9 +133,16 @@ fn rename_mode(mode: WriteMode) -> RenameMode {
     }
 }
 
-/// Rename failures that only mean "not possible here": fall back to copying.
 fn rename_unavailable(e: &Error) -> bool {
     matches!(e.kind, ErrorKind::CrossesDevice | ErrorKind::Unsupported)
+}
+
+fn commit(env: &ItemEnv, on: bool) -> Result<()> {
+    if (env.commit)(on) {
+        Ok(())
+    } else {
+        Err(Error::kind(ErrorKind::Canceled))
+    }
 }
 
 fn temp_path(dst: &Uri, temp_name: &[u8]) -> Result<VPath> {
@@ -149,7 +152,6 @@ fn temp_path(dst: &Uri, temp_name: &[u8]) -> Result<VPath> {
         .join(temp_name)
 }
 
-/// Removes a leftover temporary (best effort).
 pub async fn cleanup_temp(dst: &dyn Provider, job: &ItemJob) {
     if let Ok(p) = temp_path(&job.plan.dst, &job.temp_name) {
         if let Err(e) = remove_if_exists(dst, &p).await {
@@ -158,13 +160,22 @@ pub async fn cleanup_temp(dst: &dyn Provider, job: &ItemJob) {
     }
 }
 
-// ---------------------------------------------------------------- files
-
 async fn run_file(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let can_resume = env.dst.capabilities().has(cap::RESUME_UPLOAD);
-    let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, can_resume) {
+    let add_only = add_only(env);
+    let existing = match stat_dst(env, &plan.dst.path).await {
+        Ok(existing) => existing,
+        Err(None) => return keep_both(env, plan).await,
+        Err(Some(e)) => return Err(e),
+    };
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        can_resume,
+        add_only,
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,
@@ -172,9 +183,11 @@ async fn run_file(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     };
     match place_file(env, job, mode).await {
         Err(e) if e.kind == ErrorKind::AlreadyExists && !mode.replace => {
-            match stat_opt(&*env.dst, &plan.dst.path).await? {
-                Some(d) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume))),
-                None => Err(e),
+            match stat_dst(env, &plan.dst.path).await {
+                Ok(Some(d)) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume, add_only))),
+                Ok(None) => Err(e),
+                Err(None) => keep_both(env, plan).await,
+                Err(Some(s)) => Err(s),
             }
         }
         other => other.map(|()| Outcome::Done),
@@ -188,18 +201,18 @@ async fn place_file(env: &ItemEnv, job: &ItemJob, mode: WriteMode) -> Result<()>
         return Err(Error::kind(ErrorKind::IsADirectory));
     }
     if env.same_location && is_move(env) && !mode.resume {
+        commit(env, true)?;
         match env
             .dst
             .rename(&plan.src.path, &plan.dst.path, rename_mode(mode))
             .await
         {
             Ok(()) => return Ok(()),
-            Err(e) if rename_unavailable(&e) => {}
+            Err(e) if rename_unavailable(&e) => commit(env, false)?,
             Err(e) => return Err(e),
         }
     }
     let caps = env.dst.capabilities();
-    // AtomicPut backends are written directly; so is an in-place resume.
     let temp_used = !(caps.has(cap::ATOMIC_PUT) || mode.resume);
     let write_path = if temp_used {
         temp_path(&plan.dst, &job.temp_name)?
@@ -238,12 +251,11 @@ async fn server_copy_to(
                 replace: !temp_used && mode.replace,
                 preserve_mtime: env.options.preserve_mtime,
             },
+            env.progress.clone(),
         )
         .await
 }
 
-/// XFR-12: the committed offset is the size of the partial file at the
-/// destination. Providers without `ResumeUpload` restart the file.
 async fn committed_offset(
     env: &ItemEnv,
     write_path: &VPath,
@@ -279,7 +291,6 @@ fn clamp_to(done: u64, total: Option<u64>) -> u64 {
     total.map_or(done, |t| done.min(t))
 }
 
-/// Download and upload both count for half of the item's progress.
 fn phase_sinks(report: ProgressSink, base: u64, total: Option<u64>) -> (ProgressSink, ProgressSink) {
     let down = Arc::new(AtomicU64::new(base));
     let up = Arc::new(AtomicU64::new(base));
@@ -301,10 +312,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> std::io::Result<T> + Se
         .map_err(Error::from)
 }
 
-/// download_into(src -> scratch fd), then upload_from(scratch fd -> dst). A
-/// scratch file rather than a pipe: providers write with `pwrite` at explicit
-/// offsets (NVB-9), which a pipe cannot take, and resuming needs a seekable
-/// source.
 async fn stream_to(
     env: &ItemEnv,
     job: &ItemJob,
@@ -319,12 +326,20 @@ async fn stream_to(
         return Ok(());
     }
     let plan = &job.plan;
+    if let Some(fd) = env.src.open_local(&plan.src.path).await? {
+        return upload_direct(env, job, write_path, offset, total, mode, src_entry, fd).await;
+    }
     let dir = env.scratch_dir.clone();
     let scratch = blocking(move || {
-        std::fs::create_dir_all(&dir)?; // NOSONAR: runs on the blocking pool
+        std::fs::create_dir_all(&dir)?; // NOSONAR
         tempfile::tempfile_in(dir)
     })
     .await?;
+    let (room, probe) = (env.room.clone(), scratch.try_clone().map_err(Error::from)?);
+    let need = total.unwrap_or(0).saturating_sub(offset);
+    tokio::task::spawn_blocking(move || room.ensure(probe.as_fd(), need))
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
     let (down, up) = phase_sinks(env.progress.clone(), offset, total);
     let fd = OwnedFd::from(scratch.try_clone().map_err(Error::from)?);
     env.src
@@ -337,15 +352,8 @@ async fn stream_to(
             "the source changed or ended early while reading",
         ));
     }
-    let disposition = if offset > 0 {
-        Disposition::Resume
-    } else if mode.replace && !write_path_is_temp(job, write_path) {
-        Disposition::Truncate
-    } else {
-        Disposition::Create
-    };
     let opts = WriteOptions {
-        disposition,
+        disposition: disposition(job, write_path, offset, mode),
         offset,
         size: Some(len),
         modified: wanted_mtime(env, plan, src_entry),
@@ -356,13 +364,54 @@ async fn stream_to(
         .await
 }
 
+#[allow(clippy::too_many_arguments)]
+async fn upload_direct(
+    env: &ItemEnv,
+    job: &ItemJob,
+    write_path: &VPath,
+    offset: u64,
+    total: Option<u64>,
+    mode: WriteMode,
+    src_entry: &Entry,
+    fd: OwnedFd,
+) -> Result<()> {
+    let file = File::from(fd);
+    let len = file_len(&file).await?;
+    if total.is_some_and(|t| t != len) {
+        return Err(Error::new(
+            ErrorKind::Io,
+            "the source changed or ended early while reading",
+        ));
+    }
+    let opts = WriteOptions {
+        disposition: disposition(job, write_path, offset, mode),
+        offset,
+        size: Some(len),
+        modified: wanted_mtime(env, &job.plan, src_entry),
+        mode: wanted_mode(env, src_entry),
+    };
+    env.dst
+        .upload_from(OwnedFd::from(file), write_path, opts, env.progress.clone())
+        .await
+}
+
+fn disposition(job: &ItemJob, write_path: &VPath, offset: u64, mode: WriteMode) -> Disposition {
+    if offset > 0 {
+        Disposition::Resume
+    } else if mode.replace && !write_path_is_temp(job, write_path) {
+        Disposition::Truncate
+    } else {
+        Disposition::Create
+    }
+}
+
 fn write_path_is_temp(job: &ItemJob, write_path: &VPath) -> bool {
     write_path.name() == Some(job.temp_name.as_slice())
 }
 
 async fn file_len(f: &File) -> Result<u64> {
     let f = f.try_clone().map_err(Error::from)?;
-    blocking(move || f.metadata().map(|m| m.len())).await // NOSONAR: runs on the blocking pool
+    blocking(move || f.metadata().map(|m| m.len())).await // NOSONAR
 }
 
 fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time::SystemTime> {
@@ -372,7 +421,6 @@ fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time
     src.modified.or_else(|| plan.mtime_ms.map(ms_to_system_time))
 }
 
-/// OPS-5: modes only when the user enabled it and both sides support them.
 fn wanted_mode(env: &ItemEnv, src: &Entry) -> Option<u32> {
     let both = env.src.capabilities().has(cap::PERMISSIONS) && env.dst.capabilities().has(cap::PERMISSIONS);
     (env.options.preserve_mode && both).then_some(src.mode).flatten()
@@ -386,8 +434,6 @@ fn digests_match(a: &[u8], b: &[u8]) -> Result<()> {
     }
 }
 
-/// XFR-4: compares checksums when both sides can compute one. A provider
-/// that turns out not to support it just skips the check.
 async fn verify_checksum(env: &ItemEnv, src: &VPath, dst: &VPath) -> Result<()> {
     let Some(alg) = common_algorithm(&env.src.capabilities(), &env.dst.capabilities()) else {
         return Ok(());
@@ -422,8 +468,6 @@ async fn apply_attributes(
     }
 }
 
-/// Size check (always), checksum (when asked or moving), attributes, and the
-/// final rename out of the temporary name.
 async fn finish_placement(
     env: &ItemEnv,
     job: &ItemJob,
@@ -444,6 +488,7 @@ async fn finish_placement(
     }
     apply_attributes(env, write_path, &got, plan, src_entry).await?;
     if temp_used {
+        commit(env, true)?;
         env.dst
             .rename(write_path, &plan.dst.path, rename_mode(mode))
             .await?;
@@ -477,25 +522,37 @@ async fn keep_both(env: &ItemEnv, plan: &PlanItem) -> Result<Outcome> {
     let is_dir = plan.kind == Kind::Dir;
     for n in 2..1000 {
         let candidate = parent.join(&numbered_name(name, n, is_dir))?;
-        if stat_opt(&*env.dst, &candidate.path).await?.is_none() {
-            return Ok(Outcome::KeepBoth(candidate));
+        match stat_dst(env, &candidate.path).await {
+            Ok(None) => return Ok(Outcome::KeepBoth(candidate)),
+            Ok(Some(_)) | Err(None) => {}
+            Err(Some(e)) => return Err(e),
         }
     }
     Err(Error::new(ErrorKind::AlreadyExists, "no free name for the copy"))
 }
 
-// ------------------------------------------------------ folders, links
-
 async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let can_resume = env.dst.capabilities().has(cap::RESUME_UPLOAD);
-    let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, can_resume) {
+    let add_only = add_only(env);
+    let existing = match stat_dst(env, &plan.dst.path).await {
+        Ok(existing) => existing,
+        Err(None) => return keep_both(env, plan).await,
+        Err(Some(e)) => return Err(e),
+    };
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        can_resume,
+        add_only,
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,
         Decision::Ask(c) => return Ok(Outcome::Ask(c)),
     };
+    commit(env, true)?;
     if env.same_location && is_move(env) && !mode.merge {
         match env
             .dst
@@ -509,9 +566,11 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     }
     match env.dst.make_dir(&plan.dst.path, !mode.merge).await {
         Ok(()) => Ok(Outcome::Done),
-        Err(e) if e.kind == ErrorKind::AlreadyExists => match stat_opt(&*env.dst, &plan.dst.path).await? {
-            Some(d) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume))),
-            None => Err(e),
+        Err(e) if e.kind == ErrorKind::AlreadyExists => match stat_dst(env, &plan.dst.path).await {
+            Ok(Some(d)) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume, add_only))),
+            Ok(None) => Err(e),
+            Err(None) => keep_both(env, plan).await,
+            Err(Some(s)) => Err(s),
         },
         Err(e) => Err(e),
     }
@@ -520,7 +579,13 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
 async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, false) {
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        false,
+        add_only(env),
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,
@@ -530,6 +595,7 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
         Some(t) => t.clone(),
         None => env.src.read_link(&plan.src.path).await?,
     };
+    commit(env, true)?;
     if mode.replace {
         env.dst.remove_file(&plan.dst.path).await?;
     }
@@ -540,16 +606,16 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     Ok(Outcome::Done)
 }
 
-// --------------------------------------------------------------- deletes
-
 async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     if env.options.trash {
+        commit(env, true)?;
         let trashed = match &env.trasher {
             Some(t) => t.trash(&plan.src).await?,
             None => false,
         };
         if !trashed {
+            commit(env, false)?;
             remove_tree(&*env.src, &plan.src.path, plan.kind == Kind::Dir).await?;
         }
         return Ok(Outcome::Subtree);
@@ -565,8 +631,6 @@ async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     }
 }
 
-/// Deletes a folder with everything in it. Files go as they are found;
-/// folders afterwards, deepest first.
 pub async fn remove_tree(p: &dyn Provider, root: &VPath, is_dir: bool) -> Result<()> {
     if !is_dir {
         return remove_if_exists(p, root).await;
@@ -636,8 +700,10 @@ mod tests {
             op,
             options: TransferOptions::default(),
             scratch_dir: std::env::temp_dir(),
+            room: Room::default(),
             trasher: None,
             progress: no_progress(),
+            commit: Arc::new(|_| true),
         }
     }
 
@@ -748,6 +814,96 @@ mod tests {
         run_item(&e, &job(item("a", "b", Kind::File, 4))).await.unwrap();
         assert_eq!(q.read_file("b").unwrap(), b"data");
         assert!(q.calls().join("|").contains("upload_from"));
+    }
+
+    #[tokio::test]
+    async fn same_location_local_copy_reports_progress() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+        let local: Arc<dyn Provider> = Arc::new(crate::provider::local::LocalProvider::new(d.path().into()));
+        let seen = Arc::new(AtomicU64::new(0));
+        let s2 = seen.clone();
+        let e = ItemEnv {
+            src: local.clone(),
+            dst: local,
+            same_location: true,
+            op: OperationKind::Copy,
+            options: TransferOptions::default(),
+            scratch_dir: d.path().join("scratch"),
+            room: Room::default(),
+            trasher: None,
+            progress: Arc::new(move |done, _| s2.store(done, Ordering::SeqCst)),
+            commit: Arc::new(|_| true),
+        };
+        let out = run_item(&e, &job(item("a", "b", Kind::File, 9 << 20))).await;
+        assert_eq!(out.unwrap(), Outcome::Done);
+        assert_eq!(seen.load(Ordering::SeqCst), 9 << 20);
+        assert!(!d.path().join("scratch").exists(), "no streaming through scratch");
+    }
+
+    fn disk_of(capacity: u64) -> Room {
+        Room::new(
+            0,
+            Arc::new(move |fd| {
+                let used = rustix::fs::fstat(fd)?.st_size.unsigned_abs();
+                Ok(crate::sys::VfsInfo {
+                    free: capacity.saturating_sub(used),
+                    total: capacity,
+                    used,
+                    read_only: false,
+                    name_max: 255,
+                })
+            }),
+        )
+    }
+
+    async fn extract_bomb(capacity: u64) -> (Result<Outcome>, MemoryProvider, tempfile::TempDir) {
+        use std::io::Write as _;
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        w.start_file("bomb.bin", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        w.write_all(&vec![0u8; 8 << 20]).unwrap();
+        let zip = w.finish().unwrap().into_inner();
+        let holder = MemoryProvider::default();
+        holder.add_file("a.zip", &zip, 0);
+        let d = tempfile::tempdir().unwrap();
+        let archive = crate::provider::archive::ArchiveProvider::open(
+            Arc::new(holder),
+            vp("a.zip"),
+            d.path().join("archives"),
+            disk_of(u64::MAX),
+            None,
+        )
+        .await
+        .unwrap();
+        let dst = plain();
+        dst.add_dir("out");
+        let e = ItemEnv {
+            src: Arc::new(archive),
+            scratch_dir: d.path().join("scratch"),
+            room: disk_of(capacity),
+            op: OperationKind::Extract,
+            ..env(&MemoryProvider::default(), &dst, false, OperationKind::Extract)
+        };
+        let out = run_item(&e, &job(item("bomb.bin", "out/bomb.bin", Kind::File, 8 << 20))).await;
+        (out, dst, d)
+    }
+
+    #[tokio::test]
+    async fn archive_entry_bigger_than_free_space_fails_before_the_scratch_copy() {
+        let (out, dst, _d) = extract_bomb((8 << 20) - 1).await;
+        assert_eq!(out.err().map(|e| e.kind), Some(ErrorKind::NoSpace));
+        assert_eq!(
+            dst.calls()
+                .iter()
+                .filter(|c| c.starts_with("upload_from"))
+                .count(),
+            0
+        );
+        assert!(!dst.exists("out/bomb.bin"));
+        let (out, dst, _d) = extract_bomb(8 << 20).await;
+        assert_eq!(out.unwrap(), Outcome::Done, "a disk with room extracts it");
+        assert_eq!(dst.read_file("out/bomb.bin").unwrap().len(), 8 << 20);
     }
 
     #[tokio::test]
@@ -941,11 +1097,12 @@ mod tests {
         src.add_file("f", b"new", 1);
         let j = job(item("f", "f", Kind::File, 3));
         let temp = String::from_utf8(j.temp_name.clone()).unwrap();
+        dst.fail_next("stat", "f", Error::kind(ErrorKind::NotFound));
         dst.fail_next("rename", &temp, Error::kind(ErrorKind::AlreadyExists));
         dst.add_file("f", b"appeared", 1);
         let e = env(&src, &dst, false, OperationKind::Copy);
-        // The stat before writing already sees the file, so the question comes first.
         assert!(matches!(run_item(&e, &j).await.unwrap(), Outcome::Ask(_)));
+        assert_eq!(dst.read_file("f").unwrap(), b"appeared");
     }
 
     #[tokio::test]
@@ -1141,5 +1298,23 @@ mod tests {
         let err = run_item(&e, &j).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::PermissionDenied);
         assert!(dst.paths().is_empty(), "{:?}", dst.paths());
+    }
+
+    #[test]
+    fn disposition_truncates_only_a_replaced_target_written_in_place() {
+        let j = job(item("f", "out/f", Kind::File, 5));
+        let temp = vp("out").join(&j.temp_name).unwrap();
+        let replace = WriteMode {
+            replace: true,
+            ..WriteMode::default()
+        };
+        let target = vp("out/f");
+        assert_eq!(disposition(&j, &target, 3, replace), Disposition::Resume);
+        assert_eq!(disposition(&j, &target, 0, replace), Disposition::Truncate);
+        assert_eq!(disposition(&j, &temp, 0, replace), Disposition::Create);
+        assert_eq!(
+            disposition(&j, &target, 0, WriteMode::default()),
+            Disposition::Create
+        );
     }
 }

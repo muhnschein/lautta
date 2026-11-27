@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Error presentation (SPEC §20): one message per core ErrorKind name.
-// context: { location, item, needed, free } (sizes in bytes; any may be absent).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -8,8 +6,6 @@ function _size(bytes) {
     return Silica.Format.formatFileSize(bytes)
 }
 
-// `named` with the subject filled in, or `unnamed` when there is none, so a
-// message never reads " no longer exists.".
 function _pick(subject, named, unnamed) {
     return subject ? named.arg(subject) : unnamed
 }
@@ -27,9 +23,9 @@ function message(kind, context) {
                      qsTrId("lautta-err-auth-failed-unnamed"))
     case "ServerIdentityChanged":
         return _pick(loc,
-                     //% "%1 is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection."
+                     //% "%1 is not presenting the identity saved for it. If you didn't reinstall or change this server, someone may be intercepting the connection."
                      qsTrId("lautta-err-identity-changed"),
-                     //% "The server is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection."
+                     //% "The server is not presenting the identity saved for it. If you didn't reinstall or change it, someone may be intercepting the connection."
                      qsTrId("lautta-err-identity-changed-unnamed"))
     case "ServerIdentityUnknown":
         return _pick(loc,
@@ -46,6 +42,12 @@ function message(kind, context) {
     case "NoSpace":
         return _noSpace(loc, c)
     case "PermissionDenied":
+        if (c.open)
+            return _pick(item || loc,
+                         //% "You don't have permission to open %1."
+                         qsTrId("lautta-err-permission-open"),
+                         //% "You don't have permission to open this."
+                         qsTrId("lautta-err-permission-open-unnamed"))
         return _pick(item || loc,
                      //% "You don't have permission to change %1."
                      qsTrId("lautta-err-permission"),
@@ -76,6 +78,12 @@ function message(kind, context) {
                      qsTrId("lautta-err-unsupported"),
                      //% "This location can't do this."
                      qsTrId("lautta-err-unsupported-unnamed"))
+    case "NotPlayable":
+        return _pick(item,
+                     //% "Can't play %1."
+                     qsTrId("lautta-err-not-playable"),
+                     //% "Can't play this file."
+                     qsTrId("lautta-err-not-playable-unnamed"))
     case "BridgeUnavailable":
         //% "Network locations are unavailable right now."
         return qsTrId("lautta-err-bridge-gone")
@@ -85,6 +93,18 @@ function message(kind, context) {
                      qsTrId("lautta-err-location-gone"),
                      //% "The server is no longer connected."
                      qsTrId("lautta-err-location-gone-unnamed"))
+    case "PasswordRequired":
+        return _pick(item,
+                     //% "%1 is locked. Open it and enter its password."
+                     qsTrId("lautta-err-password-required"),
+                     //% "The file is locked. Open it and enter its password."
+                     qsTrId("lautta-err-password-required-unnamed"))
+    case "WrongPassword":
+        return _pick(item,
+                     //% "Wrong password for %1."
+                     qsTrId("lautta-err-wrong-password"),
+                     //% "Wrong password."
+                     qsTrId("lautta-err-wrong-password-unnamed"))
     case "Sandbox":
         //% "Lautta isn't allowed to read this file."
         return qsTrId("lautta-err-sandbox")
@@ -120,7 +140,7 @@ function message(kind, context) {
                      //% "The server is busy. Try again in a moment."
                      qsTrId("lautta-err-busy-unnamed"))
     case "Canceled":
-        //% "Canceled"
+        //% "Cancelled"
         return qsTrId("lautta-err-canceled")
     default:
         //% "Something went wrong."
@@ -143,7 +163,6 @@ function _noSpace(loc, c) {
                  qsTrId("lautta-err-no-space-unnamed"))
 }
 
-// Actions offered with the message (§20).
 function actions(kind) {
     switch (kind) {
     case "AuthFailed": return ["updateSignIn"]

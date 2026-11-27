@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! An in-memory provider: the test double for planners, transfers, search and
-//! sync. Capabilities are configurable so tests can exercise capability-driven
-//! behaviour (SPEC ARC-4) without a real file system or bridge.
 
 use super::{
     AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle, ReadOptions,
@@ -13,11 +10,12 @@ use crate::vpath::VPath;
 use async_trait::async_trait;
 use sha2::Digest;
 use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, Clone)]
 enum Node {
@@ -38,15 +36,19 @@ enum Node {
 #[derive(Default)]
 struct State {
     nodes: BTreeMap<VPath, Node>,
-    /// Errors injected per path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
-    /// Where the location sits on its server: absolute link targets below
-    /// it resolve into the tree, others point outside (empty: at `/`).
+    checksums: HashMap<VPath, Vec<u8>>,
+    holds: HashMap<(String, VPath), (oneshot::Sender<()>, oneshot::Receiver<()>)>,
     root_at: Vec<u8>,
+    deep_etags: bool,
 }
 
-/// Thread-safe in-memory tree. The root always exists.
+pub struct Hold {
+    pub reached: oneshot::Receiver<()>,
+    pub release: oneshot::Sender<()>,
+}
+
 #[derive(Clone)]
 pub struct MemoryProvider {
     state: Arc<Mutex<State>>,
@@ -87,15 +89,17 @@ impl MemoryProvider {
         }
     }
 
-    /// The location starts at `dir` of its server (`/home/alice` for an
-    /// SFTP account): absolute link targets are written against the
-    /// server's root, and relative ones may climb out of `dir` and back.
     pub fn rooted_at(self, dir: &str) -> MemoryProvider {
         self.lock().root_at = dir.trim_end_matches('/').as_bytes().to_vec();
         self
     }
 
-    /// Listing batch size (to test batched delivery).
+    pub fn with_deep_etags(mut self) -> MemoryProvider {
+        self.lock().deep_etags = true;
+        self.caps.raw.insert(cap::DEEP_ETAGS.to_owned());
+        self
+    }
+
     pub fn with_batch(mut self, batch: usize) -> MemoryProvider {
         self.batch = batch.max(1);
         self
@@ -112,7 +116,6 @@ impl MemoryProvider {
         VPath::parse(path.as_bytes()).unwrap_or_default()
     }
 
-    /// Adds a file (and missing parent folders) with an mtime in ms.
     pub fn add_file(&self, path: &str, data: &[u8], mtime_ms: i64) {
         let p = Self::vp(path);
         let mut st = self.lock();
@@ -135,6 +138,17 @@ impl MemoryProvider {
             mtime: SystemTime::UNIX_EPOCH,
             mode: 0o755,
         });
+    }
+
+    pub fn set_mtime(&self, path: &str, mtime_ms: i64) {
+        let p = Self::vp(path);
+        let mut st = self.lock();
+        match st.nodes.get_mut(&p) {
+            Some(Node::Dir { mtime, .. }) | Some(Node::File { mtime, .. }) => {
+                *mtime = crate::entry::ms_to_system_time(mtime_ms);
+            }
+            _ => {}
+        }
     }
 
     pub fn add_symlink(&self, path: &str, target: &str) {
@@ -160,7 +174,6 @@ impl MemoryProvider {
         self.lock().nodes.contains_key(&Self::vp(path))
     }
 
-    /// All paths, sorted (for assertions).
     pub fn paths(&self) -> Vec<String> {
         self.lock()
             .nodes
@@ -170,7 +183,10 @@ impl MemoryProvider {
             .collect()
     }
 
-    /// Makes the next `op` on `path` fail with `err` (queued, consumed in order).
+    pub fn answer_checksum(&self, path: &str, digest: &[u8]) {
+        self.lock().checksums.insert(Self::vp(path), digest.to_vec());
+    }
+
     pub fn fail_next(&self, op: &str, path: &str, err: Error) {
         self.lock()
             .failures
@@ -179,7 +195,37 @@ impl MemoryProvider {
             .push(err);
     }
 
-    /// Names of operations called so far, as `"op path"`.
+    pub fn hold_next(&self, op: &str, path: &str) -> Hold {
+        let (reached_tx, reached) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        self.lock()
+            .holds
+            .insert((op.to_owned(), Self::vp(path)), (reached_tx, release_rx));
+        Hold { reached, release }
+    }
+
+    async fn held(&self, op: &str, path: &VPath) {
+        let hold = self.lock().holds.remove(&(op.to_owned(), path.clone()));
+        let Some((reached, mut release)) = hold else {
+            return;
+        };
+        let mut reached = Some(reached);
+        std::future::poll_fn(|cx| match std::pin::Pin::new(&mut release).poll(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => {
+                if let Some(r) = reached.take() {
+                    let _ = r.send(());
+                }
+                std::task::Poll::Pending
+            }
+        })
+        .await;
+    }
+
+    pub fn clear_calls(&self) {
+        self.lock().calls.clear();
+    }
+
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -203,6 +249,26 @@ impl MemoryProvider {
         }
     }
 
+    fn deep_etag(st: &State, dir: &VPath) -> Vec<u8> {
+        let mut hash = sha2::Sha256::new();
+        for (path, node) in st.nodes.iter().filter(|(p, _)| *p != dir && p.starts_with(dir)) {
+            hash.update(path.as_bytes());
+            let (kind, size, mtime) = match node {
+                Node::File { data, mtime, .. } => (1u8, data.len(), Some(*mtime)),
+                Node::Dir { mtime, .. } => (2, 0, Some(*mtime)),
+                Node::Link { target } => (3, target.len(), None),
+            };
+            hash.update([0, kind]);
+            hash.update(size.to_le_bytes());
+            hash.update(mtime.map_or(0, crate::entry::system_time_to_ms).to_le_bytes());
+        }
+        hash.finalize()
+            .iter()
+            .take(8)
+            .flat_map(|b| format!("{b:02x}").into_bytes())
+            .collect()
+    }
+
     fn entry_for(path: &VPath, node: &Node, st: &State, follow: bool) -> Entry {
         let name = path.name().unwrap_or(b"");
         match node {
@@ -217,6 +283,9 @@ impl MemoryProvider {
                 let mut e = Entry::new(name, Kind::Dir);
                 e.modified = Some(*mtime);
                 e.mode = Some(*mode);
+                if st.deep_etags {
+                    e.etag = Some(Self::deep_etag(st, path));
+                }
                 e
             }
             Node::Link { target } => {
@@ -278,12 +347,8 @@ fn ensure_parents(st: &mut State, p: &VPath) {
     }
 }
 
-/// Links followed in one lookup before it gives up, as a file system does.
 const MAX_HOPS: usize = 40;
 
-/// `path` with the links among its folders followed, as a real file system
-/// does when it opens a path; the last component too with `follow_last`.
-/// Reads go through this; changes address the nodes themselves.
 fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     let names: Vec<&[u8]> = path.components().collect();
     let mut cur = VPath::root();
@@ -305,10 +370,6 @@ fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     cur
 }
 
-/// Where a link at `link` leads, as the server resolves it: from the
-/// link's folder for a relative target, from the server's root for an
-/// absolute one, `..` past the location included. `None` when that is
-/// outside the location (`root_at` on the server).
 fn resolve_link(link: &VPath, target: &[u8], root_at: &[u8]) -> Option<VPath> {
     let from = if target.first() == Some(&b'/') {
         Vec::new()
@@ -353,6 +414,28 @@ impl Provider for MemoryProvider {
         self.caps.clone()
     }
 
+    async fn search_names(&self, root: &VPath, text: &str, limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        self.enter("search", root)?;
+        if !self.caps.raw.contains(cap::SEARCH) {
+            return Err(Error::new(ErrorKind::Unsupported, "this location cannot search"));
+        }
+        let needle = text.to_lowercase();
+        let st = self.lock();
+        let root = canonical(&st, root, true);
+        Self::get_dir(&st, &root)?;
+        Ok(st
+            .nodes
+            .iter()
+            .filter(|(p, _)| **p != root && p.starts_with(&root))
+            .filter(|(p, _)| {
+                p.name()
+                    .is_some_and(|n| String::from_utf8_lossy(n).to_lowercase().contains(&needle))
+            })
+            .take(limit as usize)
+            .map(|(p, n)| (p.clone(), Self::entry_for(p, n, &st, false)))
+            .collect())
+    }
+
     async fn list(&self, dir: &VPath, _lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {
         self.enter("list", dir)?;
         let entries = {
@@ -371,6 +454,7 @@ impl Provider for MemoryProvider {
 
     async fn stat(&self, path: &VPath, follow: bool, _lane: Lane) -> Result<Entry> {
         self.enter("stat", path)?;
+        self.held("stat", path).await;
         let st = self.lock();
         let real = canonical(&st, path, false);
         let node = st
@@ -395,20 +479,23 @@ impl Provider for MemoryProvider {
     async fn make_dir(&self, path: &VPath, exclusive: bool) -> Result<()> {
         self.enter("make_dir", path)?;
         self.require_write()?;
-        let mut st = self.lock();
-        Self::check_parent(&st, path)?;
-        match st.nodes.get(path) {
-            Some(Node::Dir { .. }) if !exclusive => return Ok(()),
-            Some(_) => return Err(Error::kind(ErrorKind::AlreadyExists)),
-            None => {}
+        {
+            let mut st = self.lock();
+            Self::check_parent(&st, path)?;
+            match st.nodes.get(path) {
+                Some(Node::Dir { .. }) if !exclusive => return Ok(()),
+                Some(_) => return Err(Error::kind(ErrorKind::AlreadyExists)),
+                None => {}
+            }
+            st.nodes.insert(
+                path.clone(),
+                Node::Dir {
+                    mtime: SystemTime::now(),
+                    mode: 0o755,
+                },
+            );
         }
-        st.nodes.insert(
-            path.clone(),
-            Node::Dir {
-                mtime: SystemTime::now(),
-                mode: 0o755,
-            },
-        );
+        self.held("make_dir", path).await;
         Ok(())
     }
 
@@ -434,15 +521,16 @@ impl Provider for MemoryProvider {
     async fn remove_file(&self, path: &VPath) -> Result<()> {
         self.enter("remove_file", path)?;
         self.require_write()?;
-        let mut st = self.lock();
-        match st.nodes.get(path) {
-            Some(Node::Dir { .. }) => Err(Error::kind(ErrorKind::IsADirectory)),
-            Some(_) => {
-                st.nodes.remove(path);
-                Ok(())
-            }
-            None => Err(Error::kind(ErrorKind::NotFound)),
+        {
+            let mut st = self.lock();
+            match st.nodes.get(path) {
+                Some(Node::Dir { .. }) => return Err(Error::kind(ErrorKind::IsADirectory)),
+                Some(_) => st.nodes.remove(path),
+                None => return Err(Error::kind(ErrorKind::NotFound)),
+            };
         }
+        self.held("remove_file", path).await;
+        Ok(())
     }
 
     async fn remove_dir(&self, path: &VPath) -> Result<()> {
@@ -463,33 +551,36 @@ impl Provider for MemoryProvider {
     async fn rename(&self, from: &VPath, to: &VPath, mode: RenameMode) -> Result<()> {
         self.enter("rename", from)?;
         self.require_write()?;
-        let mut st = self.lock();
-        if !st.nodes.contains_key(from) {
-            return Err(Error::kind(ErrorKind::NotFound));
-        }
-        Self::check_parent(&st, to)?;
-        if to.starts_with(from) && to != from {
-            return Err(Error::kind(ErrorKind::InvalidArgument));
-        }
-        if st.nodes.contains_key(to) && from != to {
-            if mode == RenameMode::NoReplace {
-                return Err(Error::kind(ErrorKind::AlreadyExists));
+        {
+            let mut st = self.lock();
+            if !st.nodes.contains_key(from) {
+                return Err(Error::kind(ErrorKind::NotFound));
             }
-            st.nodes.retain(|p, _| !p.starts_with(to));
+            Self::check_parent(&st, to)?;
+            if to.starts_with(from) && to != from {
+                return Err(Error::kind(ErrorKind::InvalidArgument));
+            }
+            if st.nodes.contains_key(to) && from != to {
+                if mode == RenameMode::NoReplace {
+                    return Err(Error::kind(ErrorKind::AlreadyExists));
+                }
+                st.nodes.retain(|p, _| !p.starts_with(to));
+            }
+            let moved: Vec<(VPath, Node)> = st
+                .nodes
+                .iter()
+                .filter(|(p, _)| p.starts_with(from))
+                .map(|(p, n)| (p.clone(), n.clone()))
+                .collect();
+            for (p, _) in &moved {
+                st.nodes.remove(p);
+            }
+            for (p, n) in moved {
+                let rel = p.strip_prefix(from).unwrap_or_default();
+                st.nodes.insert(to.join_path(&rel), n);
+            }
         }
-        let moved: Vec<(VPath, Node)> = st
-            .nodes
-            .iter()
-            .filter(|(p, _)| p.starts_with(from))
-            .map(|(p, n)| (p.clone(), n.clone()))
-            .collect();
-        for (p, _) in &moved {
-            st.nodes.remove(p);
-        }
-        for (p, n) in moved {
-            let rel = p.strip_prefix(from).unwrap_or_default();
-            st.nodes.insert(to.join_path(&rel), n);
-        }
+        self.held("rename", from).await;
         Ok(())
     }
 
@@ -646,7 +737,13 @@ impl Provider for MemoryProvider {
         Ok(())
     }
 
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         self.enter("server_copy", from)?;
         self.require_write()?;
         if !self.caps.has(cap::SERVER_COPY) {
@@ -676,6 +773,9 @@ impl Provider for MemoryProvider {
         }
         let data = {
             let st = self.lock();
+            if let Some(d) = st.checksums.get(path) {
+                return Ok(d.clone());
+            }
             match st.nodes.get(&canonical(&st, path, true)) {
                 Some(Node::File { data, .. }) => data.clone(),
                 _ => return Err(Error::kind(ErrorKind::NotFound)),
@@ -914,12 +1014,12 @@ mod tests {
     async fn server_copy_checksum_space() {
         let m = MemoryProvider::default();
         m.add_file("a", b"abc", 0);
-        m.server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+        m.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
             .await
             .unwrap();
         assert_eq!(m.read_file("b").unwrap(), b"abc");
         assert!(m
-            .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+            .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
             .await
             .is_err());
         let sum = m.checksum(&vp("a"), "sha256").await.unwrap();
@@ -932,7 +1032,7 @@ mod tests {
         noserver.add_file("a", b"abc", 0);
         assert_eq!(
             noserver
-                .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+                .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
                 .await
                 .unwrap_err()
                 .kind,

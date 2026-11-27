@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Drag selection on the target (real Silica, SPEC §15.3), with a finger
-// sent through the window (ViewerTools.mouse). Grid view: holding an item
-// starts selection with that item selected; moving on over other items
-// selects the range from it in reading order, moving back shrinks it, and
-// letting go keeps it. Holding near the bottom edge scrolls the grid on and
-// the range follows; the held item keeps the finger after its row has
-// scrolled far out of view. List view keeps its long-press menu outside
-// selection and drags while selecting. A renamed item far down is scrolled
-// into view by its row. Fails when holding does not select, a move does not
-// extend or shrink the range, the edge does not scroll, the finger is lost
-// or the renamed item stays out of view.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -17,6 +6,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/DragSelect/"
     readonly property int files: 200
@@ -35,18 +25,25 @@ ApplicationWindow {
         return ok
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function nameOf(i) {
         return "f" + (i < 10 ? "00" : (i < 100 ? "0" : "")) + i + ".md"
     }
 
     function makeFolder() {
         documents.createFolder("DragSelect")
-        tools.pump(500)
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }, "the folder")
+        var installed = 0
         for (var i = 0; i < files; ++i)
-            tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + nameOf(i))
+            installed += tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + nameOf(i)) ? 1 : 0
+        expect(installed === files, "fixtures installed: " + installed)
     }
 
-    // The first child of the view that `pred` takes.
     function child(pred) {
         for (var i = 0; i < view.children.length; ++i) {
             if (pred(view.children[i]))
@@ -55,7 +52,6 @@ ApplicationWindow {
         return null
     }
 
-    // The grid or the list, whichever is shown.
     function flick() {
         return view.flickable
     }
@@ -65,7 +61,6 @@ ApplicationWindow {
         return panel ? panel.height : 0
     }
 
-    // The list rows or the grid's cells, which sit in its rows.
     function delegates(f) {
         var out = []
         var kids = f.contentItem.children
@@ -77,8 +72,6 @@ ApplicationWindow {
         return out
     }
 
-    // The delegate of item `index`, laid out by hand: headless, no render
-    // loop polishes the view.
     function cell(index) {
         var f = flick()
         f.forceLayout()
@@ -93,12 +86,10 @@ ApplicationWindow {
         return null
     }
 
-    // How far `item` reaches down the content of `f`.
     function bottomOf(f, item) {
         return item.mapToItem(f.contentItem, 0, item.height).y
     }
 
-    // The indices selected, in order.
     function selected() {
         return view.model.selectedUris().map(function (u) { return view.model.indexOf(u) })
     }
@@ -119,9 +110,6 @@ ApplicationWindow {
         tools.mouse(c, "press", c.width / 2, c.height / 2)
     }
 
-    // Moves the finger in two steps to the middle of item `index`. No event
-    // loop runs in between: the checks' small screen is edge zones nearly
-    // everywhere, and the view must not scroll on by itself here.
     function moveTo(index) {
         var c = cell(index)
         if (!expect(c !== null, "item " + index + " is on screen"))
@@ -132,7 +120,11 @@ ApplicationWindow {
 
     function release() {
         tools.mouse(flick(), "release", 0, 0)
-        tools.pump(50)
+    }
+
+    function hold(index) {
+        press(index)
+        return waitFor(function () { var c = cell(index); return c && c.parent.holding === true }, "item " + index + " held")
     }
 
     function checkHoldAndDrag() {
@@ -140,8 +132,7 @@ ApplicationWindow {
         expect(view.gridMode && grid.columns === 3, "a grid of 3 per row")
         expect(!view.selecting, "not selecting at first")
         press(2)
-        tools.pump(1200)
-        expect(view.selecting, "holding an item starts selection")
+        waitFor(function () { return view.selecting }, "holding an item to start selection")
         same(selected(), [2], "holding an item selects it")
         moveTo(3)
         same(selected(), [2, 3], "moving on selects the next item")
@@ -154,14 +145,11 @@ ApplicationWindow {
         release()
         same(selected(), [0, 1, 2], "letting go keeps the range")
         expect(view.selecting, "still selecting")
-        // A second drag adds a range; starting on a selected item removes one.
-        press(9)
-        tools.pump(1200)
+        hold(9)
         moveTo(10)
         release()
         same(selected(), [0, 1, 2, 9, 10], "a second range adds to the selection")
-        press(1)
-        tools.pump(1200)
+        hold(1)
         moveTo(0)
         release()
         same(selected(), [2, 9, 10], "a drag started on a selected item deselects")
@@ -171,20 +159,15 @@ ApplicationWindow {
     function checkEdgeScroll() {
         var grid = flick()
         grid.contentY = grid.originY
-        // Not in the first row: the view keeps that row anyway, its current item.
         var held = 4
-        press(held)
-        tools.pump(1200)
+        hold(held)
         var anchor = cell(held)
-        // To the bottom of the items, above the panel: the grid scrolls on.
         var y = grid.height - panelHeight() - 4
         tools.mouse(anchor, "move", anchor.width / 2, anchor.height / 2 + 10)
         tools.pump(30)
         var p = anchor.mapFromItem(grid, grid.width / 2, y)
         tools.mouse(anchor, "move", p.x, p.y)
         var top = grid.contentY
-        // Until the held item's row is far out of view, past what the view
-        // keeps ready (cacheBuffer); ten seconds at most.
         var gone = function () { return bottomOf(grid, anchor) < grid.contentY - grid.cacheBuffer }
         for (var i = 0; i < 200 && !gone(); ++i)
             tools.pump(50)
@@ -192,20 +175,17 @@ ApplicationWindow {
         var picked = selected()
         expect(picked.length > 8 && picked[0] === held && picked[picked.length - 1] === picked.length + held - 1,
                "the range follows the scrolling: " + JSON.stringify(picked))
-        // It still has the finger.
         expect(gone(), "scrolled past the cache: " + bottomOf(grid, anchor) + " " + grid.contentY + " " + grid.cacheBuffer)
         var middle = grid.itemIndexAt(grid.width / 2, grid.contentY + grid.height / 3)
         p = anchor.mapFromItem(grid, grid.width / 2, grid.height / 3)
         tools.mouse(anchor, "move", p.x, p.y)
-        tools.pump(100)
-        same(selected(), range(held, middle), "the held item still follows the finger")
+        waitFor(function () { return String(selected()) === String(range(held, middle)) },
+                "the held item to follow the finger: " + JSON.stringify(selected()) + " for " + held + "-" + middle)
         release()
         view.endSelection()
         grid.contentY = grid.originY
     }
 
-    // A renamed item out of sight is brought into view with its row, and
-    // so its remorse (OPS-9): the grid scrolls by rows, not by items.
     function checkReveal() {
         var grid = flick()
         grid.contentY = grid.originY
@@ -221,19 +201,17 @@ ApplicationWindow {
 
     function checkList() {
         App.setSetting("view_mode", JSON.stringify("list"))
-        tools.pump(300)
-        expect(!view.gridMode, "list view")
+        waitFor(function () { return !view.gridMode }, "list view")
         press(1)
-        tools.pump(1200)
+        waitFor(function () { return cell(1).menuOpen }, "holding a row to open its menu")
         release()
         expect(!view.selecting && selected().length === 0, "outside selection holding a row selects nothing")
         expect(cell(1).menuOpen, "it opens the row's menu")
         cell(1).closeMenu()
-        tools.pump(500)
+        waitFor(function () { return !cell(1).menuOpen }, "the menu to close")
         view.startSelection()
         press(1)
-        tools.pump(1200)
-        same(selected(), [1], "while selecting, holding a row selects it")
+        waitFor(function () { return String(selected()) === "1" }, "while selecting, holding a row to select it")
         moveTo(3)
         same(selected(), [1, 2, 3], "and a drag selects the rows on")
         release()
@@ -244,14 +222,14 @@ ApplicationWindow {
         makeFolder()
         App.setSetting("view_mode", JSON.stringify("grid"))
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
-        if (expect(view.model.count === files, "the folder lists its files: " + view.model.count)) {
+        if (waitFor(function () { return view && !view.model.loading && view.model.count === files }, "the folder's files")) {
             checkHoldAndDrag()
             checkEdgeScroll()
             checkReveal()
             checkList()
         }
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {
@@ -260,8 +238,6 @@ ApplicationWindow {
         Page {
             property alias view: folder
 
-            // Taller than the page: the checks' small screen leaves no room for the
-            // rows of tiles with captions between the header and the selection panel.
             DirectoryView {
                 id: folder
                 width: parent.width

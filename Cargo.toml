@@ -10,7 +10,7 @@ members = [
 default-members = ["crates/lautta-core", "crates/lautta-bridge-proto", "crates/lautta-pdf"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.95"
 license = "LGPL-2.1-or-later"
@@ -22,15 +22,10 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 
-# Small build folders: line tables only (backtraces keep file:line), no
-# incremental caches.
 [profile.dev]
 debug = "line-tables-only"
 incremental = false
 
-# The text viewer's grammars (SPEC PRV-13) compile and run their regexes in
-# these crates; unoptimised they are tens of times slower, too slow for the
-# host tests and for the QML checks on the emulated target.
 [profile.dev.package.syntect]
 opt-level = 3
 [profile.dev.package.fancy-regex]
@@ -40,9 +35,9 @@ opt-level = 3
 [profile.dev.package.regex-syntax]
 opt-level = 3
 
-# Unwinds so a PDF that trips the renderer fails that draw, not the app;
-# a panic anywhere else still aborts, through the hook of
-# `lautta_core::panics` (SPEC RS-4).
+[profile.dev.package.zlib-rs]
+opt-level = 3
+
 [profile.release]
 panic = "unwind"
 lto = "fat"
@@ -51,8 +46,5 @@ opt-level = 3
 strip = "symbols"
 debug = false
 
-# qttypes 0.2.12 links QtWidgets unconditionally; Harbour does not allow it
-# (SPEC HBR-2). third_party/qttypes is the released crate with that link
-# behind a feature (see third_party/qttypes/LAUTTA.md).
 [patch.crates-io]
 qttypes = { path = "third_party/qttypes" }

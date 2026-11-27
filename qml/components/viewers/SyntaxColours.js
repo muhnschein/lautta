@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Colours of the text viewer's syntax classes (PRV-13), in the form
-// TextDocument.styledRow takes them: "class=#rrggbb,…". They come from the
-// ambience, so they read on light and dark ambiences alike: keywords and
-// headings take the highlight colour, operators and Markdown markup the
-// secondary highlight colour, comments the secondary colour, removed diff
-// lines the error colour, and the other classes hues turned away from the
-// highlight colour's, made readable for the colour scheme by the theme.
 .pragma library
 
-// Turns of the colour wheel from the highlight colour's hue.
 var turns = {
     "function": 1 / 6,
     "string": 1 / 3,
@@ -19,7 +11,6 @@ var turns = {
     "constant": 5 / 6
 }
 
-// Hue, saturation and lightness (0..1) of a colour's r, g, b.
 function hsl(c) {
     var high = Math.max(c.r, c.g, c.b)
     var low = Math.min(c.r, c.g, c.b)
@@ -43,20 +34,17 @@ function _byte(part) {
     return text.length < 2 ? "0" + text : text
 }
 
-// "#rrggbb", or "#aarrggbb" for a colour that is not opaque.
 function hex(c) {
     var rgb = _byte(c.r) + _byte(c.g) + _byte(c.b)
     return "#" + (c.a < 1 ? _byte(c.a) : "") + rgb
 }
 
-// The highlight colour turned by `turn`; a grey highlight gets full colours.
 function _turned(theme, base, turn) {
     var saturation = Math.max(base.s, 0.6)
     var lightness = Math.min(Math.max(base.l, 0.35), 0.75)
     return theme.highlightFromColor(Qt.hsla((base.h + turn) % 1, saturation, lightness, 1), theme.colorScheme)
 }
 
-// The palette for `theme` (Silica's Theme).
 function palette(theme) {
     var colours = {
         "comment": theme.secondaryColor,

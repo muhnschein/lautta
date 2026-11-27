@@ -1,28 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Creating archives (SPEC PRV-11, §10.1 "Compress"): zip or tar.gz from any
-//! selection, streamed into a `std::io::Write` sink. When the destination is
-//! remote the caller passes the write end of a pipe and uploads the read end
-//! while the archive is being produced (NVB-9); nothing is buffered beyond a
-//! few chunks.
-//!
-//! Choices worth knowing:
-//! * Folders are added recursively, children sorted by name, so the output is
-//!   deterministic.
-//! * Symbolic links are stored *as links* in both formats (tar symlink entry;
-//!   zip entry with unix mode `S_IFLNK` whose data is the target). They are
-//!   never followed: no cycles, nothing outside the selection is read, and
-//!   extracting restores what was there.
-//! * Special files (devices, sockets) are skipped and counted.
-//! * The zip writer is our own (the `zip` crate cannot write to a pipe): data
-//!   descriptors, deflate, zip64 whenever a size is unknown or ≥ 4 GiB, and
-//!   it reads back with any unzip tool and with [`crate::provider::archive`].
-//! * A file that changes size while it is read aborts the operation rather
-//!   than writing a corrupt tar entry.
 
 mod zipstream;
 
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
 use crate::provider::archive::ArchiveProvider;
 use crate::provider::{no_progress, Lane, ProgressSink, Provider, ProviderResolver};
 use crate::uri::Uri;
@@ -35,32 +17,56 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Bytes read from a source per request.
 const CHUNK: usize = 256 * 1024;
-/// Chunks in flight between the reader and the writer thread.
 const QUEUE: usize = 8;
-/// tar needs sizes up front; unknown-size files are spooled in memory up to this.
 const SPOOL_LIMIT: u64 = 64 * 1024 * 1024;
 const WRITER_GONE: &str = "archive writer stopped";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {
     Zip,
+    SevenZ,
+    TarXz,
     TarGz,
 }
 
-/// Knobs and hooks of one compression run.
+impl ArchiveKind {
+    fn needs_size(self) -> bool {
+        matches!(self, ArchiveKind::TarXz | ArchiveKind::TarGz)
+    }
+
+    pub fn takes_password(self) -> bool {
+        matches!(self, ArchiveKind::Zip | ArchiveKind::SevenZ)
+    }
+}
+
+pub trait Sink: Write + Send + 'static {
+    fn into_file(self) -> std::result::Result<std::fs::File, Self>
+    where
+        Self: Sized,
+    {
+        Err(self)
+    }
+}
+
+impl Sink for std::fs::File {
+    fn into_file(mut self) -> std::result::Result<std::fs::File, Self> {
+        match io::Seek::stream_position(&mut self) {
+            Ok(_) => Ok(self),
+            Err(_) => Err(self),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CompressOptions {
     pub kind: ArchiveKind,
-    /// Deflate level 0-9 (default 6).
     pub level: u32,
-    /// Total input bytes when the planner knows them (progress denominator).
     pub total_hint: Option<u64>,
-    /// Called with (bytes read so far, `total_hint`).
+    pub spool_dir: Option<std::path::PathBuf>,
     pub progress: ProgressSink,
-    /// Set to stop; the run ends with `ErrorKind::Canceled`.
     pub cancel: Arc<AtomicBool>,
+    pub password: Option<Password>,
 }
 
 impl CompressOptions {
@@ -69,6 +75,8 @@ impl CompressOptions {
             kind,
             level: 6,
             total_hint: None,
+            spool_dir: None,
+            password: None,
             progress: no_progress(),
             cancel: Arc::new(AtomicBool::new(false)),
         }
@@ -81,21 +89,16 @@ pub struct CompressStats {
     pub dirs: u64,
     pub symlinks: u64,
     pub skipped: u64,
-    /// Input bytes read.
     pub bytes: u64,
 }
 
-/// What the writer needs to know about one archive member.
 #[derive(Debug, Clone)]
 pub(crate) struct EntryMeta {
-    /// Archive-relative name, `/`-separated, no leading or trailing slash.
     pub path: Vec<u8>,
     pub kind: Kind,
-    /// File size when known; the data stream must then match it exactly.
     pub size: Option<u64>,
     pub mtime: Option<SystemTime>,
     pub mode: Option<u32>,
-    /// Symlink target.
     pub link: Option<Vec<u8>>,
 }
 
@@ -106,7 +109,6 @@ enum Msg {
     Finish,
 }
 
-/// Presents the `Data` messages of the current file as a `Read`.
 struct ChunkReader<'a> {
     rx: &'a mut mpsc::Receiver<Msg>,
     buf: Vec<u8>,
@@ -132,22 +134,20 @@ impl Read for ChunkReader<'_> {
                     self.pos = 0;
                 }
                 Some(Msg::EndData) => self.done = true,
-                // Not `Interrupted`: `io::copy` would retry that forever.
                 _ => return Err(io::Error::other("compression aborted")),
             }
         }
     }
 }
 
-/// A format writer fed one member at a time.
 pub(crate) trait MemberWriter: Send {
-    /// `data` yields the file's bytes (empty for folders and links).
     fn member(&mut self, meta: &EntryMeta, data: &mut dyn Read) -> io::Result<()>;
     fn finish(self: Box<Self>) -> io::Result<()>;
 }
 
-struct TarGz<W: Write> {
-    builder: tar::Builder<flate2::write::GzEncoder<W>>,
+struct Tar<E: Write> {
+    builder: tar::Builder<E>,
+    close: fn(E) -> io::Result<()>,
 }
 
 fn tar_header(meta: &EntryMeta, kind: tar::EntryType, size: u64) -> tar::Header {
@@ -163,7 +163,7 @@ fn tar_header(meta: &EntryMeta, kind: tar::EntryType, size: u64) -> tar::Header 
     h
 }
 
-impl<W: Write + Send> MemberWriter for TarGz<W> {
+impl<E: Write + Send> MemberWriter for Tar<E> {
     fn member(&mut self, meta: &EntryMeta, data: &mut dyn Read) -> io::Result<()> {
         let path = Path::new(std::ffi::OsStr::from_bytes(&meta.path));
         match meta.kind {
@@ -189,26 +189,155 @@ impl<W: Write + Send> MemberWriter for TarGz<W> {
     }
 
     fn finish(self: Box<Self>) -> io::Result<()> {
-        let enc = self.builder.into_inner()?;
-        let mut out = enc.finish()?;
-        out.flush()
+        let inner = self.builder.into_inner()?;
+        (self.close)(inner)
     }
 }
 
-fn new_writer<W: Write + Send + 'static>(kind: ArchiveKind, level: u32, sink: W) -> Box<dyn MemberWriter> {
-    let level = level.min(9);
-    match kind {
-        ArchiveKind::Zip => Box::new(zipstream::ZipStream::new(sink, level)),
-        ArchiveKind::TarGz => Box::new(TarGz {
+const SEVENZ_UNIX_EXTENSION: u32 = 0x8000;
+const SEVENZ_DIRECTORY: u32 = 0x10;
+const SEVENZ_DICT_MAX: u32 = 8 * 1024 * 1024;
+const SEVENZ_DICT_MIN: u32 = 64 * 1024;
+const SEVENZ_KEY_ROUNDS_POWER: u8 = 19;
+
+fn sevenz_dict(size: Option<u64>) -> u32 {
+    match size {
+        Some(n) => u32::try_from(n)
+            .unwrap_or(u32::MAX)
+            .checked_next_power_of_two()
+            .unwrap_or(SEVENZ_DICT_MAX)
+            .clamp(SEVENZ_DICT_MIN, SEVENZ_DICT_MAX),
+        None => SEVENZ_DICT_MAX,
+    }
+}
+
+fn sevenz_err(e: sevenz_rust2::Error) -> io::Error {
+    io::Error::other(format!("7z: {e}"))
+}
+
+struct SevenZ<W: Sink> {
+    archive: sevenz_rust2::ArchiveWriter<std::fs::File>,
+    level: u32,
+    forward: Option<W>,
+    aes: Option<sevenz_rust2::encoder_options::AesEncoderOptions>,
+}
+
+impl<W: Sink> SevenZ<W> {
+    fn new(sink: W, level: u32, spool_dir: Option<&Path>, password: Option<&Password>) -> io::Result<Self> {
+        let (file, forward) = match sink.into_file() {
+            Ok(file) => (file, None),
+            Err(sink) => {
+                let dir = spool_dir.map_or_else(std::env::temp_dir, Path::to_path_buf);
+                std::fs::create_dir_all(&dir)?;
+                (tempfile::tempfile_in(dir)?, Some(sink))
+            }
+        };
+        let archive = sevenz_rust2::ArchiveWriter::new(file).map_err(sevenz_err)?;
+        let aes = password.map(|p| {
+            let mut o = sevenz_rust2::encoder_options::AesEncoderOptions::new(p.as_str().into());
+            o.num_cycles_power = SEVENZ_KEY_ROUNDS_POWER;
+            o
+        });
+        Ok(SevenZ {
+            archive,
+            level,
+            forward,
+            aes,
+        })
+    }
+
+    fn methods(
+        &self,
+        lzma: sevenz_rust2::encoder_options::Lzma2Options,
+    ) -> io::Result<Vec<sevenz_rust2::EncoderConfiguration>> {
+        let Some(base) = &self.aes else {
+            return Ok(vec![lzma.into()]);
+        };
+        let mut aes = base.clone();
+        getrandom::fill(&mut aes.iv).map_err(|e| io::Error::other(format!("no random IV: {e}")))?;
+        Ok(vec![aes.into(), lzma.into()])
+    }
+
+    fn entry(meta: &EntryMeta) -> io::Result<sevenz_rust2::ArchiveEntry> {
+        let name = std::str::from_utf8(&meta.path)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "7z names must be UTF-8"))?;
+        let (mut entry, unix_type, default_mode) = match meta.kind {
+            Kind::Dir => (sevenz_rust2::ArchiveEntry::new_directory(name), 0o040_000, 0o755),
+            Kind::Symlink => (sevenz_rust2::ArchiveEntry::new_file(name), 0o120_000, 0o777),
+            _ => (sevenz_rust2::ArchiveEntry::new_file(name), 0o100_000, 0o644),
+        };
+        let mode = unix_type | (meta.mode.unwrap_or(default_mode) & 0o7777);
+        entry.has_windows_attributes = true;
+        entry.windows_attributes = (mode << 16)
+            | SEVENZ_UNIX_EXTENSION
+            | if meta.kind == Kind::Dir {
+                SEVENZ_DIRECTORY
+            } else {
+                0
+            };
+        if let Some(t) = meta.mtime.and_then(|t| sevenz_rust2::NtTime::try_from(t).ok()) {
+            entry.has_last_modified_date = true;
+            entry.last_modified_date = t;
+        }
+        Ok(entry)
+    }
+}
+
+impl<W: Sink> MemberWriter for SevenZ<W> {
+    fn member(&mut self, meta: &EntryMeta, data: &mut dyn Read) -> io::Result<()> {
+        let entry = Self::entry(meta)?;
+        let mut options = sevenz_rust2::encoder_options::Lzma2Options::from_level(self.level);
+        options.set_dictionary_size(sevenz_dict(meta.size));
+        let methods = self.methods(options)?;
+        self.archive.set_content_methods(methods);
+        let pushed = match meta.kind {
+            Kind::Dir => self.archive.push_archive_entry::<&[u8]>(entry, None),
+            Kind::Symlink => {
+                let target = meta.link.as_deref().unwrap_or_default();
+                self.archive.push_archive_entry(entry, Some(target))
+            }
+            _ => self.archive.push_archive_entry(entry, Some(data)),
+        };
+        pushed.map(|_| ()).map_err(sevenz_err)
+    }
+
+    fn finish(self: Box<Self>) -> io::Result<()> {
+        let mut file = self.archive.finish()?;
+        match self.forward {
+            Some(mut sink) => {
+                io::Seek::seek(&mut file, io::SeekFrom::Start(0))?;
+                io::copy(&mut file, &mut sink)?;
+                sink.flush()
+            }
+            None => file.flush(),
+        }
+    }
+}
+
+fn new_writer<W: Sink>(opts: &CompressOptions, sink: W) -> io::Result<Box<dyn MemberWriter>> {
+    let level = opts.level.min(9);
+    Ok(match opts.kind {
+        ArchiveKind::Zip => Box::new(zipstream::ZipStream::new(sink, level, opts.password.clone())),
+        ArchiveKind::SevenZ => Box::new(SevenZ::new(
+            sink,
+            level,
+            opts.spool_dir.as_deref(),
+            opts.password.as_ref(),
+        )?),
+        ArchiveKind::TarXz => Box::new(Tar {
+            builder: tar::Builder::new(xz2::write::XzEncoder::new(sink, level)),
+            close: |e| e.finish()?.flush(),
+        }),
+        ArchiveKind::TarGz => Box::new(Tar {
             builder: tar::Builder::new(flate2::write::GzEncoder::new(
                 sink,
                 flate2::Compression::new(level),
             )),
+            close: |e| e.finish()?.flush(),
         }),
-    }
+    })
 }
 
-/// The writer thread: builds the archive from messages until `Finish`.
 fn write_archive(mut rx: mpsc::Receiver<Msg>, mut writer: Box<dyn MemberWriter>) -> Result<()> {
     loop {
         match rx.blocking_recv() {
@@ -299,7 +428,6 @@ impl Walker<'_> {
         self.stats.dirs += 1;
         let mut children = crate::provider::list_all(item.provider.as_ref(), &item.path, Lane::Bulk).await?;
         children.sort_by(|a, b| b.name.cmp(&a.name));
-        // Reverse order on the stack: the alphabetically first child is popped first.
         for child in children {
             validate_name(&child.name)?;
             let mut name = item.name.clone();
@@ -329,7 +457,7 @@ impl Walker<'_> {
         let mut meta = Self::meta(item);
         meta.size = item.entry.size.or_else(|| handle.size());
         let mut spool = None;
-        if meta.size.is_none() && self.opts.kind == ArchiveKind::TarGz {
+        if meta.size.is_none() && self.opts.kind.needs_size() {
             let data = crate::provider::read_all(handle.as_ref(), SPOOL_LIMIT + 1).await?;
             if data.len() as u64 > SPOOL_LIMIT {
                 return Err(Error::new(
@@ -357,7 +485,6 @@ impl Walker<'_> {
         self.send(Msg::Data(data)).await
     }
 
-    /// Sends exactly `size` bytes when known, to EOF otherwise.
     async fn stream_file(
         &mut self,
         handle: &dyn crate::provider::ReadHandle,
@@ -386,7 +513,6 @@ impl Walker<'_> {
     }
 }
 
-/// Top-level member name for a source.
 fn source_name(uri: &Uri) -> Result<Vec<u8>> {
     match uri.path.name() {
         Some(n) => Ok(n.to_vec()),
@@ -436,10 +562,7 @@ async fn walk(
     Ok(walker.stats)
 }
 
-/// Writes an archive of `sources` into `sink` (PRV-11). Blocks on `sink` only
-/// in a dedicated thread; reading sources is async and backpressured by the
-/// sink's speed. Top-level names must be distinct.
-pub async fn compress<W: Write + Send + 'static>(
+pub async fn compress<W: Sink>(
     resolver: &dyn ProviderResolver,
     sources: &[Uri],
     sink: W,
@@ -448,9 +571,20 @@ pub async fn compress<W: Write + Send + 'static>(
     if sources.is_empty() {
         return Err(Error::new(ErrorKind::InvalidArgument, "nothing to compress"));
     }
+    if opts.password.is_some() && !opts.kind.takes_password() {
+        return Err(Error::new(
+            ErrorKind::InvalidArgument,
+            "tar files cannot have a password",
+        ));
+    }
     let names = top_level_names(sources)?;
     let (tx, rx) = mpsc::channel(QUEUE);
-    let writer = new_writer(opts.kind, opts.level, sink);
+    let writer = {
+        let opts = opts.clone();
+        tokio::task::spawn_blocking(move || new_writer(&opts, sink))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, format!("archive writer failed: {e}")))??
+    };
     let thread = tokio::task::spawn_blocking(move || write_archive(rx, writer));
     let walked = walk(resolver, sources, names, opts, tx).await;
     let written = thread
@@ -458,23 +592,18 @@ pub async fn compress<W: Write + Send + 'static>(
         .map_err(|e| Error::new(ErrorKind::Internal, format!("archive writer failed: {e}")))?;
     match walked {
         Ok(stats) => written.map(|()| stats),
-        // The sink failed: its error is the real one.
         Err(e) if e.message == WRITER_GONE => Err(written.err().unwrap_or(e)),
         Err(e) => Err(e),
     }
 }
 
-/// One member of an archive as the transfer planner sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractItem {
-    /// Path relative to the extracted folder (or the file's own name).
     pub path: VPath,
     pub kind: Kind,
     pub size: u64,
 }
 
-/// What extracting `under` (a folder or a file inside `archive`) would create,
-/// parents before children (§10.1, XFR-3).
 pub fn extract_plan(archive: &ArchiveProvider, under: &VPath) -> Result<Vec<ExtractItem>> {
     let all = archive.entries();
     let Some(root) = all.iter().find(|e| &e.path == under) else {

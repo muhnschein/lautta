@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! English plural forms of the engineering English catalogue (UI-7).
-//!
-//! The first test builds the catalogue like the RPM does (`lrelease -idbased`)
-//! and has the real QML engine read it (`tests/translations`): "1 item", not
-//! "1 items". The others run `tools/english-plurals.py`, which makes the forms
-//! in `make translations` and in `make translations-check`, on catalogues
-//! with a form missing or a message it must not guess.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -19,7 +12,6 @@ fn catalogue() -> String {
     std::fs::read_to_string(root().join("translations/harbour-lautta.ts")).unwrap()
 }
 
-/// `lrelease -idbased` of `ts` into `dir/<name>.qm`, as the RPM spec does.
 fn release(ts: &str, dir: &Path, name: &str) {
     let source = dir.join(format!("{name}.ts"));
     std::fs::write(&source, ts).unwrap();
@@ -33,7 +25,6 @@ fn release(ts: &str, dir: &Path, name: &str) {
     assert!(dir.join(format!("{name}.qm")).exists());
 }
 
-/// Exit code of the QML check of `qml` with the catalogues of `dir` installed.
 fn check(dir: &Path, qml: &Path) -> i32 {
     lautta_qt::qml_check(&[
         "-T".to_owned(),
@@ -42,7 +33,6 @@ fn check(dir: &Path, qml: &Path) -> i32 {
     ])
 }
 
-/// The plural test (`tests/translations`) with `ts` as the installed catalogue.
 fn read_in_qml(ts: &str) -> i32 {
     let dir = tempfile::tempdir().unwrap();
     release(ts, dir.path(), "harbour-lautta");
@@ -52,7 +42,6 @@ fn read_in_qml(ts: &str) -> i32 {
     )
 }
 
-/// A German catalogue of one plural message, as lupdate and a translator leave it.
 const GERMAN: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="de">
@@ -69,8 +58,6 @@ const GERMAN: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </TS>
 "#;
 
-/// Reads the grid's message, which German has, and the paste entry's, which it
-/// has not: English plural forms.
 const LAYERS: &str = r#"import QtQuick 2.6
 QtObject {
     Component.onCompleted: {
@@ -83,9 +70,6 @@ QtObject {
 }
 "#;
 
-/// The user's language comes over engineering English and falls back to its
-/// English plural forms for what it lacks (the installation order of
-/// `lauttaInstallTranslations`).
 fn german_over_english(ts: &str) -> i32 {
     let dir = tempfile::tempdir().unwrap();
     release(ts, dir.path(), "harbour-lautta");
@@ -95,7 +79,6 @@ fn german_over_english(ts: &str) -> i32 {
     check(dir.path(), &qml)
 }
 
-/// `ts` with the singular form of message `id` made its plural form.
 fn plural_singular(ts: &str, id: &str) -> String {
     let marker = format!("<message id=\"{id}\" numerus=\"yes\">");
     let (before, message) = ts.split_once(&marker).unwrap();
@@ -111,8 +94,19 @@ fn plural_singular(ts: &str, id: &str) -> String {
     )
 }
 
-/// Qt takes one application per process: every run is in this test. The
-/// failing runs log QML errors, which are the point of them.
+fn source_of(ts: &str, id: &str) -> String {
+    let (_, message) = ts.split_once(&format!("<message id=\"{id}\">")).unwrap();
+    let source = message.split_once("<source>").unwrap().1;
+    source.split_once("</source>").unwrap().0.to_owned()
+}
+
+#[test]
+fn the_start_page_and_its_settings_are_called_browse() {
+    let ts = catalogue();
+    assert_eq!(source_of(&ts, "lautta-home-title"), "Browse");
+    assert_eq!(source_of(&ts, "lautta-settings-home-page"), "Browse page");
+}
+
 #[test]
 fn the_built_catalogue_has_english_plural_forms() {
     let home = tempfile::tempdir().unwrap();
@@ -124,7 +118,6 @@ fn the_built_catalogue_has_english_plural_forms() {
     assert_eq!(read_in_qml(&ts), 0, "the shipped catalogue fails the plural test");
     assert_eq!(german_over_english(&ts), 0, "German does not come over English");
 
-    // The tests bite: with the singular of a message made its plural, they fail.
     let broken_grid = plural_singular(&ts, "lautta-dir-grid-items");
     assert_ne!(read_in_qml(&broken_grid), 0, "a wrong singular goes unnoticed");
     let broken_paste = plural_singular(&ts, "lautta-dir-menu-paste");
@@ -134,7 +127,6 @@ fn the_built_catalogue_has_english_plural_forms() {
         "a language without the message hides a wrong singular"
     );
 
-    // Without the language lrelease writes no plural rules: every n reads the first form.
     let no_rules = ts.replacen(" language=\"en\"", "", 1);
     assert_ne!(no_rules, ts);
     assert_ne!(
@@ -143,8 +135,6 @@ fn the_built_catalogue_has_english_plural_forms() {
         "a catalogue without a language goes unnoticed"
     );
 
-    // A folder without the engineering English catalogue fails the check itself,
-    // whatever the document does with it.
     let empty = tempfile::tempdir().unwrap();
     let nothing = empty.path().join("nothing.qml");
     std::fs::write(&nothing, "import QtQuick 2.6\nQtObject {}\n").unwrap();
@@ -155,9 +145,6 @@ fn the_built_catalogue_has_english_plural_forms() {
     );
 }
 
-/// Runs `english-plurals.py fill` with `text` on stdin, its stdio ASCII as
-/// in a locale without UTF-8: exit code, stderr and the filled catalogue
-/// (stdout).
 fn fill(text: &str) -> (i32, String, String) {
     let mut child = Command::new("python3")
         .arg(root().join("tools/english-plurals.py"))
@@ -177,9 +164,6 @@ fn fill(text: &str) -> (i32, String, String) {
     )
 }
 
-/// A catalogue of messages as lupdate writes them: `(id, source, forms)`, a
-/// message with no forms being a new one (an empty form), a numerus one when
-/// its source has `%n`.
 fn lupdate_output(messages: &[(&str, &str, &[&str])]) -> String {
     let mut ts = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE TS>\n<TS version=\"2.1\" language=\"en\">\n<context>\n    <name></name>\n",
@@ -203,7 +187,6 @@ fn lupdate_output(messages: &[(&str, &str, &[&str])]) -> String {
     ts + "</context>\n</TS>\n"
 }
 
-/// The forms of the numerus message `id` in `ts`.
 fn forms_of(ts: &str, id: &str) -> Vec<String> {
     let (_, message) = ts.split_once(&format!("<message id=\"{id}\"")).unwrap();
     let message = message.split_once("</message>").unwrap().0;
@@ -271,7 +254,6 @@ fn filling_twice_changes_nothing() {
 fn a_form_taken_away_is_made_again() {
     let ts = catalogue();
     for (from, to) in [
-        // The singular emptied, the plural emptied, one form dropped, a third one.
         (
             "<numerusform>%n item</numerusform>",
             "<numerusform></numerusform>",
@@ -296,7 +278,6 @@ fn a_form_taken_away_is_made_again() {
 
 #[test]
 fn a_changed_source_gets_new_forms_and_loses_the_old_source() {
-    // What lupdate leaves of a message whose `//%` text changed.
     let ts = lupdate_output(&[("a", "Pack %n things", &["Compress %n item", "Compress %n items"])]).replace(
         "        <translation type=\"unfinished\">",
         "        <oldsource>Compress %n items</oldsource>\n        <translation type=\"unfinished\">",
@@ -309,7 +290,6 @@ fn a_changed_source_gets_new_forms_and_loses_the_old_source() {
 
 #[test]
 fn a_singular_written_by_hand_stays_while_the_source_does() {
-    // "new" is no word the rule can tell: the singular is the hand's.
     let ts = lupdate_output(&[("a", "%n new files", &["%n new file", "%n new files"])])
         .replace(" type=\"unfinished\"", "");
     let (code, stderr, out) = fill(&ts);
@@ -387,4 +367,48 @@ fn the_script_fills_stdin_and_takes_no_file() {
             .unwrap();
         assert_eq!(out.status.code(), Some(2), "{args:?}");
     }
+}
+
+fn style_breaks(ts: &str) -> Vec<String> {
+    const BANNED: [&str; 9] = [
+        "Canceled",
+        "Canceling",
+        "Favorite",
+        "Color",
+        "\u{2019}",
+        "MiB",
+        "(s)",
+        "Glob",
+        "glob",
+    ];
+    ts.split("<source>")
+        .skip(1)
+        .filter_map(|rest| rest.split("</source>").next())
+        .filter(|source| BANNED.iter().any(|word| source.contains(word)))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_catalogue_keeps_one_spelling() {
+    assert_eq!(style_breaks(&catalogue()), Vec::<String>::new());
+    let broken = "<source>Canceled</source><source>Fine</source><source>it\u{2019}s</source>";
+    assert_eq!(style_breaks(broken), ["Canceled", "it\u{2019}s"]);
+}
+
+fn without_english(ts: &str) -> Vec<String> {
+    ts.split("<message id=\"")
+        .skip(1)
+        .filter(|message| message.contains("<source></source>"))
+        .filter_map(|message| message.split('"').next())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn every_message_has_its_english() {
+    assert_eq!(without_english(&catalogue()), Vec::<String>::new());
+    let broken =
+        "<message id=\"a\"><source>A</source></message><message id=\"b\"><source></source></message>";
+    assert_eq!(without_english(broken), ["b"]);
 }

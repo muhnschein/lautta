@@ -1,26 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The bars at the bottom on the target (real Silica, UI-10, SPEC §15.3): the
-// selection panel, the paste bar, the activity bar and the search progress
-// have an opaque backdrop, not Silica's see-through panel
-// gradient alone. The selection panel shows its icons in the long-press
-// menu's order, then More actions, whatever the number of items, with no
-// push-up menu. More actions opens a page: for one item Rename (opening the
-// rename dialog), Add to favourites, Compress and Move to new folder, for
-// several Compress and Move to new folder, the header naming the item or
-// counting them; a dialog it opens takes the
-// page's place and ends selection, leaving the page keeps it. Archives show
-// the app's archive glyph (FileIcons.js) in a folder, in search, in the
-// operations pages, in Recents and on Compress. Ending selection, by Stop
-// selecting or by deselecting the last item, leaves the panel with the
-// buttons it had while it fades out, not the ones of no selection (just Stop
-// selecting); waiting for the first item it has only that one. Fails when a
-// bar lets content through, an action of the long-press menu is missing, an
-// archive shows another icon or the panel changes its buttons on its way out.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/components"
-import "../../qml/components/browse"
+import "../../qml/components/home"
 import "../../qml/components/directory"
 import "../../qml/components/operations"
 import "../../qml/components/search"
@@ -30,6 +13,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/SelectionPanel/"
     property var view: pageStack.depth > 0 && pageStack.currentPage.view ? pageStack.currentPage.view : null
@@ -51,8 +35,6 @@ ApplicationWindow {
         return expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // Every item under `item` that `pred` takes; a flickable's content item
-    // is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         out = out || []
         seen = seen || []
@@ -73,9 +55,6 @@ ApplicationWindow {
         return findAll(item, function (x) { return x.objectName === name })
     }
 
-    // The bar's backdrop is opaque and covers it, and nothing between it and
-    // the bar makes it see-through (the activity bar fades as a whole when it
-    // goes).
     function expectOpaque(bar, what) {
         var grounds = named(bar, "barBackground")
         if (!expect(grounds.length === 1, what + " has the opaque backdrop: " + grounds.length))
@@ -89,15 +68,24 @@ ApplicationWindow {
             expect(item.opacity === 1, what + ": nothing over the backdrop is translucent: " + item)
     }
 
-    // Waits out the page stack's transition: Silica ignores a pop pressed
-    // while one runs, and on the emulated target an animated push can take
-    // longer than any fixed wait.
-    function settle() {
-        for (var i = 0; i < 100 && pageStack.busy; ++i)
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
     }
 
-    // The docked panel of the folder view with `prop`.
+    function shown(bar) {
+        return bar.open && Math.abs(bar.visibleSize - bar.height) < 1
+    }
+
+    function gone(bar) {
+        return !bar.open && bar.visibleSize === 0
+    }
+
+    function onPage(pred) {
+        return !pageStack.busy && pred(pageStack.currentPage)
+    }
+
     function panel(prop) {
         var kids = view.children
         for (var i = 0; i < kids.length; ++i) {
@@ -107,16 +95,12 @@ ApplicationWindow {
         return null
     }
 
-    // The panel's button called `text`.
     function panelButton(sel, text) {
         var found = findAll(sel, function (x) { return x.description === text && x.icon !== undefined })
         return found.length === 1 ? found[0] : null
     }
 
-    // The rows of the More actions page `page`, top down: { text, icon }
-    // with the row to tap.
     function pageRows(page) {
-        // Headless, no render loop polishes the list: lay it out by hand.
         findAll(page, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = named(page, "moreRow").sort(function (a, b) { return a.y - b.y })
         return rows.map(function (row) {
@@ -128,9 +112,8 @@ ApplicationWindow {
         })
     }
 
-    // The app's glyph of `kind` at a medium icon's size (FileIcons.js).
     function glyph(kind) {
-        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
+        return FileIcons.source(FileIcons.glyph(kind, false, Theme.iconSizeMedium), Theme.pixelRatio)
     }
 
     function pageTitle(page) {
@@ -138,42 +121,33 @@ ApplicationWindow {
         return headers.length === 1 ? headers[0].title : "no single header: " + headers.length
     }
 
-    // Selects `uris`, taps More actions on the panel and gives the page it
-    // opens, or null.
     function openMore(sel, uris) {
         var folderView = view
         folderView.startSelection()
         uris.forEach(function (uri) { folderView.model.toggle(uri) })
-        tools.pump(500)
-        var more = panelButton(sel, qsTrId("lautta-dir-act-more"))
-        if (!expect(more !== null, "the panel has its More actions button"))
+        if (!waitFor(function () { return shown(sel) && panelButton(sel, qsTrId("lautta-dir-act-more")) !== null },
+                     "the panel's More actions button"))
             return null
-        more.clicked(null)
-        tools.pump(300)
-        settle()
+        panelButton(sel, qsTrId("lautta-dir-act-more")).clicked(null)
+        if (!waitFor(function () { return onPage(function (p) { return p.selection === true && p.actions !== undefined }) },
+                     "More actions to open the selection's page"))
+            return null
         var page = pageStack.currentPage
-        if (!expect(page.selection === true && page.actions !== undefined, "More actions opens the selection's page"))
-            return null
         expect(folderView.selecting, "opening the page keeps the selection")
         return page
     }
 
-    // Closes the dialog that took the More actions page's place: the folder
-    // is under it, with the page gone.
     function closeDialog(depth, what) {
         expect(pageStack.depth === depth, what + ": the dialog took the page's place: depth " + pageStack.depth)
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
-        expect(view !== null && !view.selecting, what + " ends selection")
+        waitFor(function () { return !pageStack.busy && view !== null && !view.selecting }, what + " to end selection")
     }
 
     function checkSelectionPanel() {
         var sel = panel("buttons")
         view.startSelection()
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        expect(sel.open && sel.visibleSize > 0, "the selection panel is open")
+        waitFor(function () { return shown(sel) && sel.buttons.length === 6 }, "the selection panel")
         expectOpaque(sel, "selection panel")
         same(sel.buttons.map(function (b) { return b.id }), ["share", "copy", "cut", "delete", "more", "done"],
              "the long-press menu's order, More actions, then leaving")
@@ -193,29 +167,25 @@ ApplicationWindow {
         var menus = findAll(sel, function (x) { return x._activationPermitted !== undefined || x.hasOwnProperty("__silica_menuitem") })
         expect(menus.length === 0, "one item: no push-up menu on the panel: " + menus.length)
         view.endSelection()
-        tools.pump(300)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
     }
 
     function ids(buttons) {
         return buttons.map(function (b) { return b.id })
     }
 
-    // The texts of the buttons the panel draws.
     function drawn(sel) {
         return findAll(sel, function (x) { return x.description !== undefined && x.icon !== undefined })
             .map(function (b) { return b.description })
     }
 
-    // Ending selection zeroes the count while the panel is still on its way
-    // out: from the first moment of the fade-out to its end the buttons stay.
     function checkLeavingKeepsButtons(sel) {
         var full = ["share", "copy", "cut", "delete", "more", "done"]
         view.startSelection()
-        tools.pump(300)
+        waitFor(function () { return shown(sel) }, "the panel")
         same(ids(sel.buttons), ["done"], "waiting for the first item: just Stop selecting")
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        same(ids(sel.buttons), full, "one item selected")
+        waitFor(function () { return String(ids(sel.buttons)) === String(full) }, "the buttons for one item")
         var before = drawn(sel)
         panelButton(sel, qsTrId("lautta-dir-sel-done")).clicked(null)
         expect(!view.selecting && view.model.selectedCount === 0, "Stop selecting ends it")
@@ -226,56 +196,55 @@ ApplicationWindow {
             same(drawn(sel), before, "and it draws them, step " + i)
             tools.pump(20)
         }
-        tools.pump(500)
-        expect(!sel.open, "the panel is gone")
+        waitFor(function () { return gone(sel) }, "the panel to leave")
 
         view.startSelection()
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        same(ids(sel.buttons), full, "selecting again")
+        waitFor(function () { return shown(sel) && String(ids(sel.buttons)) === String(full) }, "the buttons when selecting again")
         view.model.toggle(base + "a.md")
         expect(!view.selecting, "deselecting the last item ends selection")
         same(ids(sel.buttons), full, "the buttons stay as the panel leaves after the last item")
         same(drawn(sel), before, "and it draws them")
-        tools.pump(700)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
 
         view.startSelection()
-        tools.pump(300)
+        waitFor(function () { return shown(sel) }, "the panel")
         same(ids(sel.buttons), ["done"], "waiting again: just Stop selecting")
         view.endSelection()
-        tools.pump(500)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
     }
 
-    function checkMoreOfOne(sel) {
+    function checkMoreOfOne(sel, favourite) {
         var page = openMore(sel, [base + "a.md"])
         if (!page)
             return
         same(pageTitle(page), "a.md", "the header names the one item")
-        // The window shows three rows: the page's own list says all four.
         same(page.actions.map(function (a) { return [a.text, a.icon] }),
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
-              [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
+              [qsTrId(favourite ? "lautta-dir-act-edit-favourite" : "lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
               [qsTrId("lautta-dir-act-compress"), "file-archive"],
+              [qsTrId("lautta-dir-act-checksums"), "checksum"],
               [qsTrId("lautta-dir-act-move-new-folder"), "file-folder"]],
-             "one item: Rename, Add to favourites, Compress, Move to new folder, each with its icon")
+             "one item: Rename, Add to (or, once added, Edit) favourites, Compress, Checksums, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
-        expect(view !== null && view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")
+        waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
+        expect(view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")
 
         page = openMore(sel, [])
+        if (!page)
+            return
         pageRows(page)[0].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.newName !== undefined }) }, "the rename dialog")
         var dialog = pageStack.currentPage
         expect(dialog.newName !== undefined && dialog.uri === base + "a.md" && dialog.isDir === false,
                "Rename opens the rename dialog for the selected file")
         closeDialog(2, "Rename")
 
         page = openMore(sel, [base + "a.md"])
+        if (!page)
+            return
         pageRows(page)[1].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.added !== undefined }) }, "the favourite page")
         var favourite = pageStack.currentPage
         expect(favourite.added !== undefined && favourite.uri === base + "a.md" && favourite.isDir === false,
                "Add to favourites opens the favourite page for the selected file")
@@ -286,7 +255,6 @@ ApplicationWindow {
         var folderView = view
         folderView.startSelection()
         folderView.model.selectAll()
-        tools.pump(500)
         var page = openMore(sel, [])
         if (!page)
             return
@@ -295,21 +263,19 @@ ApplicationWindow {
              [[qsTrId("lautta-dir-act-compress"), glyph("archive")],
               [qsTrId("lautta-dir-act-move-new-folder"), glyph("folder")]],
              "several items: Compress and Move to new folder, the app's glyphs")
-        // A dialog takes the page's place while selection ends: the header
-        // and the rows stay as they were.
         folderView.endSelection()
-        tools.pump(300)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header keeps its count when selection ends")
         same(pageRows(page).length, 2, "the rows stay when selection ends")
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
+        waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
 
         folderView.model.selectAll()
         page = openMore(sel, [])
+        if (!page)
+            return
         pageRows(page)[0].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.formats !== undefined }) }, "the compress dialog")
         var dialog = pageStack.currentPage
         expect(dialog.formats !== undefined, "Compress opens the compress dialog")
         same(dialog.uris.slice().sort(), [base + "a.md", base + "b.md", base + "c.tar.gz"], "for every selected item")
@@ -317,26 +283,23 @@ ApplicationWindow {
     }
 
     function checkClipboardPanel() {
-        App.copy(JSON.stringify([base + "a.md"]))
-        tools.pump(700)
         var clip = panel("fromText")
-        expect(clip.open, "the paste bar is open")
+        App.copy(JSON.stringify([base + "a.md"]))
+        waitFor(function () { return shown(clip) }, "the paste bar")
         expectOpaque(clip, "paste bar")
         App.clearClipboard()
-        tools.pump(300)
+        waitFor(function () { return gone(clip) }, "the paste bar to leave")
     }
 
     function checkOtherBars() {
         expectOpaque(activityBar, "activity bar")
         pageStack.push(Qt.resolvedUrl("../../qml/pages/SearchPage.qml"), {}, PageStackAction.Immediate)
-        tools.pump(300)
         var searchPanels = findAll(pageStack.currentPage, function (x) { return x.dock !== undefined })
         if (expect(searchPanels.length === 1, "the search page has its progress panel"))
             expectOpaque(searchPanels[0], "search progress")
     }
 
     function checkArchiveIcons() {
-        // Headless, no render loop polishes the list: lay it out by hand.
         findAll(view, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = findAll(view, function (x) { return x.category === "archive" && x.thumbnailReady !== undefined })
         var archive = glyph("archive")
@@ -350,29 +313,27 @@ ApplicationWindow {
 
     Component.onCompleted: {
         documents.createFolder("SelectionPanel")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "b.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), base + "c.tar.gz")
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }, "the folder")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md"), "a.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "b.md"), "b.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), base + "c.tar.gz"), "c.tar.gz")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
-        if (expect(view && view.model.count === 3, "the folder lists its files")) {
+        if (waitFor(function () { return view && !view.model.loading && view.model.count === 3 }, "the folder's files")) {
             checkSelectionPanel()
             var sel = panel("buttons")
             checkLeavingKeepsButtons(sel)
-            checkMoreOfOne(sel)
+            checkMoreOfOne(sel, false)
             checkMoreOfSeveral(sel)
-            // Grid view holds to select: the same panel and page there.
             App.setSetting("view_mode", JSON.stringify("grid"))
-            tools.pump(300)
-            if (expect(view.gridMode, "the folder shows its files as a grid"))
-                checkMoreOfOne(sel)
+            if (waitFor(function () { return view.gridMode }, "the folder as a grid"))
+                checkMoreOfOne(sel, true)
             App.setSetting("view_mode", JSON.stringify("list"))
-            tools.pump(300)
+            waitFor(function () { return !view.gridMode }, "the folder as a list")
             checkClipboardPanel()
             checkArchiveIcons()
         }
         checkOtherBars()
+        reachedEnd = true
     }
 
     Item {

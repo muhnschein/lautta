@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TransferItemsModel { transferId }`: the items of one transfer and its
-//! summary for the details page.
 
 use super::events;
 use crate::json::to_json;
 use crate::runtime::core;
 use lautta_core::app_transfers::{direction_of, split_error, state_name, wait_reason_name, ProgressBook};
+use lautta_core::bridge::Level;
 use lautta_core::ops::OperationKind;
 use lautta_core::transfer::model::{kind_name, operation_name};
-use lautta_core::transfer::{TransferEvent, TransferItem};
+use lautta_core::transfer::{TransferEvent, TransferItem, TransferState};
 use lautta_core::vpath::display_name;
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
@@ -95,8 +94,6 @@ pub struct TransferItemsModel {
     transferIdChanged: qt_signal!(),
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
-    /// Summary of the transfer as JSON (see `summary_json`); empty when the
-    /// transfer is gone.
     summaryJson: qt_property!(QString; NOTIFY summaryChanged),
     summaryChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
@@ -217,7 +214,6 @@ impl TransferItemsModel {
     }
 }
 
-/// The header of the details page: names, counters, live rate, options.
 pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &ProgressBook) -> Option<String> {
     let s = core.engine.get(id)?;
     let first = core.engine.first_item(id);
@@ -227,6 +223,11 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         direction_of(&core.locations, s.kind, &i.src, &i.dst).name()
     });
     let loc_name = |u: &lautta_core::Uri| core.location(&u.location).map(|l| l.name).unwrap_or_default();
+    let (refused_level, refused_name) = if s.state == TransferState::Failed {
+        refused(core, id)
+    } else {
+        ("", String::new())
+    };
     Some(to_json(&serde_json::json!({
         "id": s.id,
         "kind": operation_name(s.kind),
@@ -244,12 +245,27 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         "finishedMs": s.finished_ms,
         "direction": direction,
         "destination": core.locations.display_address(&s.dest),
-        "destName": loc_name(&s.dest),
+        "destName": core.display_title(&s.dest),
         "sourceAddress": source_dir.as_ref().map(|u| core.locations.display_address(u)),
         "sourceName": source_dir.as_ref().map(loc_name),
         "verifyChecksums": s.options.verify_checksums,
         "preserveMtime": s.options.preserve_mtime,
+        "refusedLevel": refused_level,
+        "refusedName": refused_name,
     })))
+}
+
+fn refused(core: &lautta_core::app::Core, id: i64) -> (&'static str, String) {
+    let Some(item) = core.engine.first_refused(id) else {
+        return ("", String::new());
+    };
+    let bridge = core.bridge.as_ref();
+    let found = [&item.dst, &item.src].into_iter().find_map(|u| {
+        let level = bridge?.access(&u.location)?;
+        let name = core.location(&u.location).map(|l| l.name).unwrap_or_default();
+        (level != Level::Full).then(|| (level.as_str(), name))
+    });
+    found.unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -356,8 +372,8 @@ mod tests {
         assert_eq!(v["bytesDone"], 5);
         assert_eq!(v["itemsDone"], 1);
         assert_eq!(v["eta"], -1);
-        assert!(v["destination"].as_str().unwrap().starts_with("file://"));
-        assert!(v["sourceAddress"].as_str().unwrap().ends_with("/Documents"));
+        assert_eq!(v["destination"], "Downloads");
+        assert_eq!(v["sourceAddress"], "Documents");
         assert_eq!(v["verifyChecksums"], false);
     }
 }

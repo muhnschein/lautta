@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `Operations` singleton: copy/move with plan summaries, delete,
-//! conflicts before the run, compress/extract and archives as locations.
-//!
-//! All methods take `&self` and keep their state in cells: QML may call back
-//! from inside a signal handler while this object is still on the stack.
 
 use super::{error_parts, parse_uri, parse_uris};
 use crate::json::{from_json, to_json};
-use crate::runtime::{core, handle, spawn_then};
+use crate::runtime::{core, spawn_then};
 use lautta_core::app::{Core, Started};
+use lautta_core::app_archives::ArchiveHold;
 use lautta_core::app_operations::{parse_choice, ConflictEntry, PendingPlans, StartOptions};
-use lautta_core::compress::ArchiveKind;
+use lautta_core::compress::{ArchiveKind, CompressOptions};
 use lautta_core::ops::{OperationKind, Plan};
-use lautta_core::transfer::{TransferEvent, TransferState};
+use lautta_core::password::{self, Password};
 use lautta_core::{Error, ErrorKind, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -22,10 +18,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// At most one progress signal per job in this interval.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
-/// What starting an operation led to.
 enum Launched {
     Transfer(i64),
     Summary(Box<Plan>, String),
@@ -33,12 +27,9 @@ enum Launched {
 
 #[derive(Default)]
 struct State {
-    /// Folder to open when the extract transfer with this id completes.
-    open_after: HashMap<i64, String>,
-    /// The same, for extract plans that still wait for their summary.
-    open_after_plan: HashMap<u64, String>,
     jobs: HashMap<i64, Arc<AtomicBool>>,
-    listening: bool,
+    pages: HashMap<String, Vec<ArchiveHold>>,
+    opened: HashMap<String, ArchiveHold>,
 }
 
 #[derive(QObject, Default)]
@@ -56,32 +47,31 @@ pub struct Operations {
     resolveConflict: qt_method!(fn(&self, plan_id: i32, index: i32, choice: QString, apply_to_all: bool)),
     remove: qt_method!(fn(&self, uris_json: QString)),
     deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
-    compress: qt_method!(fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString)),
+    compress: qt_method!(
+        fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString, password: QString)
+    ),
+    weakPassword: qt_method!(fn(&self, text: QString) -> bool),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
-    measure: qt_method!(fn(&self, uris_json: QString)),
-    extract: qt_method!(fn(&self, archive_uri: QString, dest_uri: QString)),
-    extractAndOpen: qt_method!(fn(&self, archive_uri: QString, dest_uri: QString)),
-    inspectArchive: qt_method!(fn(&self, archive_uri: QString)),
-    openArchive: qt_method!(fn(&self, uri: QString)),
+    extract: qt_method!(fn(&self, archive_uri: QString, password: QString)),
+    openArchive: qt_method!(fn(&self, uri: QString, password: QString)),
+    holdArchive: qt_method!(fn(&self, uri: QString)),
+    releaseArchive: qt_method!(fn(&self, uri: QString)),
     isArchive: qt_method!(fn(&self, uri: QString) -> bool),
     archiveSource: qt_method!(fn(&self, uri: QString) -> QString),
     displayPath: qt_method!(fn(&self, uri: QString) -> QString),
     probeShared: qt_method!(fn(&self, paths_json: QString) -> QString),
-    destinationsJson: qt_method!(fn(&self) -> QString),
+    sharePlacesJson: qt_method!(fn(&self) -> QString),
 
     needsSummary: qt_signal!(planId: i32, summaryJson: QString),
     started: qt_signal!(transferId: i64),
-    /// `subject`: the URI of the item the error is about, or empty.
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
     removed: qt_signal!(trashedCount: i32, transferId: i64),
     conflictResolved: qt_signal!(planId: i32, remaining: i32),
     jobStarted: qt_signal!(jobId: i32),
     jobProgress: qt_signal!(jobId: i32, done: i64, total: i64),
     jobFinished: qt_signal!(jobId: i32, ok: bool, resultUri: QString),
-    measured: qt_signal!(infoJson: QString),
-    archiveInspected: qt_signal!(uri: QString, infoJson: QString),
     archiveOpened: qt_signal!(uri: QString, rootUri: QString),
-    extractFinished: qt_signal!(transferId: i64, ok: bool, destUri: QString),
+    locked: qt_signal!(uri: QString, action: QString, wrong: bool),
 
     pending: Arc<PendingPlans>,
     next_job: Cell<i32>,
@@ -107,17 +97,27 @@ async fn launch(core: &Core, started: Result<Started>) -> Result<Launched> {
     })
 }
 
+fn password_of(text: &QString) -> Option<Password> {
+    Password::from_text(text.to_string())
+}
+
+fn asks_password(e: &Error) -> Option<bool> {
+    match e.kind {
+        ErrorKind::PasswordRequired => Some(false),
+        ErrorKind::WrongPassword => Some(true),
+        _ => None,
+    }
+}
+
 fn bad_arguments() -> Error {
     Error::new(ErrorKind::InvalidArgument, "bad arguments")
 }
 
-/// The plan of a summary sheet is gone (started or discarded already).
 fn plan_gone() -> Error {
     Error::new(ErrorKind::NotFound, "the planned operation is no longer pending")
 }
 
-/// `file:///a%20b` or `/a b` as a path.
-fn local_path(text: &str) -> std::path::PathBuf {
+pub(crate) fn local_path(text: &str) -> std::path::PathBuf {
     let raw = text.strip_prefix("file://").unwrap_or(text);
     let bytes = raw.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -162,8 +162,6 @@ impl Operations {
         self.jobs_changed();
     }
 
-    // ------------------------------------------------------ copy and move
-
     fn copyTo(&self, uris_json: QString, dest_uri: QString) {
         self.transfer_op(OperationKind::Copy, &uris_json, &dest_uri);
     }
@@ -182,27 +180,17 @@ impl Operations {
             async move { launch(&core, core.copy_or_move(kind, sources, dest).await).await },
             move |res| {
                 if let Some(p) = me.as_pinned() {
-                    p.borrow().arrived(res, None);
+                    p.borrow().arrived(res);
                 }
             },
         );
     }
 
-    /// A started or planned operation reached the GUI thread.
-    fn arrived(&self, res: Result<Launched>, open_after: Option<String>) {
+    fn arrived(&self, res: Result<Launched>) {
         match res {
-            Ok(Launched::Transfer(id)) => {
-                if let Some(dest) = open_after {
-                    self.state.borrow_mut().open_after.insert(id, dest);
-                    self.listen();
-                }
-                self.started(id);
-            }
+            Ok(Launched::Transfer(id)) => self.started(id),
             Ok(Launched::Summary(plan, summary)) => {
                 let id = self.pending.insert(*plan);
-                if let Some(dest) = open_after {
-                    self.state.borrow_mut().open_after_plan.insert(id, dest);
-                }
                 self.needsSummary(plan_id(id), QString::from(summary.as_str()));
             }
             Err(e) => self.emit_failed(&e),
@@ -222,12 +210,10 @@ impl Operations {
         let Some(core) = core() else {
             return self.emit_failed(&plan_gone());
         };
-        let open_after = self.state.borrow_mut().open_after_plan.remove(&id);
         let pending = self.pending.clone();
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                // A conflict answer may still be working on the plan.
                 let plan = pending.take_when_returned(id).await.ok_or_else(plan_gone)?;
                 let started = match options {
                     Some(text) => {
@@ -240,19 +226,15 @@ impl Operations {
             },
             move |res| {
                 if let Some(p) = me.as_pinned() {
-                    p.borrow().arrived(res, open_after);
+                    p.borrow().arrived(res);
                 }
             },
         );
     }
 
     fn discardPlan(&self, plan_id: i32) {
-        let id = u64::try_from(plan_id).unwrap_or(0);
-        self.pending.discard(id);
-        self.state.borrow_mut().open_after_plan.remove(&id);
+        self.pending.discard(u64::try_from(plan_id).unwrap_or(0));
     }
-
-    // ------------------------------------------------------ conflicts
 
     fn conflictsJson(&self, plan_id: i32) -> QString {
         let Some(core) = core() else {
@@ -297,8 +279,6 @@ impl Operations {
         );
     }
 
-    // ------------------------------------------------------ delete
-
     fn remove(&self, uris_json: QString) {
         let (Some(core), Some(items)) = (core(), parse_uris(&uris_json)) else {
             return self.emit_failed(&bad_arguments());
@@ -306,7 +286,6 @@ impl Operations {
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                // A delete that succeeds trashed every item that goes there.
                 let trashed = items.iter().filter(|u| core.deletes_to_trash(u)).count();
                 (core.delete(&items).await, trashed)
             },
@@ -323,9 +302,6 @@ impl Operations {
         );
     }
 
-    /// True when `remove` would delete any of the items for good: they
-    /// skip the Trash (OPS-8), so the page asks first. Junk counts as
-    /// permanent: asking is the safe side.
     fn deletesPermanently(&self, uris_json: QString) -> bool {
         match (core(), parse_uris(&uris_json)) {
             (Some(core), Some(items)) => items.iter().any(|u| !core.deletes_to_trash(u)),
@@ -333,9 +309,14 @@ impl Operations {
         }
     }
 
-    // ------------------------------------------------------ compress
-
-    fn compress(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString) {
+    fn compress(
+        &self,
+        uris_json: QString,
+        dest_uri: QString,
+        name: QString,
+        kind: QString,
+        password: QString,
+    ) {
         let (Some(core), Some(sources), Some(dest), Some(kind)) = (
             core(),
             parse_uris(&uris_json),
@@ -354,13 +335,15 @@ impl Operations {
         self.change_jobs(1);
         self.jobStarted(job);
         let me = QPointer::from(self);
-        let progress = self.progress_sink(job);
+        let opts = CompressOptions {
+            progress: self.progress_sink(job),
+            cancel,
+            password: password_of(&password),
+            ..CompressOptions::new(kind)
+        };
         let name = name.to_string();
         spawn_then(
-            async move {
-                core.compress_to(&sources, &dest, &name, kind, progress, cancel)
-                    .await
-            },
+            async move { core.compress_to(&sources, &dest, &name, opts).await },
             move |res| {
                 let Some(p) = me.as_pinned() else { return };
                 let this = p.borrow();
@@ -379,7 +362,6 @@ impl Operations {
         );
     }
 
-    /// Progress as signals on the GUI thread, at most a few times a second.
     fn progress_sink(&self, job: i32) -> lautta_core::provider::ProgressSink {
         let me = QPointer::from(self);
         let deliver = qmetaobject::queued_callback(move |(done, total): (i64, i64)| {
@@ -409,125 +391,90 @@ impl Operations {
         }
     }
 
-    fn measure(&self, uris_json: QString) {
-        let (Some(core), Some(sources)) = (core(), parse_uris(&uris_json)) else {
+    fn weakPassword(&self, text: QString) -> bool {
+        password::is_weak(&text.to_string())
+    }
+
+    fn extract(&self, archive_uri: QString, password: QString) {
+        let (Some(core), Some(archive)) = (core(), parse_uri(&archive_uri)) else {
             return self.emit_failed(&bad_arguments());
         };
-        let me = QPointer::from(self);
-        spawn_then(async move { core.measure(&sources).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(m) => this.measured(QString::from(to_json(&m).as_str())),
-                Err(e) => this.emit_failed(&e),
-            }
-        });
-    }
-
-    // ------------------------------------------------------ archives
-
-    fn extract(&self, archive_uri: QString, dest_uri: QString) {
-        self.extract_op(&archive_uri, &dest_uri, false);
-    }
-
-    fn extractAndOpen(&self, archive_uri: QString, dest_uri: QString) {
-        self.extract_op(&archive_uri, &dest_uri, true);
-    }
-
-    fn extract_op(&self, archive_uri: &QString, dest_uri: &QString, open: bool) {
-        let (Some(core), Some(archive), Some(dest)) = (core(), parse_uri(archive_uri), parse_uri(dest_uri))
-        else {
-            return self.emit_failed(&bad_arguments());
-        };
-        let open_after = open.then(|| dest.to_string());
+        let password = password_of(&password);
         let me = QPointer::from(self);
         spawn_then(
-            async move { launch(&core, core.extract(&archive, &dest).await).await },
+            async move { launch(&core, core.extract(&archive, password).await).await },
             move |res| {
-                if let Some(p) = me.as_pinned() {
-                    p.borrow().arrived(res, open_after);
+                let Some(p) = me.as_pinned() else { return };
+                let this = p.borrow();
+                match res.as_ref().err().and_then(asks_password) {
+                    Some(wrong) => this.locked(archive_uri, QString::from("extract"), wrong),
+                    None => this.arrived(res),
                 }
             },
         );
     }
 
-    /// Listens to the engine once, to tell when an extract finished.
-    fn listen(&self) {
-        let Some(core) = core() else { return };
-        if std::mem::replace(&mut self.state.borrow_mut().listening, true) {
-            return;
-        }
-        let me = QPointer::from(self);
-        let deliver = qmetaobject::queued_callback(move |(id, ok): (i64, bool)| {
-            if let Some(p) = me.as_pinned() {
-                p.borrow().transfer_finished(id, ok);
-            }
-        });
-        let mut events = core.engine.subscribe();
-        handle().spawn(async move {
-            use tokio::sync::broadcast::error::RecvError;
-            loop {
-                match events.recv().await {
-                    Ok(TransferEvent::Finished(id)) => {
-                        let ok = core
-                            .engine
-                            .get(id)
-                            .is_some_and(|s| s.state == TransferState::Completed);
-                        deliver((id, ok));
-                    }
-                    Ok(_) | Err(RecvError::Lagged(_)) => {}
-                    Err(RecvError::Closed) => break,
-                }
-            }
-        });
-    }
-
-    fn transfer_finished(&self, id: i64, ok: bool) {
-        let dest = self.state.borrow_mut().open_after.remove(&id);
-        if let Some(dest) = dest {
-            self.extractFinished(id, ok, QString::from(dest.as_str()));
-        }
-    }
-
-    fn inspectArchive(&self, archive_uri: QString) {
-        let (Some(core), Some(uri)) = (core(), parse_uri(&archive_uri)) else {
-            return self.emit_failed(&bad_arguments());
-        };
-        let me = QPointer::from(self);
-        spawn_then(async move { core.archive_info(&uri).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(info) => this.archiveInspected(archive_uri, QString::from(to_json(&info).as_str())),
-                Err(e) => this.emit_failed(&e),
-            }
-        });
-    }
-
-    fn openArchive(&self, uri: QString) {
+    fn openArchive(&self, uri: QString, password: QString) {
         let (Some(core), Some(archive)) = (core(), parse_uri(&uri)) else {
             return self.emit_failed(&bad_arguments());
         };
+        let password = password_of(&password);
         let me = QPointer::from(self);
-        spawn_then(async move { core.open_archive(&archive).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(location) => {
-                    let root = Uri::root(location).to_string();
-                    this.archiveOpened(uri, QString::from(root.as_str()));
+        spawn_then(
+            async move { core.open_archive(&archive, password).await },
+            move |res| {
+                let Some(p) = me.as_pinned() else { return };
+                let this = p.borrow();
+                match res {
+                    Ok((location, hold)) => {
+                        let root = Uri::root(location.clone()).to_string();
+                        let replaced = this.state.borrow_mut().opened.insert(location, hold);
+                        drop(replaced);
+                        this.archiveOpened(uri, QString::from(root.as_str()));
+                    }
+                    Err(e) => match asks_password(&e) {
+                        Some(wrong) => this.locked(uri, QString::from("open"), wrong),
+                        None => this.emit_failed(&e),
+                    },
                 }
-                Err(e) => this.emit_failed(&e),
-            }
-        });
+            },
+        );
     }
 
-    /// Whether the URI lies inside an opened archive (LOC-5).
+    fn holdArchive(&self, uri: QString) {
+        let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
+            return;
+        };
+        let hold = {
+            let _runtime = crate::runtime::handle().enter();
+            core.hold_archive(&u.location)
+        };
+        let opener = {
+            let mut state = self.state.borrow_mut();
+            state.pages.entry(u.location.clone()).or_default().push(hold);
+            state.opened.remove(&u.location)
+        };
+        drop(opener);
+    }
+
+    fn releaseArchive(&self, uri: QString) {
+        let Some(u) = parse_uri(&uri) else { return };
+        let hold = {
+            let mut state = self.state.borrow_mut();
+            let pages = state.pages.get_mut(&u.location);
+            let hold = pages.and_then(Vec::pop);
+            if state.pages.get(&u.location).is_some_and(Vec::is_empty) {
+                state.pages.remove(&u.location);
+            }
+            hold
+        };
+        drop(hold);
+    }
+
     fn isArchive(&self, uri: QString) -> bool {
         self.archive_location(&uri).is_some()
     }
 
-    /// The archive file a location inside an archive was opened from.
     fn archiveSource(&self, uri: QString) -> QString {
         self.archive_location(&uri)
             .and_then(|l| l.url)
@@ -540,8 +487,6 @@ impl Operations {
         matches!(location.kind, lautta_core::locations::LocationKind::Archive).then_some(location)
     }
 
-    // ------------------------------------------------------ helpers for pages
-
     fn displayPath(&self, uri: QString) -> QString {
         match (core(), parse_uri(&uri)) {
             (Some(core), Some(u)) => QString::from(core.display_path(&u).as_str()),
@@ -549,8 +494,6 @@ impl Operations {
         }
     }
 
-    /// Which of the received files Lautta can read (INT-1); the paths may be
-    /// `file://` URLs.
     fn probeShared(&self, paths_json: QString) -> QString {
         let paths: Vec<String> = from_json(&paths_json.to_string()).unwrap_or_default();
         let paths: Vec<std::path::PathBuf> = paths.iter().map(|p| local_path(p)).collect();
@@ -558,9 +501,9 @@ impl Operations {
         QString::from(to_json(&files).as_str())
     }
 
-    fn destinationsJson(&self) -> QString {
-        let list = core().map(|c| c.destinations()).unwrap_or_default();
-        QString::from(to_json(&list).as_str())
+    fn sharePlacesJson(&self) -> QString {
+        let places = core().map(|c| c.share_places()).unwrap_or_default();
+        QString::from(to_json(&places).as_str())
     }
 }
 
