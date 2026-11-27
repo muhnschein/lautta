@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A video whose sound is in a format the phone can't decode, such as DTS, E-AC-3 or TrueHD in an MKV, still plays its picture, and the header now says *Cannot play the audio track*. Before, it said *Can't play film.mkv.*, and a video on a server was downloaded whole for nothing ([#285](https://github.com/muhnschein/lautta/issues/285)).
 - Reproducible builds: a commit always builds to the same RPM, byte for byte. `tools/verify-rpm.sh` checks one for you (`doc/VERIFYING.md`).
 - Lautta speaks your language: it follows the phone's *Language* setting in all 39 languages Sailfish OS offers. Its launcher description and *Save to Lautta* in the share menu are translated too ([#36](https://github.com/muhnschein/lautta/issues/36)).
 - A PDF whose fill pattern repeats at a huge step, such as `tiling-pattern-large-steps.pdf` from the pdf.js tests, no longer closes Lautta: the page shows as it should.

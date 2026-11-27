@@ -2549,5 +2549,9 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>ഈ ഫയൽ സാധുവായ UTF-8 അല്ല. ചില അക്ഷരങ്ങൾ മാറ്റിസ്ഥാപിച്ചിരിക്കുന്നു.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>ഓഡിയോ ട്രാക്ക് പ്ലേ ചെയ്യാനാകില്ല</translation>
+    </message>
 </context>
 </TS>

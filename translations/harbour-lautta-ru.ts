@@ -2603,5 +2603,9 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Этот файл не в корректной кодировке UTF-8. Некоторые символы заменены.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Не удаётся воспроизвести звуковую дорожку</translation>
+    </message>
 </context>
 </TS>

@@ -39,6 +39,11 @@ ApplicationWindow {
              qsTrId("lautta-err-wrong-password-unnamed"), "wrong password unnamed")
     }
 
+    function checkNoSound() {
+        same(ErrorText.message("NoSound", { "item": "a.mkv", "location": "Videos", "open": true }),
+             qsTrId("lautta-err-no-sound"), "no file name, the header shows it")
+    }
+
     function checkItemStates() {
         var cases = [
             ["copy", "", "lautta-xfr-item-copying"],
@@ -110,6 +115,7 @@ ApplicationWindow {
             Component.onCompleted: {
                 test.checkPermission()
                 test.checkPasswords()
+                test.checkNoSound()
                 test.checkItemStates()
                 test.checkCanceledItems()
                 test.checkPending()
