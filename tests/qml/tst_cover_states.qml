@@ -32,6 +32,7 @@ ApplicationWindow {
 
             anchors.fill: parent
             live: false
+            appActive: true
         }
     }
 
@@ -74,7 +75,7 @@ ApplicationWindow {
 
     Component { id: folderPage; DirectoryPage {} }
     Component { id: plainDialog; Dialog {} }
-    Component { id: lateCover; CoverPage { live: false } }
+    Component { id: lateCover; CoverPage { live: false; appActive: true } }
     Component { id: plainPage; Page {} }
     Component {
         id: slowPage
@@ -237,6 +238,19 @@ ApplicationWindow {
                }), "both fill the cover, drawn at its size, ready, cached: " + lit[0].sourceSize + " " + lit[0].status)
         var layers = listOf(lanes[0].children)
         expect(lit[0].z >= faint[0].z && layers.indexOf(lit[0]) > layers.indexOf(faint[0]), "lit lanes over faint ones")
+        var shown = named(frame, "coverLanes")[0]
+        cover.appActive = false
+        cover.live = false
+        expect(named(frame, "coverLanes").length === 1 && named(frame, "coverLanes")[0] === shown,
+               "out of sight while another app is in front, the cover keeps what it drew")
+        cover.live = true
+        expect(named(frame, "coverLanes")[0] === shown, "back in sight, the same lanes, not drawn again")
+        cover.live = false
+        cover.appActive = true
+        expect(named(frame, "coverLanes").length === 0, "back in Lautta, the hidden cover drops the lanes")
+        cover.live = true
+        expect(named(frame, "coverLanes").length === 1 && named(frame, "coverLanes")[0] !== shown,
+               "leaving Lautta builds the cover anew")
         cover.live = false
         expect(named(frame, "coverLanes").length === 0, "hidden cover drops the lanes")
         cover.live = true

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lautta's cover no longer flickers when you come back to the home screen from another app. It keeps what it showed instead of drawing it again ([#297](https://github.com/muhnschein/lautta/issues/297)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0
