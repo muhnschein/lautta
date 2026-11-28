@@ -395,7 +395,7 @@ impl Scan<'_> {
                 node: child,
                 parent: descend.dst_dir.clone(),
                 frame: descend.frame,
-                depth: next.depth + 1,
+                depth: ancestors.len(),
             }));
         }
         Ok(())
