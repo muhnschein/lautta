@@ -14,8 +14,8 @@ use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHand
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
-    remote_thumbnail, render_glow, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source, ThumbJobs,
-    ThumbSettings, ThumbSource, ThumbnailCache, THUMB_SIZES,
+    is_svg, remote_thumbnail, render_glow, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source,
+    ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache, MAX_SVG_THUMB_BYTES, THUMB_SIZES,
 };
 use crate::thumbs_pdf::PdfThumbs;
 use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
@@ -685,6 +685,9 @@ impl Previews {
         if kind == PreviewKind::Glow {
             return self.glow(core, &file).await;
         }
+        if is_svg(entry) {
+            return svg_thumbnail(core, &file, &settings).await.map(Arc::new);
+        }
         let pdf = category_of(entry) == FileCategory::Pdf;
         let version = thumb_key(&file.key_uri, 0, entry.modified_ms(), entry.etag.as_deref());
         if pdf && self.pdf.is_refused(&version) {
@@ -862,6 +865,23 @@ async fn read_cover(file: &ThumbFile) -> Result<Option<Vec<u8>>> {
     Ok(read_audio_of(Arc::from(handle), true)
         .await?
         .and_then(|r| r.cover))
+}
+
+async fn svg_thumbnail(core: &Core, file: &ThumbFile, settings: &ThumbSettings) -> Result<Vec<u8>> {
+    let max = match (file.local, core.power_save()) {
+        (true, _) => MAX_SVG_THUMB_BYTES,
+        (false, true) => 0,
+        (false, false) => settings.max_remote_bytes.min(MAX_SVG_THUMB_BYTES),
+    };
+    let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+    let bytes = read_all(handle.as_ref(), max.saturating_add(1)).await?;
+    if bytes.len() as u64 > max {
+        return Err(Error::new(
+            ErrorKind::Unsupported,
+            "file too large for a thumbnail",
+        ));
+    }
+    Ok(bytes)
 }
 
 struct ThumbFile {
