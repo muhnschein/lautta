@@ -482,7 +482,7 @@ impl Core {
     }
 
     pub async fn search_scope(
-        &self,
+        self: &Arc<Self>,
         groups: &[SearchGroup],
         request: &SearchRequest,
         cancel: Arc<AtomicBool>,
@@ -496,7 +496,19 @@ impl Core {
         futures::future::join_all(runs).await;
     }
 
-    fn indexed_hits(
+    async fn indexed_hits(
+        self: &Arc<Self>,
+        root: &SearchRoot,
+        indexed: &crate::index::store::RootInfo,
+        query: &search::SearchQuery,
+    ) -> Result<Vec<SearchHit>> {
+        let (core, root, indexed, query) = (self.clone(), root.clone(), indexed.clone(), query.clone());
+        tokio::task::spawn_blocking(move || core.indexed_hits_now(&root, &indexed, &query))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, format!("index query failed: {e}")))?
+    }
+
+    fn indexed_hits_now(
         &self,
         root: &SearchRoot,
         indexed: &crate::index::store::RootInfo,
@@ -555,7 +567,7 @@ impl Core {
 
     #[allow(clippy::too_many_arguments)]
     async fn search_index(
-        &self,
+        self: &Arc<Self>,
         group: usize,
         root_index: usize,
         root: &SearchRoot,
@@ -564,7 +576,7 @@ impl Core {
         cancel: &Arc<AtomicBool>,
         out: &mpsc::Sender<ScopeEvent>,
     ) -> Result<u64> {
-        let first = self.indexed_hits(root, indexed, query)?;
+        let first = self.indexed_hits(root, indexed, query).await?;
         let mut shown: std::collections::HashSet<Uri> = first.iter().map(|h| h.uri.clone()).collect();
         if !first.is_empty() {
             let _ = out
@@ -585,7 +597,7 @@ impl Core {
         if self.index_refresh_root(indexed, cancel).await.is_err() {
             return Ok(shown.len() as u64);
         }
-        let fresh = self.indexed_hits(root, indexed, query)?;
+        let fresh = self.indexed_hits(root, indexed, query).await?;
         let now: std::collections::HashSet<Uri> = fresh.iter().map(|h| h.uri.clone()).collect();
         let gone: Vec<Uri> = shown.iter().filter(|u| !now.contains(*u)).cloned().collect();
         let added: Vec<SearchHit> = fresh.into_iter().filter(|h| !shown.contains(&h.uri)).collect();
@@ -606,7 +618,7 @@ impl Core {
     }
 
     async fn search_group(
-        &self,
+        self: &Arc<Self>,
         group: usize,
         spec: &SearchGroup,
         query: &search::SearchQuery,
@@ -1198,5 +1210,79 @@ mod tests {
             archives: 300,
         };
         assert_eq!(c.total(), 321);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_busy_index_does_not_hold_back_live_groups_of_an_everywhere_search() {
+        use crate::entry::Capabilities;
+        use crate::locations::{Location, LocationKind, LocationRegistry};
+        use crate::paths::AppPaths;
+        use crate::provider::memory::MemoryProvider;
+        use crate::vpath::VPath;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Documents")).unwrap();
+        std::fs::write(dir.path().join("Documents/report-phone.txt"), b"x").unwrap();
+        let paths = AppPaths::new(dir.path());
+        let registry = LocationRegistry::with_media_root(paths.clone(), dir.path().join("media"));
+        let core = Core::open_with(paths, registry).await.unwrap();
+        let index = core.index.as_ref().unwrap();
+        for t in core.index_targets() {
+            let root = index.store.root(&t.location, &VPath::root()).unwrap();
+            core.index_refresh_root(&root, &AtomicBool::new(false))
+                .await
+                .unwrap();
+        }
+        let nas = MemoryProvider::new(Capabilities::with(&[]));
+        nas.add_file("share/report-nas.txt", b"x", 0);
+        let server = LocationKind::Server {
+            provider: "sftp".into(),
+        };
+        core.locations
+            .register(Location::remote("nv-nas", server, "NAS", None), Arc::new(nas));
+        core.location_prefs
+            .set(&LocationPrefs {
+                index_names: true,
+                ..LocationPrefs::new("nv-nas")
+            })
+            .unwrap();
+        index.store.root("nv-nas", &VPath::root()).unwrap();
+        let groups = core.search_groups(&SearchScope::Everywhere, None);
+        let nas_group = groups.iter().position(|g| g.kind == GroupKind::Server).unwrap();
+        let (held_tx, held) = std::sync::mpsc::channel();
+        let (release, release_rx) = std::sync::mpsc::channel();
+        let store = index.store.clone();
+        let holder = std::thread::spawn(move || store.hold_until(held_tx, release_rx));
+        held.recv().unwrap();
+        let request = SearchRequest {
+            text: "report".into(),
+            ..SearchRequest::default()
+        };
+        let (tx, mut rx) = mpsc::channel(8);
+        let searching = core.clone();
+        let search = tokio::spawn(async move {
+            searching
+                .search_scope(&groups, &request, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        let nas_hit = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while let Some(event) = rx.recv().await {
+                if let ScopeEvent::Hits { group, hits, .. } = event {
+                    if group == nas_group {
+                        return Some(hits[0].uri.to_string());
+                    }
+                }
+            }
+            None
+        })
+        .await;
+        release.send(()).unwrap();
+        holder.join().unwrap();
+        assert_eq!(
+            nas_hit,
+            Ok(Some("lautta://nv-nas/share/report-nas.txt".to_owned())),
+            "the server's hits came while the index was busy"
+        );
+        while rx.recv().await.is_some() {}
+        search.await.unwrap();
     }
 }
