@@ -447,6 +447,16 @@ mod tests {
         };
         assert_eq!(state("user-documents"), Some((RootState::Failed, true)));
         assert_eq!(state("user-downloads"), Some((RootState::Ready, false)));
+        let documents = index.store.root("user-documents", &VPath::root()).unwrap();
+        index
+            .store
+            .set_state(documents.id, RootState::Crawling, None)
+            .unwrap();
+        assert_eq!(
+            state("user-documents"),
+            Some((RootState::Failed, true)),
+            "a failure the full store could not save still shows"
+        );
         index.store.grow_again();
         refresh_due(&Arc::downgrade(&core), &stop, true).await;
         assert_eq!(state("user-documents"), Some((RootState::Ready, false)));
