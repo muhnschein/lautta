@@ -18,6 +18,7 @@ use lautta_bridge_proto::{
     Opts, OptsBuilder, WireCheckItem, WireCheckResult, WireWalkItem, MAX_CHECK_ITEMS, MAX_READ_BYTES,
 };
 use std::collections::HashMap;
+use std::io::Read;
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
@@ -323,6 +324,9 @@ impl Provider for NetvfsProvider {
     }
 
     async fn open_read(&self, path: &VPath, lane: Lane) -> Result<Box<dyn ReadHandle>> {
+        if !self.known_capabilities().await.has(cap::RANDOM_READ) {
+            return self.open_ranged(path, lane).await;
+        }
         let link = self.link()?;
         let (handle, size) = rpc(link
             .proxy()
@@ -406,6 +410,116 @@ impl Provider for NetvfsProvider {
             total: n(total),
             used: n(used),
         })
+    }
+}
+
+impl NetvfsProvider {
+    async fn open_ranged(&self, path: &VPath, lane: Lane) -> Result<Box<dyn ReadHandle>> {
+        let entry = self.stat(path, true, lane).await?;
+        if entry.is_dir() {
+            return Err(Error::kind(ErrorKind::IsADirectory));
+        }
+        Ok(Box::new(RangedReadHandle {
+            link: self.link()?,
+            loc: self.loc.clone(),
+            path: path.clone(),
+            lane,
+            size: entry.size,
+            last: tokio::sync::Mutex::new(None),
+        }))
+    }
+}
+
+const FIRST_RANGE_BYTES: u64 = 1 << 20;
+const MAX_RANGE_BYTES: u64 = 16 << 20;
+
+struct Range {
+    offset: u64,
+    bytes: Vec<u8>,
+}
+
+impl Range {
+    fn end(&self) -> u64 {
+        self.offset + self.bytes.len() as u64
+    }
+
+    fn slice(&self, offset: u64, max: usize) -> Option<Vec<u8>> {
+        if offset < self.offset || offset >= self.end() {
+            return None;
+        }
+        let start = usize::try_from(offset - self.offset).ok()?;
+        let end = start.saturating_add(max).min(self.bytes.len());
+        Some(self.bytes[start..end].to_vec())
+    }
+}
+
+struct RangedReadHandle {
+    link: Arc<Link>,
+    loc: String,
+    path: VPath,
+    lane: Lane,
+    size: Option<u64>,
+    last: tokio::sync::Mutex<Option<Range>>,
+}
+
+impl RangedReadHandle {
+    async fn fetch(&self, offset: u64, length: u64) -> Result<Vec<u8>> {
+        let (reader, writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
+        let drain = tokio::task::spawn_blocking(move || {
+            let mut out = Vec::new();
+            std::fs::File::from(reader)
+                .take(length)
+                .read_to_end(&mut out)
+                .map(|_| out)
+        });
+        let opts = OptsBuilder::new()
+            .str("lane", self.lane.wire())
+            .int("offset", to_i64(offset))
+            .int("size", to_i64(length))
+            .build();
+        let start = async {
+            let started = self
+                .link
+                .proxy()
+                .download(&self.loc, self.path.as_bytes(), Fd::from(&writer), &opts)
+                .await;
+            drop(writer);
+            started
+        };
+        let job = self.link.run_job(start, &no_progress()).await;
+        let bytes = drain
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, format!("range reader failed: {e}")))??;
+        job?;
+        Ok(bytes)
+    }
+}
+
+#[async_trait]
+impl ReadHandle for RangedReadHandle {
+    fn size(&self) -> Option<u64> {
+        self.size
+    }
+
+    async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
+        if max == 0 || self.size.is_some_and(|s| offset >= s) {
+            return Ok(Vec::new());
+        }
+        let max = max.min(MAX_READ_BYTES as usize);
+        let mut last = self.last.lock().await;
+        if let Some(hit) = last.as_ref().and_then(|r| r.slice(offset, max)) {
+            return Ok(hit);
+        }
+        let length = match last.as_ref() {
+            Some(r) if r.end() == offset => (r.bytes.len() as u64 * 2).min(MAX_RANGE_BYTES),
+            _ => FIRST_RANGE_BYTES,
+        }
+        .max(max as u64);
+        let bytes = self.fetch(offset, length).await?;
+        let range = Range { offset, bytes };
+        let out = range.slice(offset, max).unwrap_or_default();
+        *last = Some(range);
+        Ok(out)
     }
 }
 

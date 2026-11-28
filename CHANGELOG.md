@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Files on FTPS servers open in Lautta's viewers. Before, they failed with *openRead is not supported* ([#292](https://github.com/muhnschein/lautta/issues/292)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0
