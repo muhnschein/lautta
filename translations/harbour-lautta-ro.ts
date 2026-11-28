@@ -2627,5 +2627,9 @@
             <numerusform>%n din %1 au eșuat</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Spațiu insuficient</translation>
+    </message>
 </context>
 </TS>

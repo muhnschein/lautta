@@ -2682,5 +2682,9 @@
             <numerusform>%n od %1 ni uspelo</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Ni dovolj prostora</translation>
+    </message>
 </context>
 </TS>

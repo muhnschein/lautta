@@ -2572,5 +2572,9 @@
             <numerusform>%n/%1 epäonnistui</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Tilaa ei ole tarpeeksi</translation>
+    </message>
 </context>
 </TS>

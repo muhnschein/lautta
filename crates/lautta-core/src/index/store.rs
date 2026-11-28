@@ -603,6 +603,20 @@ impl IndexStore {
         Ok(())
     }
 
+    #[cfg(test)]
+    pub(crate) fn stop_growing(&self) {
+        let conn = self.lock();
+        let pages: i64 = conn.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+        conn.pragma_update(None, "max_page_count", pages).unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn grow_again(&self) {
+        self.lock()
+            .pragma_update(None, "max_page_count", 1_073_741_823i64)
+            .unwrap();
+    }
+
     pub fn integrity_ok(&self) -> bool {
         self.lock()
             .execute("INSERT INTO node_fts(node_fts) VALUES ('integrity-check')", [])

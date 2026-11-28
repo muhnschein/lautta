@@ -2517,5 +2517,9 @@
             <numerusform>%1 項中有 %n 項失敗</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>空間不足</translation>
+    </message>
 </context>
 </TS>

@@ -2517,5 +2517,9 @@
             <numerusform>%n/%1 başarısız</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Yeterli alan yok</translation>
+    </message>
 </context>
 </TS>
