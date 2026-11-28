@@ -248,6 +248,9 @@ ApplicationWindow {
         cover.live = false
         cover.appActive = true
         expect(named(frame, "coverLanes").length === 0, "back in Lautta, the hidden cover drops the lanes")
+        cover.appActive = false
+        expect(named(frame, "coverLanes").length === 0, "Lautta out of front without the cover in sight builds nothing")
+        cover.appActive = true
         cover.live = true
         expect(named(frame, "coverLanes").length === 1 && named(frame, "coverLanes")[0] !== shown,
                "leaving Lautta builds the cover anew")
