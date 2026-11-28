@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Lautta 1.0
 import "../../../qml/components/ErrorText.js" as ErrorText
+import "../../../qml/components/viewers"
 
 Item {
     id: root
@@ -21,11 +22,15 @@ Item {
     MediaSource { id: idle }
     MediaSource { id: streaming }
     MediaSource { id: copying; preferDownload: true }
+    MediaSource { id: deepCopy; preferDownload: true }
+    MediaPlayback { id: deep }
 
     Component.onCompleted: {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/data.bin"), "lautta://user-documents/a.mp3"), "fixture")
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/nested-boxes.mp4"), "lautta://user-documents/deep.mp4"),
+              "nested fixture")
 
-        check(idle.state === "" && !idle.playing && idle.uri === "", "idle source")
+        check(idle.state === "" && !idle.playing && idle.uri === "" && !idle.local, "idle source")
         idle.play()
         idle.seek(1000)
         idle.pause()
@@ -49,6 +54,8 @@ Item {
         check(!streaming.loading, "source opened")
         check(streaming.errorKind === "NotPlayable", "no backend is reported: '" + streaming.errorKind + "'")
         check(!streaming.playing && streaming.state === "stopped", "not playing")
+        check(streaming.local && streaming.mode === "stream" && !streaming.downloading,
+              "a device file streams: " + streaming.local + " " + streaming.mode)
         streaming.uri = "lautta://user-documents/missing.mp3"
         until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(streaming.errorKind === "NotFound", "missing file: " + streaming.errorKind)
@@ -58,6 +65,17 @@ Item {
         until(function() { return !copying.downloading })
         check(!copying.downloading && copying.downloadProgress === 1, "downloaded: " + copying.downloadProgress)
         check(copying.mode === "download", "stays in download mode")
+
+        deep.uri = "lautta://user-documents/deep.mp4"
+        check(deep.videoSource.uri === deep.uri, "device files play through the checked source")
+        until(function() { return !deep.loading && deep.errorKind !== "" })
+        check(deep.errorKind === "NotPlayable" && deep.failed, "nested boxes are refused: " + deep.errorKind)
+        check(deep.videoSource.errorMessage === "media nested too deeply to play",
+              "refused before the player sees it: " + deep.videoSource.errorMessage)
+        deepCopy.uri = "lautta://user-documents/deep.mp4"
+        until(function() { return !deepCopy.downloading && deepCopy.errorKind !== "" })
+        check(deepCopy.errorMessage === "media nested too deeply to play",
+              "a downloaded copy is checked too: " + deepCopy.errorMessage)
         reachedEnd = true
     }
 }

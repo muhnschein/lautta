@@ -4,8 +4,11 @@ use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use cpp::cpp;
 use lautta_core::app_viewers::ReadAhead;
+use lautta_core::error::Result;
 use lautta_core::org::recents::RecentKind;
-use lautta_core::provider::ProgressSink;
+use lautta_core::preview::boxes::nested_too_deeply;
+use lautta_core::provider::local::read_file;
+use lautta_core::provider::{ProgressSink, ReadHandle};
 use qmetaobject::prelude::*;
 use qmetaobject::{qml_register_type, QPointer};
 use std::os::raw::c_void;
@@ -27,7 +30,6 @@ cpp! {{
     #include <QtCore/QEvent>
     #include <QtCore/QIODevice>
     #include <QtCore/QMetaProperty>
-    #include <QtCore/QUrl>
     #include <QtCore/QVariant>
     #include <QtQml/QQmlEngine>
     #include <QtQuick/QQuickItem>
@@ -119,12 +121,6 @@ cpp! {{
         m->player->setMedia(QMediaContent(), m->device);
     }
 
-    static void lauttaMediaFile(LauttaMedia *m, const QString &path)
-    {
-        lauttaMediaDropDevice(m);
-        m->player->setMedia(QMediaContent(QUrl::fromLocalFile(path)));
-    }
-
     static void lauttaMediaSeek(LauttaMedia *m, qint64 ms)
     {
         if (!m->device) {
@@ -194,6 +190,13 @@ pub(crate) fn keep_while_loading(source: &QVariant, obj: &QVariant) -> bool {
     })
 }
 
+async fn playable(file: Arc<dyn ReadHandle>) -> Result<Option<Arc<ReadAhead>>> {
+    if nested_too_deeply(file.as_ref()).await? {
+        return Ok(None);
+    }
+    Ok(Some(Arc::new(ReadAhead::new(file)?)))
+}
+
 fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
     Arc::into_raw(r) as *mut c_void
 }
@@ -247,8 +250,8 @@ pub fn state_name(code: i32) -> &'static str {
     }
 }
 
-fn fallback_applies(code: i32, status: i32) -> bool {
-    matches!(code, 1 | 2) && error_kind(code, status) == "NotPlayable"
+fn fallback_applies(local: bool, code: i32, status: i32) -> bool {
+    !local && matches!(code, 1 | 2) && error_kind(code, status) == "NotPlayable"
 }
 
 #[derive(Default)]
@@ -270,6 +273,7 @@ pub struct MediaSource {
     duration: qt_property!(f64; NOTIFY changed),
     loading: qt_property!(bool; NOTIFY changed),
     mode: qt_property!(QString; NOTIFY changed),
+    local: qt_property!(bool; NOTIFY changed),
     preferDownload: qt_property!(bool; WRITE setPreferDownload NOTIFY changed),
     downloading: qt_property!(bool; NOTIFY changed),
     downloadProgress: qt_property!(f64; NOTIFY changed),
@@ -387,7 +391,8 @@ impl MediaSource {
     }
 
     fn player_failed(&mut self, code: i32, status: i32) -> bool {
-        if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(code, status) {
+        if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(self.local, code, status)
+        {
             self.fell_back = true;
             self.start_download();
             return true;
@@ -414,6 +419,7 @@ impl MediaSource {
         self.generation += 1;
         self.fell_back = false;
         self.opened = false;
+        self.local = false;
         self.errorKind = QString::default();
         self.errorMessage = QString::default();
         self.downloading = false;
@@ -442,6 +448,7 @@ impl MediaSource {
         let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
             return;
         };
+        self.local = core.locations.to_local_path(&uri).is_some();
         if self.preferDownload {
             self.start_download();
             return;
@@ -453,22 +460,16 @@ impl MediaSource {
         run_then(
             self,
             async move {
-                let reader = ReadAhead::new(core.open_reader(&uri).await?)?;
+                let reader = playable(core.open_reader(&uri).await?).await?;
                 core.note_viewed(&uri, RecentKind::Previewed);
-                Ok(Arc::new(reader))
+                Ok(reader)
             },
             move |me, res| {
                 if me.generation != gen {
                     return;
                 }
                 me.loading = false;
-                match res {
-                    Ok(reader) => me.attach(reader),
-                    Err(e) => {
-                        me.errorKind = qstr(e.kind.name());
-                        me.errorMessage = qstr(&e.message);
-                    }
-                }
+                me.opened_with(res);
                 me.changed();
             },
         );
@@ -507,34 +508,38 @@ impl MediaSource {
             self,
             async move {
                 core.note_viewed(&uri, RecentKind::Previewed);
-                core.download_for_playback(&uri, sink).await
+                let path = core.download_for_playback(&uri, sink).await?;
+                playable(Arc::from(read_file(path).await?)).await
             },
             move |me, res| {
                 if me.generation != gen {
                     return;
                 }
                 me.downloading = false;
-                match res {
-                    Ok(path) => me.play_file(&path.to_string_lossy()),
-                    Err(e) => {
-                        me.errorKind = qstr(e.kind.name());
-                        me.errorMessage = qstr(&e.message);
-                    }
+                if res.as_ref().is_ok_and(Option::is_some) {
+                    me.downloadProgress = 1.0;
                 }
+                me.opened_with(res);
                 me.changed();
             },
         );
     }
 
-    fn play_file(&mut self, path: &str) {
-        let m = self.player_ptr();
-        let path = QString::from(path);
-        cpp!(unsafe [m as "LauttaMedia*", path as "QString"] { lauttaMediaFile(m, path); });
-        self.opened = true;
-        self.errorKind = QString::default();
-        self.downloadProgress = 1.0;
-        if self.want_play {
-            self.play();
+    fn opened_with(&mut self, res: Result<Option<Arc<ReadAhead>>>) {
+        match res {
+            Ok(Some(reader)) => {
+                self.errorKind = QString::default();
+                self.errorMessage = QString::default();
+                self.attach(reader);
+            }
+            Ok(None) => {
+                self.errorKind = qstr("NotPlayable");
+                self.errorMessage = qstr("media nested too deeply to play");
+            }
+            Err(e) => {
+                self.errorKind = qstr(e.kind.name());
+                self.errorMessage = qstr(&e.message);
+            }
         }
     }
 
@@ -622,14 +627,26 @@ mod tests {
 
     #[test]
     fn only_device_failures_fall_back_to_a_download() {
-        assert!(fallback_applies(1, 8) && fallback_applies(2, 8));
-        assert!(!fallback_applies(3, 8) && !fallback_applies(4, 8) && !fallback_applies(5, 8));
+        assert!(fallback_applies(false, 1, 8) && fallback_applies(false, 2, 8));
+        assert!(
+            !fallback_applies(false, 3, 8)
+                && !fallback_applies(false, 4, 8)
+                && !fallback_applies(false, 5, 8)
+        );
     }
 
     #[test]
     fn a_stream_without_sound_or_still_loading_is_not_downloaded() {
-        assert!(!fallback_applies(2, 6), "a download lacks the same decoder");
-        assert!(!fallback_applies(2, 2), "wait for loading to decide");
+        assert!(
+            !fallback_applies(false, 2, 6),
+            "a download lacks the same decoder"
+        );
+        assert!(!fallback_applies(false, 2, 2), "wait for loading to decide");
+    }
+
+    #[test]
+    fn a_device_file_is_never_copied_to_play_it() {
+        assert!(!fallback_applies(true, 1, 8) && !fallback_applies(true, 2, 8));
     }
 
     #[test]

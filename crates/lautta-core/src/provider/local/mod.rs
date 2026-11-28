@@ -471,6 +471,21 @@ impl ReadHandle for LocalReader {
     }
 }
 
+pub async fn read_file(path: PathBuf) -> Result<Box<dyn ReadHandle>> {
+    blocking(move || {
+        let file = File::open(path)?; // NOSONAR
+        let meta = file.metadata()?; // NOSONAR
+        if meta.is_dir() {
+            return Err(Error::kind(ErrorKind::IsADirectory));
+        }
+        Ok(Box::new(LocalReader {
+            file: Arc::new(file),
+            size: meta.len(),
+        }) as Box<dyn ReadHandle>)
+    })
+    .await
+}
+
 #[async_trait]
 impl Provider for LocalProvider {
     fn capabilities(&self) -> Capabilities {
@@ -598,19 +613,7 @@ impl Provider for LocalProvider {
     }
 
     async fn open_read(&self, path: &VPath, _lane: Lane) -> Result<Box<dyn ReadHandle>> {
-        let real = self.real_path(path);
-        blocking(move || {
-            let file = File::open(real)?; // NOSONAR
-            let meta = file.metadata()?; // NOSONAR
-            if meta.is_dir() {
-                return Err(Error::kind(ErrorKind::IsADirectory));
-            }
-            Ok(Box::new(LocalReader {
-                file: Arc::new(file),
-                size: meta.len(),
-            }) as Box<dyn ReadHandle>)
-        })
-        .await
+        read_file(self.real_path(path)).await
     }
 
     async fn open_local(&self, path: &VPath) -> Result<Option<OwnedFd>> {
