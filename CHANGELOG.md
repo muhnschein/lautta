@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Three kinds of damaged audio and video files no longer close Lautta when you play them. Files on the phone now play the way server files do, and an MP4 or MOV whose boxes are nested too deeply is refused with *Can't play* ([#295](https://github.com/muhnschein/lautta/issues/295)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0

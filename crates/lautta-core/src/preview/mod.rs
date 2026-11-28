@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 pub mod audio;
+pub mod boxes;
 pub mod exif;
 pub mod highlight;
 pub mod markdown;
