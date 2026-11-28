@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Searching *everywhere* shows results again while Lautta is still building the name list of a server. Before, it could show nothing at all until the list was done ([#299](https://github.com/muhnschein/lautta/issues/299)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0

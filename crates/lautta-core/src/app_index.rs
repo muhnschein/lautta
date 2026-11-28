@@ -182,8 +182,7 @@ impl Core {
         if !self.index_targets().iter().any(|t| t.location == location) {
             return None;
         }
-        let root = index.store.root(location, &VPath::root()).ok()?;
-        root.checked_ms.is_some().then_some(root)
+        index.store.ready_root(location, &VPath::root())
     }
 
     pub fn index_query(

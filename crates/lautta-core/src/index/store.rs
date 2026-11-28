@@ -6,6 +6,7 @@ use crate::filter::fold_text;
 use crate::uri::LocationId;
 use crate::vpath::VPath;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -111,6 +112,7 @@ pub struct IndexedEntry {
 #[derive(Clone)]
 pub struct IndexStore {
     conn: Arc<Mutex<Connection>>,
+    ready: Arc<Mutex<HashMap<i64, RootInfo>>>,
     path: PathBuf,
 }
 
@@ -210,6 +212,26 @@ fn reopen(path: &Path) -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
+fn ready_where(conn: &Connection, cond: &str, args: impl rusqlite::Params) -> Result<HashMap<i64, RootInfo>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT id, location_id, path, pass, state, checked_ms, 0 FROM root
+             WHERE checked_ms IS NOT NULL AND {cond}"
+        ))
+        .map_err(sql)?;
+    let rows = stmt.query_map(args, IndexStore::root_row).map_err(sql)?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let root = row.map_err(sql)?;
+        out.insert(root.id, root);
+    }
+    Ok(out)
+}
+
+fn ready_roots(conn: &Connection) -> Result<HashMap<i64, RootInfo>> {
+    ready_where(conn, "1", [])
+}
+
 fn needle_glob(fold: &str) -> String {
     let mut out = String::from("*");
     for c in fold.chars() {
@@ -247,8 +269,10 @@ impl IndexStore {
             Ok(c) => c,
             Err(_) => fresh(path).map_err(sql)?,
         };
+        let ready = ready_roots(&conn)?;
         Ok(IndexStore {
             conn: Arc::new(Mutex::new(conn)),
+            ready: Arc::new(Mutex::new(ready)),
             path: path.to_path_buf(),
         })
     }
@@ -256,6 +280,7 @@ impl IndexStore {
     pub fn rebuild(&self) -> Result<()> {
         let mut conn = self.lock();
         *conn = fresh(&self.path).map_err(sql)?;
+        self.ready().clear();
         Ok(())
     }
 
@@ -264,6 +289,20 @@ impl IndexStore {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         }
+    }
+
+    fn ready(&self) -> MutexGuard<'_, HashMap<i64, RootInfo>> {
+        match self.ready.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        }
+    }
+
+    pub fn ready_root(&self, location: &str, path: &VPath) -> Option<RootInfo> {
+        self.ready()
+            .values()
+            .find(|r| r.location == location && &r.path == path)
+            .cloned()
     }
 
     pub fn root(&self, location: &str, path: &VPath) -> Result<RootInfo> {
@@ -332,6 +371,7 @@ impl IndexStore {
             .map_err(sql)?;
         conn.execute("DELETE FROM root WHERE id = ?1", params![id])
             .map_err(sql)?;
+        self.ready().remove(&id);
         Ok(())
     }
 
@@ -358,12 +398,14 @@ impl IndexStore {
     }
 
     pub fn finish_pass(&self, root: i64, now_ms: i64) -> Result<()> {
-        self.lock()
-            .execute(
-                "UPDATE root SET state = 'ready', checked_ms = ?2, error = NULL WHERE id = ?1",
-                params![root, now_ms],
-            )
-            .map_err(sql)?;
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE root SET state = 'ready', checked_ms = ?2, error = NULL WHERE id = ?1",
+            params![root, now_ms],
+        )
+        .map_err(sql)?;
+        let done = ready_where(&conn, "id = ?1", params![root])?;
+        self.ready().extend(done);
         Ok(())
     }
 
@@ -603,6 +645,17 @@ impl IndexStore {
         Ok(())
     }
 
+    #[cfg(test)]
+    pub(crate) fn hold_until(
+        &self,
+        held: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    ) {
+        let _conn = self.lock();
+        let _ = held.send(());
+        let _ = release.recv();
+    }
+
     pub fn integrity_ok(&self) -> bool {
         self.lock()
             .execute("INSERT INTO node_fts(node_fts) VALUES ('integrity-check')", [])
@@ -645,6 +698,26 @@ mod tests {
             .collect();
         out.sort();
         out
+    }
+
+    #[test]
+    fn a_root_is_ready_once_its_first_pass_finished_until_removed_or_rebuilt() {
+        let (dir, s) = store();
+        let a = s.root("a", &VPath::root()).unwrap();
+        let b = s.root("b", &VPath::root()).unwrap();
+        assert_eq!(s.ready_root("a", &VPath::root()), None, "never crawled");
+        s.finish_pass(a.id, 7).unwrap();
+        s.finish_pass(b.id, 8).unwrap();
+        let ready = s.ready_root("a", &VPath::root()).unwrap();
+        assert_eq!((ready.id, ready.checked_ms), (a.id, Some(7)));
+        assert_eq!(s.ready_root("a", &vp("sub")), None);
+        let reopened = IndexStore::open(&dir.path().join("names.db")).unwrap();
+        assert_eq!(reopened.ready_root("b", &VPath::root()).map(|r| r.id), Some(b.id));
+        s.remove_root(a.id).unwrap();
+        assert_eq!(s.ready_root("a", &VPath::root()), None);
+        assert!(s.ready_root("b", &VPath::root()).is_some());
+        s.rebuild().unwrap();
+        assert_eq!(s.ready_root("b", &VPath::root()), None);
     }
 
     #[test]
