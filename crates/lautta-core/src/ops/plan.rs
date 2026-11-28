@@ -8,7 +8,6 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver};
 use crate::uri::Uri;
 use crate::vpath::VPath;
-use futures::future::BoxFuture;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -177,22 +176,34 @@ struct DeleteScan<'a> {
     items: Vec<PlanItem>,
 }
 
+enum DeleteStep {
+    Visit(Uri, Entry),
+    Emit(Uri, Entry),
+}
+
 impl DeleteScan<'_> {
-    fn walk(&mut self, src: Uri, entry: Entry) -> BoxFuture<'_, Result<()>> {
-        Box::pin(async move {
+    async fn walk(&mut self, src: Uri, entry: Entry) -> Result<()> {
+        let mut stack = vec![DeleteStep::Visit(src, entry)];
+        while let Some(step) = stack.pop() {
             check_cancel(self.cancel)?;
-            if entry.kind == Kind::Dir {
-                let provider = self.resolver.provider(&src.location)?;
-                let listing = children(&*provider, &src.path).await.map_err(|e| e.about(&src))?;
-                for child in listing {
-                    let child_uri = src.join(&child.name)?;
-                    self.walk(child_uri, child).await?;
+            match step {
+                DeleteStep::Visit(src, entry) if entry.kind == Kind::Dir => {
+                    let provider = self.resolver.provider(&src.location)?;
+                    let listing = children(&*provider, &src.path).await.map_err(|e| e.about(&src))?;
+                    let mut visits = Vec::with_capacity(listing.len());
+                    for child in listing {
+                        visits.push(DeleteStep::Visit(src.join(&child.name)?, child));
+                    }
+                    stack.push(DeleteStep::Emit(src, entry));
+                    stack.extend(visits.into_iter().rev());
+                }
+                DeleteStep::Visit(src, entry) | DeleteStep::Emit(src, entry) => {
+                    self.items.push(item_from(src.clone(), src, entry.kind, &entry));
+                    (self.progress)(self.items.len() as u64);
                 }
             }
-            self.items.push(item_from(src.clone(), src, entry.kind, &entry));
-            (self.progress)(self.items.len() as u64);
-            Ok(())
-        })
+        }
+        Ok(())
     }
 }
 
@@ -264,6 +275,20 @@ struct Added {
     dst_dir_exists: bool,
 }
 
+struct Pending {
+    node: Node,
+    parent: Uri,
+    frame: Frame,
+    depth: usize,
+}
+
+struct Descend {
+    children: Vec<Node>,
+    dst_dir: Uri,
+    frame: Frame,
+    seen: Seen,
+}
+
 struct Scan<'a> {
     resolver: &'a dyn ProviderResolver,
     opts: &'a PlanOptions,
@@ -317,7 +342,7 @@ impl Scan<'_> {
             link_depth: 0,
             through_link: false,
         };
-        self.add_node(node, destination.clone(), frame, Vec::new()).await
+        self.add_node(node, destination.clone(), frame).await
     }
 
     fn links_as_links(&self, src: &Uri, destination: &Uri) -> bool {
@@ -334,93 +359,114 @@ impl Scan<'_> {
         }
     }
 
-    fn add_node(
-        &mut self,
-        node: Node,
-        parent: Uri,
-        frame: Frame,
-        ancestors: Vec<Seen>,
-    ) -> BoxFuture<'_, Result<()>> {
-        Box::pin(async move {
+    async fn add_node(&mut self, node: Node, parent: Uri, frame: Frame) -> Result<()> {
+        let mut stack = vec![Pending {
+            node,
+            parent,
+            frame,
+            depth: 0,
+        }];
+        let mut ancestors: Vec<Seen> = Vec::new();
+        while let Some(next) = stack.pop() {
             check_cancel(self.cancel)?;
-            match node.entry.kind {
-                Kind::Symlink => self.add_link(node, parent, frame, ancestors).await,
-                Kind::Dir => self.add_dir(node, parent, frame, ancestors).await,
-                _ => {
-                    let kind = node.entry.kind;
-                    self.add_item(&node.src, &node.entry, kind, &parent, frame, None)
-                        .await
-                        .map(|_| ())
+            ancestors.truncate(next.depth);
+            let dir = match next.node.entry.kind {
+                Kind::Symlink => self.add_link(next.node, &next.parent, next.frame).await?,
+                Kind::Dir => Some((next.node, next.frame)),
+                kind => {
+                    self.add_item(
+                        &next.node.src,
+                        &next.node.entry,
+                        kind,
+                        &next.parent,
+                        next.frame,
+                        None,
+                    )
+                    .await?;
+                    None
                 }
-            }
-        })
+            };
+            let Some((node, frame)) = dir else { continue };
+            let Some(descend) = self.add_dir(node, &next.parent, frame, &ancestors).await? else {
+                continue;
+            };
+            ancestors.push(descend.seen);
+            stack.extend(descend.children.into_iter().rev().map(|child| Pending {
+                node: child,
+                parent: descend.dst_dir.clone(),
+                frame: descend.frame,
+                depth: ancestors.len(),
+            }));
+        }
+        Ok(())
     }
 
     async fn add_dir(
         &mut self,
         node: Node,
-        parent: Uri,
+        parent: &Uri,
         frame: Frame,
-        mut ancestors: Vec<Seen>,
-    ) -> Result<()> {
+        ancestors: &[Seen],
+    ) -> Result<Option<Descend>> {
         if ancestors.contains(&node.seen) {
-            return Ok(());
+            return Ok(None);
         }
         let added = self
-            .add_item(&node.src, &node.entry, Kind::Dir, &parent, frame, None)
+            .add_item(&node.src, &node.entry, Kind::Dir, parent, frame, None)
             .await?;
         let item = &self.items[added.index];
         let merging = item.conflict.as_ref().is_some_and(|c| c.dst_is_dir);
         if self.rename_move && !merging {
-            return Ok(());
+            return Ok(None);
         }
         let dst_dir = item.dst.clone();
         let provider = self.resolver.provider(&node.src.location)?;
         let listing = children(&*provider, &node.real)
             .await
             .map_err(|e| e.about(&node.src))?;
-        ancestors.push(node.seen.clone());
-        let child_frame = Frame {
-            check_dst: added.dst_dir_exists,
-            ..frame
-        };
+        let mut kids = Vec::with_capacity(listing.len());
         for entry in listing {
             let real = node.real.join(&entry.name)?;
-            let child = Node {
+            kids.push(Node {
                 src: Uri::new(node.src.location.clone(), real.clone()),
                 seen: Seen::Path(real.clone()),
                 real,
                 entry,
-            };
-            self.add_node(child, dst_dir.clone(), child_frame, ancestors.clone())
-                .await?;
+            });
         }
-        Ok(())
+        Ok(Some(Descend {
+            children: kids,
+            dst_dir,
+            frame: Frame {
+                check_dst: added.dst_dir_exists,
+                ..frame
+            },
+            seen: node.seen,
+        }))
     }
 
-    async fn add_link(&mut self, node: Node, parent: Uri, frame: Frame, ancestors: Vec<Seen>) -> Result<()> {
+    async fn add_link(&mut self, node: Node, parent: &Uri, frame: Frame) -> Result<Option<(Node, Frame)>> {
         let provider = self.resolver.provider(&node.src.location)?;
         let link = provider
             .read_link(&node.src.path)
             .await
             .map_err(|e| e.about(&node.src))?;
         if self.as_links {
-            return self
-                .add_item(&node.src, &node.entry, Kind::Symlink, &parent, frame, Some(link))
-                .await
-                .map(|_| ());
+            self.add_item(&node.src, &node.entry, Kind::Symlink, parent, frame, Some(link))
+                .await?;
+            return Ok(None);
         }
         let link_depth = frame.link_depth + 1;
         if link_depth > MAX_LINK_DEPTH {
-            return Ok(());
+            return Ok(None);
         }
         let target = match provider.stat(&node.src.path, true, Lane::Bulk).await {
             Ok(e) => e,
-            Err(e) if e.kind == ErrorKind::NotFound => return Ok(()),
+            Err(e) if e.kind == ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.about(&node.src)),
         };
         if target.kind == Kind::Symlink {
-            return Ok(());
+            return Ok(None);
         }
         let resolved = if frame.through_link {
             None
@@ -446,13 +492,13 @@ impl Scan<'_> {
             through_link,
             ..frame
         };
-        match followed.entry.kind {
-            Kind::Dir => self.add_dir(followed, parent, frame, ancestors).await,
-            kind => self
-                .add_item(&followed.src, &followed.entry, kind, &parent, frame, None)
-                .await
-                .map(|_| ()),
+        if followed.entry.kind == Kind::Dir {
+            return Ok(Some((followed, frame)));
         }
+        let kind = followed.entry.kind;
+        self.add_item(&followed.src, &followed.entry, kind, parent, frame, None)
+            .await?;
+        Ok(None)
     }
 
     async fn add_item(
@@ -605,6 +651,47 @@ mod tests {
 
     fn srcs(p: &Plan) -> Vec<String> {
         p.items.iter().map(|i| i.src.path.display()).collect()
+    }
+
+    const DEEP: usize = 1000;
+
+    fn deep_tree(mem: &MemoryProvider) -> String {
+        let bottom = format!("s/{}", vec!["d"; DEEP].join("/"));
+        mem.add_file(&format!("{bottom}/bottom.txt"), b"hello", 0);
+        mem.add_dir("dst");
+        bottom
+    }
+
+    #[tokio::test]
+    async fn a_copy_plans_a_tree_a_thousand_folders_deep_parents_first() {
+        let (mem, r) = setup();
+        let bottom = deep_tree(&mem);
+        let p = plan(OperationKind::Copy, &["s"], "dst", &r).await.unwrap();
+        assert_eq!(p.items.len(), DEEP + 2);
+        assert_eq!(p.items[0].src.path.display(), "s");
+        assert_eq!(p.items[DEEP].src.path.display(), bottom);
+        assert_eq!(
+            p.items[DEEP + 1].dst.path.display(),
+            format!("dst/{bottom}/bottom.txt")
+        );
+        assert!(p
+            .items
+            .windows(2)
+            .all(|w| w[1].src.path.parent().as_ref() == Some(&w[0].src.path)));
+    }
+
+    #[tokio::test]
+    async fn a_delete_plans_a_tree_a_thousand_folders_deep_children_first() {
+        let (mem, r) = setup();
+        let bottom = deep_tree(&mem);
+        let p = plan(OperationKind::Delete, &["s"], "", &r).await.unwrap();
+        assert_eq!(p.items.len(), DEEP + 2);
+        assert_eq!(srcs(&p)[0], format!("{bottom}/bottom.txt"));
+        assert_eq!(srcs(&p)[DEEP + 1], "s");
+        assert!(p
+            .items
+            .windows(2)
+            .all(|w| w[0].src.path.parent().as_ref() == Some(&w[1].src.path)));
     }
 
     #[tokio::test]
@@ -1216,6 +1303,30 @@ mod tests {
         mem.fail_next("stat", "dst/a", Error::kind(ErrorKind::PermissionDenied));
         let err = plan(OperationKind::Copy, &["s/a"], "dst", &r).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn a_link_back_to_a_folder_two_levels_up_is_skipped() {
+        let src = MemoryProvider::default();
+        src.add_symlink("a/b/up", "../../a");
+        let dst = MemoryProvider::default();
+        dst.add_dir("d");
+        let r = StaticResolver::default()
+            .with("s", Arc::new(src))
+            .with("d", Arc::new(dst));
+        let cancel = AtomicBool::new(false);
+        let p = Planner::plan(
+            OperationKind::Copy,
+            vec![uri("s", "a")],
+            uri("d", "d"),
+            &r,
+            &follow(),
+            &cancel,
+            &|_| {},
+        )
+        .await
+        .unwrap();
+        assert_eq!(dsts(&p), vec!["d/a", "d/a/b"]);
     }
 
     #[tokio::test]

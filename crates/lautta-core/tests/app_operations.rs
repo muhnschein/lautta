@@ -1245,3 +1245,37 @@ async fn a_locked_extract_waiting_for_its_summary_keeps_the_archive_open() {
     );
     until_closed(&h, &id, changed).await;
 }
+
+#[tokio::test]
+async fn an_entry_three_thousand_folders_deep_extracts_as_far_as_paths_allow() {
+    let h = home().await;
+    let mut zip = std::io::Cursor::new(Vec::new());
+    let mut w = zip::ZipWriter::new(&mut zip);
+    let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    w.start_file(format!("{}bottom.txt", "d/".repeat(3000)), stored)
+        .unwrap();
+    std::io::Write::write_all(&mut w, b"hello").unwrap();
+    w.finish().unwrap();
+    write(&h.root.join("Documents/deep.zip"), &zip.into_inner());
+    let Started::NeedsSummary(plan) = h
+        .core
+        .extract(&uri("lautta://user-documents/deep.zip"), None)
+        .await
+        .unwrap()
+    else {
+        panic!("3001 items need the summary");
+    };
+    assert_eq!(plan.items.len(), 3001);
+    let id = h.core.start_plan(*plan).await.unwrap();
+    let s = h
+        .core
+        .engine
+        .wait_for(id, |s| s.state.is_finished())
+        .await
+        .unwrap();
+    assert_eq!(s.state, TransferState::Failed, "paths past PATH_MAX fail: {s:?}");
+    assert!(
+        h.root.join("Documents/d/d/d").is_dir(),
+        "the shallow part is extracted"
+    );
+}

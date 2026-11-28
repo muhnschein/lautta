@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Extracting, copying or deleting a folder tree thousands of folders deep, such as a zip whose one file sits 3000 folders down, no longer closes Lautta. What fits within the phone's path length is extracted, and the rest fails with an error ([#290](https://github.com/muhnschein/lautta/issues/290)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0
