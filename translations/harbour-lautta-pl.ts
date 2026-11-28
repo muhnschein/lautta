@@ -2627,5 +2627,13 @@
             <numerusform>%n z %1 nieudanych</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 to potok lub urządzenie, a nie plik.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>To jest potok lub urządzenie, a nie plik.</translation>
+    </message>
 </context>
 </TS>

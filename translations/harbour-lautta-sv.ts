@@ -2572,5 +2572,13 @@
             <numerusform>%n av %1 misslyckades</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 är ett rör eller en enhet, inte en fil.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Detta är ett rör eller en enhet, inte en fil.</translation>
+    </message>
 </context>
 </TS>

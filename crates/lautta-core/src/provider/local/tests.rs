@@ -1085,7 +1085,7 @@ async fn server_copy_refuses_special_files() {
         .server_copy(&vp("fifo"), &vp("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
-    assert_eq!(e.kind, ErrorKind::Unsupported);
+    assert_eq!(e.kind, ErrorKind::NotAFile);
 }
 
 struct Gate {
@@ -1326,4 +1326,75 @@ async fn caller_file_offsets_are_ignored() {
     let mut got = Vec::new();
     target.read_to_end(&mut got).unwrap();
     assert_eq!(&got[..3], b"abc");
+}
+
+fn special_files(d: &Path) {
+    rustix::fs::mknodat(
+        rustix::fs::CWD,
+        d.join("pipe.mp3"),
+        rustix::fs::FileType::Fifo,
+        rustix::fs::Mode::from_raw_mode(0o600),
+        0,
+    )
+    .unwrap();
+    symlink("/dev/zero", d.join("zero.txt")).unwrap();
+}
+
+async fn unblocked<T>(d: &Path, op: impl std::future::Future<Output = Result<T>>) -> Result<T> {
+    match tokio::time::timeout(Duration::from_secs(10), op).await {
+        Ok(r) => r,
+        Err(_) => {
+            let _writer = OpenOptions::new().write(true).open(d.join("pipe.mp3"));
+            panic!("opening a special file hung");
+        }
+    }
+}
+
+fn assert_not_a_file<T>(r: Result<T>, what: &str) {
+    match r {
+        Ok(_) => panic!("{what}: a special file was opened"),
+        Err(e) => assert_eq!(e.kind, ErrorKind::NotAFile, "{what}: {e}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipes_and_device_links_are_refused_before_they_are_read() {
+    let (d, p) = setup();
+    special_files(d.path());
+    for name in ["pipe.mp3", "zero.txt"] {
+        let path = vp(name);
+        let read = unblocked(d.path(), p.open_read(&path, Lane::Interactive)).await;
+        assert_not_a_file(read, &format!("open_read {name}"));
+        let local = unblocked(d.path(), p.open_local(&path)).await;
+        assert_not_a_file(local, &format!("open_local {name}"));
+        let sum = unblocked(d.path(), p.checksum(&path, "sha256")).await;
+        assert_not_a_file(sum, &format!("checksum {name}"));
+        let into = tempfile::tempfile().unwrap();
+        let down = unblocked(
+            d.path(),
+            p.download_into(&path, OwnedFd::from(into), ReadOptions::default(), no_progress()),
+        )
+        .await;
+        assert_not_a_file(down, &format!("download_into {name}"));
+    }
+}
+
+#[tokio::test]
+async fn pipes_and_device_links_list_as_special() {
+    let (d, p) = setup();
+    special_files(d.path());
+    let listed = list_all(&p, &VPath::root(), Lane::Interactive).await.unwrap();
+    assert!(listed.iter().all(Entry::is_special), "{listed:?}");
+    std::fs::write(d.path().join("song.mp3"), b"x").unwrap();
+    symlink("song.mp3", d.path().join("link.mp3")).unwrap();
+    for (name, special) in [
+        ("pipe.mp3", true),
+        ("zero.txt", true),
+        ("song.mp3", false),
+        ("link.mp3", false),
+        ("", false),
+        ("missing", false),
+    ] {
+        assert_eq!(is_special_file(&d.path().join(name)), special, "{name:?}");
+    }
 }

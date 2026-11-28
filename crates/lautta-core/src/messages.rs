@@ -117,6 +117,7 @@ fn text_for_other(kind: ErrorKind, ctx: &MessageContext) -> String {
         ErrorKind::ProtocolError => format!("{loc} sent an answer Lautta couldn't understand."),
         ErrorKind::NotADirectory => format!("{it} isn't a folder."),
         ErrorKind::IsADirectory => format!("{it} is a folder."),
+        ErrorKind::NotAFile => format!("{it} is a pipe or a device, not a file."),
         ErrorKind::DirectoryNotEmpty => format!("{it} isn't empty."),
         ErrorKind::InvalidName => format!("{loc} doesn't accept that name."),
         ErrorKind::ReadOnlyFilesystem => format!("{loc} is read-only."),

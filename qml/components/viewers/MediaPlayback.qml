@@ -11,11 +11,18 @@ Item {
     property Item output
 
     readonly property bool local: App.isLocal(uri)
+    readonly property string localSource: local ? App.localUrl(uri) : ""
     readonly property QtObject videoSource: local ? localPlayer : remote
     readonly property bool playing: local ? localPlayer.playbackState === MM.MediaPlayer.PlayingState : remote.playing
     readonly property real position: local ? localPlayer.position : remote.position
     readonly property real duration: local ? localPlayer.duration : remote.duration
-    readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error, localPlayer.status) : remote.errorKind
+    readonly property string errorKind: {
+        if (!local)
+            return remote.errorKind
+        if (localSource === "")
+            return "NotAFile"
+        return remote.playerErrorKind(localPlayer.error, localPlayer.status)
+    }
     readonly property bool failed: ErrorText.stopsPlayback(errorKind)
     readonly property bool loading: remote.loading
     readonly property bool downloading: remote.downloading
@@ -63,7 +70,7 @@ Item {
 
     MM.MediaPlayer {
         id: localPlayer
-        source: playback.local ? App.localUrl(playback.uri) : ""
+        source: playback.localSource
         autoPlay: true
     }
 

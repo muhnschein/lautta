@@ -2617,5 +2617,13 @@
             <numerusform>%n of %1 failed</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -2627,5 +2627,13 @@
             <numerusform>%n из %1 с ошибкой</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 — это канал или устройство, а не файл.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Это канал или устройство, а не файл.</translation>
+    </message>
 </context>
 </TS>

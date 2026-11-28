@@ -2682,5 +2682,13 @@
             <numerusform>%n od %1 ni uspelo</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 je cev ali naprava, ne datoteka.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>To je cev ali naprava, ne datoteka.</translation>
+    </message>
 </context>
 </TS>

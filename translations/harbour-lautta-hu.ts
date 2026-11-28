@@ -2517,5 +2517,13 @@
             <numerusform>%1 közül %n sikertelen</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 egy cső vagy eszköz, nem fájl.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Ez egy cső vagy eszköz, nem fájl.</translation>
+    </message>
 </context>
 </TS>

@@ -2627,5 +2627,13 @@
             <numerusform>%n din %1 au eșuat</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 este un canal sau un dispozitiv, nu un fișier.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Acesta este un canal sau un dispozitiv, nu un fișier.</translation>
+    </message>
 </context>
 </TS>

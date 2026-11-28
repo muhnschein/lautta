@@ -2572,5 +2572,13 @@
             <numerusform>%n/%1 epäonnistui</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 on putki tai laite, ei tiedosto.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Tämä on putki tai laite, ei tiedosto.</translation>
+    </message>
 </context>
 </TS>

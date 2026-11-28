@@ -2572,5 +2572,13 @@
             <numerusform>%n sur %1 ont échoué</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 est un tube ou un périphérique, pas un fichier.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Ceci est un tube ou un périphérique, pas un fichier.</translation>
+    </message>
 </context>
 </TS>

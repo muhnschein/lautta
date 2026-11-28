@@ -2627,5 +2627,13 @@
             <numerusform>Nepavyko %n iš %1</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 yra kanalas arba įrenginys, ne failas.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Tai kanalas arba įrenginys, ne failas.</translation>
+    </message>
 </context>
 </TS>

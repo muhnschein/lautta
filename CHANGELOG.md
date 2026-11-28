@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A named pipe or a link to a device, such as `/dev/zero`, no longer hangs Lautta when you open it. Lautta says it is a pipe or a device, not a file, and shows no thumbnail for it ([#291](https://github.com/muhnschein/lautta/issues/291)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0

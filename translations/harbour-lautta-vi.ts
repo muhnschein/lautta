@@ -2517,5 +2517,13 @@
             <numerusform>%n/%1 không thành công</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 là một pipe hoặc thiết bị, không phải tệp.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Đây là một pipe hoặc thiết bị, không phải tệp.</translation>
+    </message>
 </context>
 </TS>
