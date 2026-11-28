@@ -6,6 +6,8 @@ use cpp::cpp;
 use lautta_core::app_viewers::{
     parse_image_uri, parse_thumb_id, viewer_decode_size, GalleryItem, PreviewKind,
 };
+use lautta_core::error::ErrorKind;
+use lautta_core::preview::svg::svg_refusal;
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::collections::HashMap;
@@ -312,6 +314,9 @@ unsafe impl Send for Reply {}
 
 impl Reply {
     fn done(self, bytes: &[u8], (w, h): (i32, i32), orientation: u8, transform: bool, exact: bool) {
+        if let Some(why) = svg_refusal(bytes) {
+            return self.fail(&format!("{}: {}", ErrorKind::Unsupported.name(), why.message()));
+        }
         let handle = self.take();
         let (data, len) = (bytes.as_ptr(), bytes.len());
         let orientation = i32::from(orientation);
@@ -579,6 +584,15 @@ mod tests {
         bytes.to_slice().to_vec()
     }
 
+    fn nested_svg(depth: usize) -> Vec<u8> {
+        let mut svg = String::from(r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200">"#);
+        svg.push_str(&"<g>".repeat(depth - 1));
+        svg.push_str(r#"<rect width="400" height="200" fill="red"/>"#);
+        svg.push_str(&"</g>".repeat(depth - 1));
+        svg.push_str("</svg>");
+        svg.into_bytes()
+    }
+
     fn test_jpeg(w: i32, h: i32) -> Vec<u8> {
         test_image(w, h, "JPEG")
     }
@@ -719,6 +733,44 @@ mod tests {
         assert!(e.contains("bad thumbnail id"), "{e}");
         let (e, ..) = probe("lautta-file", "garbage", (0, 0));
         assert!(e.contains("bad image id"), "{e}");
+
+        let at_limit = nested_svg(lautta_core::preview::svg::MAX_SVG_DEPTH);
+        nas.add_file("p/at-limit.svg", &at_limit, 1);
+        nas.add_file("p/deep.svg", &nested_svg(100_000), 1);
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/at-limit.svg", (0, 0));
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 400, 200),
+            "an SVG nested up to the limit is drawn"
+        );
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/at-limit.svg?size=64",
+            (64, 64),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 64, 32),
+            "its thumbnail is drawn at the item's size"
+        );
+        let refused = "Unsupported: image nested too deeply to show";
+        let (e, ..) = probe("lautta-file", "lautta://nv-qt-images/p/deep.svg", (0, 0));
+        assert_eq!(e, refused, "100000 nested groups are refused, not given to Qt");
+        let (e, ..) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/deep.svg?size=64",
+            (64, 64),
+        );
+        assert_eq!(e, refused, "and get no thumbnail");
+        let mut huge = vec![b' '; usize::try_from(lautta_core::thumbs::MAX_SVG_THUMB_BYTES).unwrap()];
+        huge.extend(nested_svg(1));
+        nas.add_file("p/huge.svg", &huge, 1);
+        let (e, ..) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/huge.svg?size=64",
+            (64, 64),
+        );
+        assert!(e.ends_with("too large for a thumbnail"), "{e}");
 
         nas.add_file(
             "p/two.pdf",
