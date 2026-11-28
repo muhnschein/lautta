@@ -2572,5 +2572,13 @@
             <numerusform>Απέτυχαν %n από %1</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>Το %1 είναι σωλήνας ή συσκευή, όχι αρχείο.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Αυτό είναι σωλήνας ή συσκευή, όχι αρχείο.</translation>
+    </message>
 </context>
 </TS>

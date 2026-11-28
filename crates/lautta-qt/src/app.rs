@@ -250,6 +250,7 @@ impl App {
             (Some(c), Some(u)) => c
                 .locations
                 .to_local_path(&u)
+                .filter(|p| !lautta_core::provider::local::is_special_file(p))
                 .map(|p| QString::from(format!("file://{}", p.display()).as_str()))
                 .unwrap_or_default(),
             _ => QString::default(),

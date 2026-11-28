@@ -31,6 +31,7 @@ pub struct ViewerTools {
     pump: qt_method!(fn(&self, ms: i32)),
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
     installRepeated: qt_method!(fn(&self, source_url: QString, dest_uri: QString, times: i32) -> bool),
+    installLink: qt_method!(fn(&self, target: QString, dest_uri: QString) -> bool),
     setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
     mouse: qt_method!(fn(&self, item: QVariant, kind: QString, x: f64, y: f64) -> bool),
 }
@@ -127,6 +128,14 @@ impl ViewerTools {
         let times = usize::try_from(times).unwrap_or_default();
         std::fs::read(source).is_ok_and(|bytes| std::fs::write(target, bytes.repeat(times)).is_ok())
     }
+
+    fn installLink(&self, target: QString, dest_uri: QString) -> bool {
+        link_path(&dest_uri).is_some_and(|link| std::os::unix::fs::symlink(target.to_string(), link).is_ok())
+    }
+}
+
+fn link_path(dest_uri: &QString) -> Option<PathBuf> {
+    core()?.locations.to_local_path(&parse_uri(dest_uri)?)
 }
 
 fn fixture_paths(source_url: &QString, dest_uri: &QString) -> Option<(PathBuf, PathBuf)> {

@@ -2517,5 +2517,13 @@
             <numerusform>%n/%1 başarısız</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 bir boru veya aygıt, dosya değil.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Bu bir boru veya aygıt, dosya değil.</translation>
+    </message>
 </context>
 </TS>

@@ -2627,5 +2627,13 @@
             <numerusform>%n z %1 zlyhalo</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 je rúra alebo zariadenie, nie súbor.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Toto je rúra alebo zariadenie, nie súbor.</translation>
+    </message>
 </context>
 </TS>

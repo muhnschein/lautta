@@ -63,6 +63,7 @@ impl ThumbSettings {
 
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
     if !shown
+        || entry.is_special()
         || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE)
         || !shows_in_app(&mime_of(entry).unwrap_or_default())
     {
@@ -830,6 +831,31 @@ mod tests {
             ThumbSource::Icon,
             "Show thumbnails off"
         );
+    }
+
+    #[test]
+    fn pipes_and_links_to_devices_keep_their_glyph() {
+        use crate::entry::Kind;
+        for name in ["a.jpg", "b.mp3", "c.txt", "d.pdf"] {
+            let mut pipe = file(name, Some(0));
+            pipe.kind = Kind::Special;
+            let mut link = file(name, Some(9));
+            (link.kind, link.target_kind) = (Kind::Symlink, Kind::Special);
+            let mut to_file = file(name, Some(9));
+            (to_file.kind, to_file.target_kind) = (Kind::Symlink, Kind::File);
+            for e in [&pipe, &link] {
+                assert_eq!(
+                    thumbnail_source(e, true, true, &settings()),
+                    ThumbSource::Icon,
+                    "{name}"
+                );
+            }
+            assert_ne!(
+                thumbnail_source(&to_file, true, true, &settings()),
+                ThumbSource::Icon,
+                "{name}: a link to a file keeps its thumbnail"
+            );
+        }
     }
 
     #[test]

@@ -2627,5 +2627,13 @@
             <numerusform>Neizdevās %n no %1</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 ir kanāls vai ierīce, nevis fails.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Tas ir kanāls vai ierīce, nevis fails.</translation>
+    </message>
 </context>
 </TS>

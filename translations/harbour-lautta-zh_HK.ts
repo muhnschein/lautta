@@ -2517,5 +2517,13 @@
             <numerusform>%1 項中有 %n 項失敗</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 是管道或裝置，不是檔案。</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>這是管道或裝置，不是檔案。</translation>
+    </message>
 </context>
 </TS>

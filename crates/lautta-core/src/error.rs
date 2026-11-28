@@ -22,6 +22,7 @@ pub enum ErrorKind {
     ProtocolError,
     NotADirectory,
     IsADirectory,
+    NotAFile,
     DirectoryNotEmpty,
     InvalidName,
     ReadOnlyFilesystem,
@@ -39,7 +40,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub const ALL: [ErrorKind; 31] = [
+    pub const ALL: [ErrorKind; 32] = [
         ErrorKind::NotFound,
         ErrorKind::AlreadyExists,
         ErrorKind::PermissionDenied,
@@ -57,6 +58,7 @@ impl ErrorKind {
         ErrorKind::ProtocolError,
         ErrorKind::NotADirectory,
         ErrorKind::IsADirectory,
+        ErrorKind::NotAFile,
         ErrorKind::DirectoryNotEmpty,
         ErrorKind::InvalidName,
         ErrorKind::ReadOnlyFilesystem,
@@ -92,6 +94,7 @@ impl ErrorKind {
             ErrorKind::ProtocolError => "ProtocolError",
             ErrorKind::NotADirectory => "NotADirectory",
             ErrorKind::IsADirectory => "IsADirectory",
+            ErrorKind::NotAFile => "NotAFile",
             ErrorKind::DirectoryNotEmpty => "DirectoryNotEmpty",
             ErrorKind::InvalidName => "InvalidName",
             ErrorKind::ReadOnlyFilesystem => "ReadOnlyFilesystem",

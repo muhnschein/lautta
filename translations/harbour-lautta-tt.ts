@@ -2517,5 +2517,13 @@
             <numerusform>%1 эчтән %n барып чыкмады</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 — канал яки җайланма, файл түгел.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>Бу канал яки җайланма, файл түгел.</translation>
+    </message>
 </context>
 </TS>

@@ -2572,5 +2572,13 @@
             <numerusform>%1 ರಲ್ಲಿ %n ವಿಫಲವಾಗಿವೆ</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 ಪೈಪ್ ಅಥವಾ ಸಾಧನ, ಫೈಲ್ ಅಲ್ಲ.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>ಇದು ಪೈಪ್ ಅಥವಾ ಸಾಧನ, ಫೈಲ್ ಅಲ್ಲ.</translation>
+    </message>
 </context>
 </TS>

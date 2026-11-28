@@ -78,6 +78,12 @@ function message(kind, context) {
                      qsTrId("lautta-err-unsupported"),
                      //% "This location can't do this."
                      qsTrId("lautta-err-unsupported-unnamed"))
+    case "NotAFile":
+        return _pick(item,
+                     //% "%1 is a pipe or a device, not a file."
+                     qsTrId("lautta-err-not-a-file"),
+                     //% "This is a pipe or a device, not a file."
+                     qsTrId("lautta-err-not-a-file-unnamed"))
     case "NotPlayable":
         return _pick(item,
                      //% "Can't play %1."

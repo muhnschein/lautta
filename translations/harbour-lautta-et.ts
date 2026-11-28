@@ -2572,5 +2572,13 @@
             <numerusform>%n %1-st ebaõnnestus</numerusform>
         </translation>
     </message>
+    <message id="lautta-err-not-a-file">
+        <source>%1 is a pipe or a device, not a file.</source>
+        <translation>%1 on toru või seade, mitte fail.</translation>
+    </message>
+    <message id="lautta-err-not-a-file-unnamed">
+        <source>This is a pipe or a device, not a file.</source>
+        <translation>See on toru või seade, mitte fail.</translation>
+    </message>
 </context>
 </TS>

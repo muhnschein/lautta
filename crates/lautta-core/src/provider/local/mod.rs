@@ -309,6 +309,35 @@ fn upload_blocking(
     Ok(())
 }
 
+pub fn is_special_file(path: &Path) -> bool {
+    sys::stat(path, true).is_ok_and(|st| !st.is_dir() && !st.is_file())
+}
+
+fn refuse_unless_file(is_dir: bool, is_file: bool) -> Result<()> {
+    if is_dir {
+        Err(Error::kind(ErrorKind::IsADirectory))
+    } else if is_file {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorKind::NotAFile, "not a regular file"))
+    }
+}
+
+fn open_file(path: &Path) -> Result<(File, std::fs::Metadata)> {
+    let st = sys::stat(path, true)?;
+    refuse_unless_file(st.is_dir(), st.is_file())?;
+    let nonblock = rustix::fs::OFlags::NONBLOCK;
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(nonblock.bits() as i32)
+        .open(path)?; // NOSONAR
+    let meta = file.metadata()?;
+    refuse_unless_file(meta.is_dir(), meta.is_file())?;
+    let flags = rustix::fs::fcntl_getfl(&file).map_err(std::io::Error::from)?;
+    rustix::fs::fcntl_setfl(&file, flags - nonblock).map_err(std::io::Error::from)?;
+    Ok((file, meta))
+}
+
 fn is_regular(f: &File) -> bool {
     f.metadata().map(|m| m.is_file()).unwrap_or(false)
 }
@@ -320,11 +349,7 @@ fn download_blocking(
     progress: &ProgressSink,
     stop: &Stop,
 ) -> Result<()> {
-    let mut srcf = File::open(src)?;
-    let meta = srcf.metadata()?;
-    if meta.is_dir() {
-        return Err(Error::kind(ErrorKind::IsADirectory));
-    }
+    let (mut srcf, meta) = open_file(src)?;
     let mut dstf = File::from(dst);
     if offset > 0 {
         srcf.seek(SeekFrom::Start(offset))?;
@@ -356,7 +381,7 @@ fn copy_blocking(
         return Err(Error::kind(ErrorKind::IsADirectory));
     }
     if !st.is_file() && !st.is_symlink() {
-        return Err(Error::new(ErrorKind::Unsupported, "not a regular file"));
+        return Err(Error::new(ErrorKind::NotAFile, "not a regular file"));
     }
     if !opts.replace && sys::stat(to, false).is_ok() {
         return Err(Error::kind(ErrorKind::AlreadyExists));
@@ -389,7 +414,7 @@ fn write_copy(
         std::os::unix::fs::symlink(std::fs::read_link(from)?, tmp)?;
         return Ok(());
     }
-    let src = File::open(from)?;
+    let (src, _) = open_file(from)?;
     let dst = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -403,10 +428,7 @@ fn write_copy(
 }
 
 fn hash_file(path: &Path, algorithm: &str, stop: &Stop) -> Result<Vec<u8>> {
-    let file = File::open(path)?;
-    if file.metadata()?.is_dir() {
-        return Err(Error::kind(ErrorKind::IsADirectory));
-    }
+    let (file, _) = open_file(path)?;
     match algorithm {
         "sha256" => Ok(hash_reader::<sha2::Sha256>(file, stop)?),
         "sha1" => Ok(hash_reader::<sha1::Sha1>(file, stop)?),
@@ -600,11 +622,7 @@ impl Provider for LocalProvider {
     async fn open_read(&self, path: &VPath, _lane: Lane) -> Result<Box<dyn ReadHandle>> {
         let real = self.real_path(path);
         blocking(move || {
-            let file = File::open(real)?; // NOSONAR
-            let meta = file.metadata()?; // NOSONAR
-            if meta.is_dir() {
-                return Err(Error::kind(ErrorKind::IsADirectory));
-            }
+            let (file, meta) = open_file(&real)?; // NOSONAR
             Ok(Box::new(LocalReader {
                 file: Arc::new(file),
                 size: meta.len(),
@@ -616,11 +634,7 @@ impl Provider for LocalProvider {
     async fn open_local(&self, path: &VPath) -> Result<Option<OwnedFd>> {
         let real = self.real_path(path);
         blocking(move || {
-            let file = File::open(real)?; // NOSONAR
-            let meta = file.metadata()?; // NOSONAR
-            if !meta.is_file() {
-                return Err(Error::kind(ErrorKind::IsADirectory));
-            }
+            let (file, _) = open_file(&real)?; // NOSONAR
             Ok(Some(OwnedFd::from(file)))
         })
         .await

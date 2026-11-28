@@ -64,6 +64,10 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn is_special(&self) -> bool {
+        self.kind == Kind::Special || (self.kind == Kind::Symlink && self.target_kind == Kind::Special)
+    }
+
     pub fn new(name: &[u8], kind: Kind) -> Entry {
         let mut flags = EntryFlags::empty();
         if std::str::from_utf8(name).is_err() {
