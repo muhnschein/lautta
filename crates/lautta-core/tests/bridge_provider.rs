@@ -400,6 +400,82 @@ async fn reads_are_capped_at_one_mebibyte() {
     assert_eq!(read_all(handle.as_ref(), 8 << 20).await.unwrap(), data);
 }
 
+fn without_read_handles(rig: &Rig) {
+    let flags: Vec<&str> = lautta_bridge_proto::fake::DEFAULT_CAPS
+        .iter()
+        .copied()
+        .filter(|f| *f != "ReadHandles")
+        .collect();
+    rig.fake.set_capabilities("account:1", &flags, &[], 255);
+}
+
+#[tokio::test]
+async fn a_location_without_read_handles_is_read_through_ranged_downloads() {
+    let rig = Rig::ready().await;
+    without_read_handles(&rig);
+    let data: Vec<u8> = (0..(5u32 << 20)).map(|i| (i % 251) as u8).collect();
+    rig.fake.put_file("account:1", b"big.bin", &data);
+    let provider = rig.provider();
+    let handle = provider
+        .open_read(&p("big.bin"), Lane::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(handle.size(), Some(data.len() as u64));
+    assert_eq!(handle.read_at(3, 4).await.unwrap(), data[3..7]);
+    assert_eq!(
+        handle.read_at(100, 4).await.unwrap(),
+        data[100..104],
+        "served from the range read"
+    );
+    assert_eq!(rig.fake.calls_of("Download").len(), 1);
+    let far = 4usize << 20;
+    assert_eq!(handle.read_at(far as u64, 10).await.unwrap(), data[far..far + 10]);
+    assert_eq!(rig.fake.calls_of("Download").len(), 2, "a jump is a new range");
+    assert!(
+        handle.read_at(data.len() as u64, 5).await.unwrap().is_empty(),
+        "end of file"
+    );
+    assert!(handle.read_at(2, 0).await.unwrap().is_empty());
+    assert_eq!(
+        rig.fake.calls_of("Download").len(),
+        2,
+        "nothing is fetched past the end"
+    );
+    rig.fake.clear_calls();
+    assert_eq!(read_all(handle.as_ref(), 8 << 20).await.unwrap(), data);
+    assert_eq!(
+        rig.fake.calls_of("Download").len(),
+        3,
+        "a read from the start takes ranges growing from 1 MiB: 1 + 2 + 4 MiB cover 5 MiB"
+    );
+    assert_eq!(rig.fake.open_handles(), 0);
+    assert!(
+        rig.fake.calls_of("OpenRead").is_empty(),
+        "no read handle is asked for"
+    );
+}
+
+#[tokio::test]
+async fn a_location_without_read_handles_still_fails_cleanly() {
+    let rig = Rig::ready().await;
+    without_read_handles(&rig);
+    rig.fake.put_dir("account:1", b"dir");
+    let provider = rig.provider();
+    let kind = |path: &'static str| {
+        let provider = &provider;
+        async move {
+            provider
+                .open_read(&p(path), Lane::Stream)
+                .await
+                .err()
+                .unwrap()
+                .kind
+        }
+    };
+    assert_eq!(kind("missing").await, ErrorKind::NotFound);
+    assert_eq!(kind("dir").await, ErrorKind::IsADirectory);
+}
+
 #[tokio::test]
 async fn opening_a_missing_file_or_a_folder_fails_cleanly() {
     let rig = Rig::ready().await;

@@ -560,6 +560,14 @@ impl Iface {
         let lane = args::lane(&lane, "stream")?;
         self.begin("OpenRead", lane, &loc, true).await?;
         self.admit(&loc, &path, Op::Read)?;
+        let offered = self.shared.with(|s| {
+            s.caps
+                .get(&loc)
+                .is_none_or(|c| c.flags.iter().any(|f| f == "ReadHandles"))
+        });
+        if !offered {
+            return Err(Fail::net("Unsupported", "openRead is not supported"));
+        }
         let size = self.tree(&loc, |t| {
             t.file_data(&path)
                 .map(|d| i64::try_from(d.len()).unwrap_or(i64::MAX))
