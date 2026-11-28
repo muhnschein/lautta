@@ -2572,5 +2572,9 @@
             <numerusform>%n av %1 mislyktes</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Ikke nok plass</translation>
+    </message>
 </context>
 </TS>

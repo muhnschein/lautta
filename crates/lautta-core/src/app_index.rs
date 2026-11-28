@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::app::Core;
-use crate::error::Result;
+use crate::error::{ErrorKind, Result};
 use crate::index::crawl::{Crawl, CrawlOutcome};
 use crate::index::sched::{lower_this_thread, Conditions, Mode};
 use crate::index::store::{IndexStore, IndexedEntry, RootInfo, RootState, QUERY_LIMIT};
@@ -9,7 +9,7 @@ use crate::locations::{Location, LocationKind};
 use crate::search::SearchHit;
 use crate::uri::{LocationId, Uri};
 use crate::vpath::VPath;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use tokio::sync::watch;
@@ -32,6 +32,7 @@ pub struct IndexStatus {
     pub names: i64,
     pub checked_ms: Option<i64>,
     pub waits_for_wifi: bool,
+    pub no_space: bool,
 }
 
 struct Worker {
@@ -45,6 +46,7 @@ pub struct NameIndex {
     worker: Mutex<Option<Worker>>,
     servers: Mutex<Option<Arc<AtomicBool>>>,
     refreshed: Mutex<HashSet<i64>>,
+    failures: Mutex<HashMap<LocationId, ErrorKind>>,
     changed: watch::Sender<u64>,
 }
 
@@ -67,8 +69,17 @@ impl NameIndex {
             worker: Mutex::default(),
             servers: Mutex::default(),
             refreshed: Mutex::default(),
+            failures: Mutex::default(),
             changed: watch::channel(0).0,
         }
+    }
+
+    fn record(&self, location: &str, failure: Option<ErrorKind>) {
+        let mut failures = lock(&self.failures);
+        match failure {
+            Some(kind) => failures.insert(location.to_owned(), kind),
+            None => failures.remove(location),
+        };
     }
 
     pub fn subscribe(&self) -> watch::Receiver<u64> {
@@ -163,9 +174,14 @@ impl Core {
                 let root = roots
                     .iter()
                     .find(|r| r.location == t.location && r.path.is_root());
-                let state = root.map_or(RootState::Pending, |r| r.state);
+                let failure = lock(&index.failures).get(&t.location).copied();
+                let state = match failure {
+                    Some(_) => RootState::Failed,
+                    None => root.map_or(RootState::Pending, |r| r.state),
+                };
                 IndexStatus {
                     waits_for_wifi: no_wifi && !t.local && state == RootState::Pending,
+                    no_space: failure == Some(ErrorKind::NoSpace),
                     state,
                     names: root.map_or(0, |r| r.names),
                     checked_ms: root.and_then(|r| r.checked_ms),
@@ -223,8 +239,13 @@ impl Core {
         }
         .run(root)
         .await;
-        if matches!(out, Ok(CrawlOutcome::Done)) {
-            lock(&index.refreshed).insert(root.id);
+        match &out {
+            Ok(CrawlOutcome::Done) => {
+                lock(&index.refreshed).insert(root.id);
+                index.record(&root.location, None);
+            }
+            Ok(CrawlOutcome::Stopped) => {}
+            Err(e) => index.record(&root.location, Some(e.kind)),
         }
         index.notify();
         out
@@ -349,8 +370,14 @@ async fn refresh_due(core: &Weak<Core>, stop: &Arc<AtomicBool>, local: bool) {
         }
         let Some(c) = core.upgrade() else { return };
         let Some(index) = &c.index else { return };
-        let Ok(root) = index.store.root(&target.location, &VPath::root()) else {
-            continue;
+        let root = match index.store.root(&target.location, &VPath::root()) {
+            Ok(root) => root,
+            Err(e) => {
+                log::info!("index of {} not started: {e}", target.location);
+                index.record(&target.location, Some(e.kind));
+                index.notify();
+                continue;
+            }
         };
         if !c.index_due(&root, target.local) {
             continue;
@@ -386,5 +413,42 @@ async fn run_worker(core: Weak<Core>, stop: Arc<AtomicBool>) {
             drop(worker);
             index.notify();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::locations::LocationRegistry;
+    use crate::paths::AppPaths;
+
+    #[tokio::test]
+    async fn a_full_index_says_no_space_lets_the_others_finish_and_clears_once_a_crawl_succeeds() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for d in ["Documents", "Downloads"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        for i in 0..2000 {
+            std::fs::write(root.join(format!("Documents/many-{i:05}.txt")), b"x").unwrap();
+        }
+        let paths = AppPaths::new(root);
+        let registry = LocationRegistry::with_media_root(paths.clone(), root.join("media"));
+        let core = Core::open_with(paths, registry).await.unwrap();
+        let index = core.index.as_ref().unwrap();
+        index.store.stop_growing();
+        let stop = Arc::new(AtomicBool::new(false));
+        refresh_due(&Arc::downgrade(&core), &stop, true).await;
+        let state = |location: &str| {
+            core.index_status()
+                .into_iter()
+                .find(|s| s.location == location)
+                .map(|s| (s.state, s.no_space))
+        };
+        assert_eq!(state("user-documents"), Some((RootState::Failed, true)));
+        assert_eq!(state("user-downloads"), Some((RootState::Ready, false)));
+        index.store.grow_again();
+        refresh_due(&Arc::downgrade(&core), &stop, true).await;
+        assert_eq!(state("user-documents"), Some((RootState::Ready, false)));
     }
 }

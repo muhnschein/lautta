@@ -2572,5 +2572,9 @@
             <numerusform>%n %1-st ebaõnnestus</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Pole piisavalt ruumi</translation>
+    </message>
 </context>
 </TS>

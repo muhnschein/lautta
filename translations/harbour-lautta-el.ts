@@ -2572,5 +2572,9 @@
             <numerusform>Απέτυχαν %n από %1</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Δεν υπάρχει αρκετός χώρος</translation>
+    </message>
 </context>
 </TS>

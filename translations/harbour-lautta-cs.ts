@@ -2627,5 +2627,9 @@
             <numerusform>%n z %1 selhalo</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Není dost místa</translation>
+    </message>
 </context>
 </TS>

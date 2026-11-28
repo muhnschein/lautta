@@ -2572,5 +2572,9 @@
             <numerusform>%1 માંથી %n નિષ્ફળ</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>પૂરતી જગ્યા નથી</translation>
+    </message>
 </context>
 </TS>

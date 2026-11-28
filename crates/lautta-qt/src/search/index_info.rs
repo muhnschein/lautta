@@ -40,16 +40,26 @@ fn kind_of(core: &lautta_core::app::Core, location: &str) -> &'static str {
     }
 }
 
+fn line_state(s: &lautta_core::app_index::IndexStatus) -> &'static str {
+    if s.no_space {
+        "nospace"
+    } else if s.waits_for_wifi {
+        "wifi"
+    } else {
+        s.state.name()
+    }
+}
+
 fn lines(core: &lautta_core::app::Core) -> Vec<Line> {
     let mut out: Vec<Line> = core
         .index_status()
         .into_iter()
         .map(|s| Line {
+            state: line_state(&s),
             kind: kind_of(core, &s.location),
             location: s.location,
             name: s.name,
             local: s.local,
-            state: if s.waits_for_wifi { "wifi" } else { s.state.name() },
             names: s.names,
             checked_ms: s.checked_ms.unwrap_or(-1),
             wanted: true,
@@ -118,5 +128,29 @@ impl IndexInfo {
             core.index_restart();
         }
         self.refresh();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lautta_core::app_index::IndexStatus;
+    use lautta_core::index::store::RootState;
+
+    #[test]
+    fn a_full_index_shows_before_waiting_for_wifi_and_the_stored_state() {
+        let status = |state, waits_for_wifi, no_space| IndexStatus {
+            location: "nv-nas".into(),
+            name: "NAS".into(),
+            local: false,
+            state,
+            names: 0,
+            checked_ms: None,
+            waits_for_wifi,
+            no_space,
+        };
+        assert_eq!(line_state(&status(RootState::Failed, true, true)), "nospace");
+        assert_eq!(line_state(&status(RootState::Pending, true, false)), "wifi");
+        assert_eq!(line_state(&status(RootState::Crawling, false, false)), "crawling");
     }
 }

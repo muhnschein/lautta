@@ -2572,5 +2572,9 @@
             <numerusform>%n van %1 mislukt</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Niet genoeg ruimte</translation>
+    </message>
 </context>
 </TS>

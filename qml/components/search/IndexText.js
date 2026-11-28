@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
-var rank = { "failed": 0, "crawling": 1, "pending": 2, "off": 3, "ready": 4 }
+var rank = { "nospace": 0, "failed": 0, "crawling": 1, "pending": 2, "off": 3, "ready": 4 }
 
 function rows(lines) {
     var device = null
@@ -43,6 +43,9 @@ function status(row) {
     case "failed":
         //% "Not reachable"
         return qsTrId("lautta-index-state-unreachable")
+    case "nospace":
+        //% "Not enough space"
+        return qsTrId("lautta-index-state-no-space")
     case "wifi":
         //% "Waiting for Wi-Fi"
         return qsTrId("lautta-index-state-wifi")

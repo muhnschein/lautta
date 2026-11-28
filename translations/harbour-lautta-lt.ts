@@ -2627,5 +2627,9 @@
             <numerusform>Nepavyko %n iš %1</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Nepakanka vietos</translation>
+    </message>
 </context>
 </TS>

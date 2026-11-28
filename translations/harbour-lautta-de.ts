@@ -2572,5 +2572,9 @@
             <numerusform>%n von %1 fehlgeschlagen</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Nicht genug Speicherplatz</translation>
+    </message>
 </context>
 </TS>

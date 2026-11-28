@@ -2572,5 +2572,9 @@
             <numerusform>%1 पैकी %n अयशस्वी</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>पुरेशी जागा नाही</translation>
+    </message>
 </context>
 </TS>

@@ -2627,5 +2627,9 @@
             <numerusform>%n з %1 з помилкою</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Недостатньо місця</translation>
+    </message>
 </context>
 </TS>

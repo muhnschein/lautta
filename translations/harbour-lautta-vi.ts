@@ -2517,5 +2517,9 @@
             <numerusform>%n/%1 không thành công</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Không đủ dung lượng</translation>
+    </message>
 </context>
 </TS>

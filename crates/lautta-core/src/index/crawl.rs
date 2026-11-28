@@ -63,13 +63,20 @@ impl Crawl<'_> {
         }
     }
 
-    fn failed(&self, root: &RootInfo, e: Error) -> Result<CrawlOutcome> {
-        self.store
-            .set_state(root.id, RootState::Failed, Some(&e.to_string()))?;
-        Err(e)
+    pub async fn run(&self, root: &RootInfo) -> Result<CrawlOutcome> {
+        let out = self.pass(root).await;
+        if let Err(e) = &out {
+            if let Err(unsaved) = self
+                .store
+                .set_state(root.id, RootState::Failed, Some(&e.to_string()))
+            {
+                log::info!("index state of {} not saved: {unsaved}", root.location);
+            }
+        }
+        out
     }
 
-    pub async fn run(&self, root: &RootInfo) -> Result<CrawlOutcome> {
+    async fn pass(&self, root: &RootInfo) -> Result<CrawlOutcome> {
         let pass = self.store.begin_pass(root.id)?;
         self.store.set_state(root.id, RootState::Crawling, None)?;
         let deep = self
@@ -86,13 +93,13 @@ impl Crawl<'_> {
                 .await
                 .map(|mut checks| checks.pop());
             let check = match first {
-                Ok(Some(FolderCheck::Failed(e))) | Err(e) => return self.failed(root, e),
+                Ok(Some(FolderCheck::Failed(e))) | Err(e) => return Err(e),
                 Ok(Some(check)) => check,
                 Ok(None) => {
-                    return self.failed(
-                        root,
-                        Error::new(ErrorKind::ProtocolError, "no answer for the top folder"),
-                    )
+                    return Err(Error::new(
+                        ErrorKind::ProtocolError,
+                        "no answer for the top folder",
+                    ))
                 }
             };
             let mark = self.apply(root, top, check, pass, deep)?;
@@ -114,7 +121,7 @@ impl Crawl<'_> {
                 .await
             {
                 Ok(checks) => checks,
-                Err(e) => return self.failed(root, e),
+                Err(e) => return Err(e),
             };
             let mut marks = Vec::with_capacity(batch.len());
             let mut checks = checks.into_iter();
@@ -476,6 +483,22 @@ mod tests {
         assert_eq!(
             r.store.root_info(r.root.id).unwrap().unwrap().state,
             RootState::Failed
+        );
+    }
+
+    #[tokio::test]
+    async fn a_full_index_ends_the_crawl_as_failed_with_the_reason() {
+        let r = rig();
+        for i in 0..2000 {
+            r.mem.add_file(&format!("b/many-{i:05}.txt"), b"x", OLD);
+        }
+        r.store.stop_growing();
+        let (out, _) = crawl(&r, &AtomicBool::new(false)).await;
+        assert_eq!(out.unwrap_err().kind, ErrorKind::NoSpace);
+        assert_eq!(
+            r.store.root_info(r.root.id).unwrap().unwrap().state,
+            RootState::Failed,
+            "never left as crawling"
         );
     }
 

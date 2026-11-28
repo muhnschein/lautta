@@ -2517,5 +2517,9 @@
             <numerusform>%1 эчтән %n барып чыкмады</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Урын җитми</translation>
+    </message>
 </context>
 </TS>

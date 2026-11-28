@@ -2627,5 +2627,9 @@
             <numerusform>%n z %1 nieudanych</numerusform>
         </translation>
     </message>
+    <message id="lautta-index-state-no-space">
+        <source>Not enough space</source>
+        <translation>Za mało miejsca</translation>
+    </message>
 </context>
 </TS>

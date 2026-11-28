@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- When the search list runs out of storage, *Settings › Search* now says *Not enough space* for the location it was building, and the other locations still get their turn. Before, the location said *Updating* forever and the others stayed *Waiting* ([#298](https://github.com/muhnschein/lautta/issues/298)).
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 
 ## 1.1.0
