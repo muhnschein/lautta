@@ -246,6 +246,8 @@ mod tests {
             check(&[FTYP.to_vec(), long].concat()).await,
             "size 1 takes the 64-bit size"
         );
+        let cut = [FTYP.to_vec(), b"\x00\x00\x00\x01moov\x00\x00".to_vec()].concat();
+        assert!(!check(&cut).await, "a 64-bit size cut off by the end of the file");
         let mut lie = movie(MAX_BOX_DEPTH + 1);
         lie[FTYP.len()..FTYP.len() + 4].copy_from_slice(&0x7fff_ffffu32.to_be_bytes());
         assert!(
