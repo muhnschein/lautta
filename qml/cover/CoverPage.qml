@@ -7,6 +7,16 @@ CoverBackground {
     id: cover
 
     property bool live: status === Cover.Active
+    property bool appActive: Qt.application.state === Qt.ApplicationActive
+    property bool keep
+    onLiveChanged: {
+        if (live)
+            keep = true
+    }
+    onAppActiveChanged: {
+        if (appActive)
+            keep = false
+    }
     readonly property var source: {
         if (typeof pageStack === "undefined" || !pageStack || !pageStack.currentPage)
             return null
@@ -36,7 +46,7 @@ CoverBackground {
     Loader {
         objectName: "coverContent"
         anchors.fill: parent
-        active: cover.live && cover.source !== null
+        active: (cover.live || (cover.keep && !cover.appActive)) && cover.source !== null
         sourceComponent: cover.kind === "home" ? home : (cover.kind === "grid" || cover.kind === "list" ? folder : (cover.kind === "file" ? file : null))
     }
 
