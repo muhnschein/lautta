@@ -24,6 +24,9 @@ Item {
 
     Component.onCompleted: {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/data.bin"), "lautta://user-documents/a.mp3"), "fixture")
+        check(tools.installLink("/dev/zero", "lautta://user-documents/zero.mp3"), "link to a device")
+        check(App.localUrl("lautta://user-documents/a.mp3").indexOf("file:///") === 0, "a file has a local URL")
+        check(App.localUrl("lautta://user-documents/zero.mp3") === "", "a link to a device has none")
 
         check(idle.state === "" && !idle.playing && idle.uri === "", "idle source")
         idle.play()
