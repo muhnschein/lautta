@@ -20,6 +20,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const HEAD_BYTES: u64 = 64 * 1024;
+pub const MAX_SVG_THUMB_BYTES: u64 = 4 * 1024 * 1024;
+const SVG_MIME: &str = "image/svg+xml";
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
@@ -73,6 +75,7 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
         {
             ThumbSource::Text
         }
+        (FileCategory::Image, true) if is_svg(entry) => ThumbSource::App,
         (FileCategory::Image | FileCategory::Video | FileCategory::Pdf, true) => ThumbSource::System,
         (FileCategory::Audio, _) if local || set.remote => ThumbSource::App,
         (FileCategory::Image, false) if set.remote => ThumbSource::App,
@@ -81,6 +84,10 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
         }
         _ => ThumbSource::Icon,
     }
+}
+
+pub fn is_svg(entry: &Entry) -> bool {
+    mime_of(entry).as_deref() == Some(SVG_MIME)
 }
 
 pub fn app_thumbnail_url(uri: &Uri) -> String {
@@ -849,6 +856,35 @@ mod tests {
                 "{name}: a link to a file keeps its thumbnail"
             );
         }
+    }
+
+    #[test]
+    fn svgs_are_drawn_by_the_app_on_the_phone_and_on_servers() {
+        let on = settings();
+        for name in ["a.svg", "b.SVGZ"] {
+            for local in [true, false] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::App,
+                    "{name} local {local}"
+                );
+            }
+        }
+        let off = ThumbSettings { remote: false, ..on };
+        assert_eq!(
+            thumbnail_source(&file("a.svg", Some(5)), true, true, &off),
+            ThumbSource::App,
+            "the server switch does not touch local pictures"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.svg", Some(5)), false, true, &off),
+            ThumbSource::Icon
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.svg", Some(5)), true, false, &on),
+            ThumbSource::Icon,
+            "Show thumbnails off"
+        );
     }
 
     #[test]
